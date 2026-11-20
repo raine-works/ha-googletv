@@ -1,12 +1,9 @@
 # Google TV by Raineworks
 
 An **unofficial** [Home Assistant](https://www.home-assistant.io/) integration for
-Google TV and Android TV, from [Raineworks](https://github.com/raine-works): power,
-apps, HDMI inputs, volume, what's playing and a remote, all over one local
-connection (ADB network debugging). No Android TV Remote, Google Cast or ADB
-integrations to combine, and no helpers to make. And a TV app of its own, for
-Home Assistant's notifications on the TV: live ones that stay up while the
-door's open, cameras, progress bars.
+Google TV and Android TV, from [Raineworks](https://github.com/raine-works), with a
+TV app of its own. One local connection does what used to take the Android TV
+Remote, Google Cast and ADB integrations together, and a few things none of them can.
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg?style=for-the-badge)](LICENSE)
@@ -19,33 +16,100 @@ door's open, cameras, progress bars.
 > This project is not affiliated with, authorized, or endorsed by Google. Google
 > TV and Android TV are trademarks of Google LLC.
 
+## What it does
+
+* **Control the TV**: power (with Wake-on-LAN), volume, every app and HDMI
+  input by its name on the TV, a remote, and what's playing in any app
+  (Netflix, YouTube TV, Spotify, Plex…) with its artwork. Within a second.
+* **Know what it's doing**: an Activity sensor (`off`, `home`, `app`,
+  `playing`, `paused`, `input`, `screensaver`) to drive your automations.
+* **Notifications on the TV**, over whatever's on, HDMI inputs included:
+  text, an image, a live camera, a progress bar. **Live notifications** stay
+  up while something's true (the front door is open) and update in place.
+* **A media target, in place of Google Cast**: Home Assistant's media
+  browser, text-to-speech and cameras play on the TV. Announcements are
+  spoken *over* your show, which ducks, instead of stopping it.
+* **Dashboards on the TV**: any Home Assistant dashboard, full screen,
+  signed in by itself.
+* **Simple setup**: Home Assistant finds the TV, installs the TV app and
+  pairs with it. Nothing to type but **Submit**.
+
+Everything stays on your network, except optional lookups of app icons and
+artwork ([Privacy](#privacy-and-security)).
+
+## Setup
+
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=raine-works&repository=ha-googletv&category=integration)
 
-## What you get
+1. **Install the integration.** In HACS, open **Google TV by Raineworks**
+   with the button above (or add `https://github.com/raine-works/ha-googletv`
+   as a custom repository, category **Integration**), download it and
+   restart Home Assistant.
+2. **Turn on network debugging on the TV.**
+   1. Settings → System → About: select **Android TV OS build** seven
+      times ("You are now a developer").
+   2. Settings → System → Developer options: turn on **USB debugging**, and
+      **Network debugging** (or Wireless debugging) where it's a separate
+      switch. Sony calls it **ADB debugging**; TCL offers it only while the
+      TV is connected to a network.
+3. **Add the TV.** It appears under Settings → Devices & services →
+   **Discovered**. Choose **Add**, leave **Install the TV app** ticked, and
+   **Submit**. On the TV, "Allow USB debugging?" appears: tick **Always
+   allow from this computer** and choose **Allow** (the setup waits a
+   minute for it).
 
-Each TV is a device with:
+That's it: Home Assistant installs the TV app, allows its pop-ups and pairs
+with it. Not discovered? **Add integration → Google TV by Raineworks**, with
+the TV's IP address and port 5555. A fixed address for the TV (a DHCP
+reservation in your router) is optional: a discovered TV is followed to a
+new one.
 
-**Media player** (`media_player.<tv>`, device class TV)
+**Starting from the TV?** If the TV app is already on the TV, its screen
+walks you through the same steps until Home Assistant is paired: a QR code
+that opens the integration in HACS on your phone, whether network debugging
+is on (with a button to its settings), and adding the TV.
+
+## The TV in Home Assistant
+
+Each TV is a device with these entities.
+
+### Media player
+
+`media_player.<tv>`, device class TV.
 
 | | |
 | :--- | :--- |
 | State | `off` (asleep), `playing` / `paused` (what the front app reports), else `on` |
-| Sources | Every app in the TV's launcher, then its HDMI inputs, by the names given to them on the TV ("Xbox"; "HDMI 2" when unnamed). `source` is the input on screen, else the app in front. A device on HDMI-CEC's own input counts as its port's input. |
-| Now playing | Title, artist or show, position, from the TV's media sessions (Netflix, YouTube TV, Spotify, Plex…), with no Cast needed |
+| Sources | Every app in the TV's launcher, then its HDMI inputs, by their names on the TV ("Xbox"; "HDMI 2" when unnamed). `source` is the input on screen, else the app in front. A device on HDMI-CEC's own input counts as its port's input |
+| Now playing | Title, artist or show and position, from the TV's media sessions, with no Cast needed |
 | Artwork | A song's cover (iTunes), a show's poster (TVmaze) or a film's poster (Google Play, else Wikipedia), else the app's icon |
-| Volume | The TV's media volume as a level (set, step, mute) |
+| Volume | The TV's media volume as a level: set, step, mute |
 | Controls | Turn on / off, play, pause, stop, next, previous, select source |
-| `play_media` | `media_content_type: app` with a package (`com.netflix.ninja`), `input` with an input id, or `url` with a link the TV opens |
-| Attributes | `app_id`, `app_name`, `apps` (package, name and icon), `inputs` (id, port, name), `input`, `media_app` |
+| Media | Browse and play Home Assistant's media, announcements, and apps, inputs and links: see [Media and dashboards](#media-and-dashboards) |
+| Attributes | `app_id`, `app_name`, `apps` (package, name and icon), `inputs` (id, port, name, icon, kind, CEC device), `input`, `media_app`, `tv_bridge` (the TV app: `paired`, `installed` or `not_installed`) |
 
-**Input** (`select.<tv>_input`): the HDMI inputs by their names on the TV,
-showing the one on screen; pick one to switch to it (the TV wakes first).
+### Activity
 
-Each input gets an icon for what's on it, from its name on the TV ("Xbox",
-"PS5", "Switch", "Apple TV", "Cable box"…), else from the name its device
-gives itself over HDMI-CEC; anything else is an HDMI port. The Input select
-and the media player take the icon of the input on screen, and both list
-every input's `icon`, `kind` and CEC `device` in their attributes.
+`sensor.<tv>_activity`: what the TV is doing, the sensor to trigger
+automations on.
+
+| State | When |
+| :--- | :--- |
+| `off` | The screen is off |
+| `screensaver` | The screensaver is on (music playing under it counts as `playing`) |
+| `home` | The home screen |
+| `app` | An app is open, nothing playing |
+| `playing` | Something's playing |
+| `paused` | It's paused |
+| `input` | An HDMI input is on screen (its name in the `input` attribute) |
+
+### Input
+
+`select.<tv>_input`: the HDMI inputs by their names on the TV, showing the
+one on screen. Pick one to switch to it (the TV wakes first).
+
+Each input gets an icon for what's on it, from its name on the TV, else
+from the name its device gives itself over HDMI-CEC:
 
 | Kind | Matches | Icon |
 | :--- | :--- | :--- |
@@ -65,20 +129,124 @@ every input's `icon`, `kind` and CEC `device` in their attributes.
 | `console` | Game, Console, Retro | `mdi:controller` |
 | `hdmi` | anything else | `mdi:video-input-hdmi` |
 
-**Activity** (`sensor.<tv>_activity`): what the TV is doing, the sensor to
-trigger automations on:
+### Apps, remote and the rest
 
-| State | When |
+* **Current app** (`sensor.<tv>_current_app`): the app in front by name,
+  its package in the `package` attribute.
+* **Apps**: a device of its own, "<TV> Apps", with a button per app
+  (`button.<tv>_apps_netflix`, …), named and pictured from its Google Play
+  listing. Press to open it (the TV wakes first). Apps installed later get
+  their buttons on their own. Apps open by their launch screen, so the ones
+  Android TV Remote can no longer launch (YouTube TV, Apple TV, HBO Max,
+  Hulu) open here.
+* **Remote keys** (`button.<tv>_home`, …): Home, Back, Up, Down, Left,
+  Right, OK, Play/pause, Volume up, Volume down, Mute and Settings.
+* **Remote** (`remote.<tv>`): `remote.send_command` with any key (`HOME`,
+  `BACK`, `DPAD_UP` / `DOWN` / `LEFT` / `RIGHT` / `CENTER`, `VOLUME_UP`,
+  `MEDIA_PLAY_PAUSE`, `SETTINGS`…) or an Android key code; `num_repeats`
+  and `delay_secs` work.
+* **Notifications** (`notify.<tv>_notifications`): see below.
+* **Diagnostics**: Connection (Ethernet or Wi-Fi), Wi-Fi signal, Storage
+  used and free, Last restart; IP address and Memory free are there,
+  disabled. **Download diagnostics** on the device gives the TV's latest
+  reading, its address and identifiers redacted, for bug reports.
+
+The TV is read every second: its screen and what's playing (about 100 ms of
+work on the TV), so playing, paused and the screen turning off show within a
+second. Every 5 seconds the full read adds the app, volume and inputs (and at
+once after a command). The app list and diagnostics every 10 minutes.
+
+## Notifications
+
+The TV app shows Home Assistant's notifications as pop-ups over whatever's
+on screen (apps and HDMI inputs alike), in the TV's notification panel, or
+both.
+
+The notify entity (`notify.<tv>_notifications`) pops a message up in the
+top right. The **`googletv.notify`** action does the rest:
+
+| Field | |
 | :--- | :--- |
-| `off` | The screen is off |
-| `screensaver` | The screensaver is on (music playing under it counts as `playing`) |
-| `home` | The home screen |
-| `app` | An app is open, nothing playing |
-| `playing` | Something's playing |
-| `paused` | It's paused |
-| `input` | An HDMI input is on screen (its name in the `input` attribute) |
+| `message`, `title` | The text |
+| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Google TV logo if not set |
+| `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`) |
+| `camera_entity` | A camera's live stream (`camera_view: live`, the default) or a snapshot |
+| `video` | A video or live stream URL (HLS, RTSP, MP4) |
+| `size` | `compact` (a one-line pill; a camera plays in a small tile on it), `small`, `medium`, `large`; the TV's setting if not given |
+| `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's setting if not given |
+| `duration` | Seconds on screen (8, or 20 with a video); `0` keeps it up until it's dismissed |
+| `until_entity`, `until_state` | Keep it up until this entity changes, or reaches `until_state`: a [live notification](#live-notifications) |
+| `progress` | A progress bar, 0 to 100 |
+| `color` | The pop-up's border (`#03A9F4`) |
+| `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
+| `mute` | A video's sound (off by default) |
+| `tag` | Send again with the same tag to update it in place; dismiss it by its tag |
+| `ignore_rules` | Pop up even where the rules say not to |
+| `when_blocked` | Where a pop-up the rules keep off the screen goes: `panel` or `drop` |
 
-Dim the lights when the TV plays, bring them up when it pauses:
+The action returns whether it popped up, went to the panel, or why not, and
+its `tag`. **`googletv.dismiss_notifications`** takes a notification down by
+its tag (or all of them), from the screen and the panel.
+
+### Live notifications
+
+With `until_entity` a notification stays up while something's true, and
+goes when it isn't. With `duration: 0` it stays until it's dismissed. Home
+Assistant keeps track of them: they survive a restart of Home Assistant
+(and come down if the door closed meanwhile), and are shown again if the
+TV app restarts.
+
+To show values that change, send the notification again with the same
+`tag`. It's updated where it is, with no animation; a camera on it keeps
+playing and the panel doesn't alert again. See the
+[recipes](#recipes).
+
+### Stacking
+
+Each corner (and the top, bottom and center) holds a stack. Three cards show
+at a time: live ones first, then the newest. A "+2 more" pill counts the
+rest, which come back as cards go.
+
+### Rules
+
+Pop-ups can stay off the apps and inputs you pick: on the TV app's screen,
+or with **`googletv.set_notification_rules`** (by name: `Netflix`, `Xbox`).
+Those notifications go to the panel instead, or nowhere. The integration
+tells the app which input is on screen, so input rules work.
+
+## Media and dashboards
+
+The TV is a media target, as a Chromecast is, but through the TV app.
+
+| | |
+| :--- | :--- |
+| **Media browser** | The TV is in the media browser's player list: local media, cameras, radio, anything Home Assistant can browse that's audio, video or an image |
+| **`media_player.play_media`** | Audio, video or an image (a media source or URL) plays full screen. A song shows its cover, title, artist and progress (select pauses, left and right skip); a video has the player's controls. Back, the end, or the media player's stop closes it, back to what was on |
+| **Announcements** | With `announce: true`, and by default for text-to-speech, audio is spoken *over* what's on, which ducks and comes back, with a pill showing what's said. Announcements queue |
+| **Apps, inputs, links** | `media_content_type: app` with a package (`com.netflix.ninja`), `input` with an input id, or `url` with a link the TV opens in its app (a YouTube link in YouTube) |
+| **`googletv.show_dashboard`** | A dashboard full screen (`dashboard: dashboard-tv`, `view: cameras`), its sidebar hidden. Back or stop closes it |
+
+While Home Assistant's media plays, the media player shows it like any app's
+(title, playing or paused), and the remote's play and pause keys work.
+
+**Dashboards sign in as the TV's own user.** The first time you show one,
+the integration makes an ordinary (not administrator), local-only Home
+Assistant user named after the TV, "Living Room TV (TV)", with a long-lived
+token the TV app uses. It's in Settings → People → Users, where you can
+remove it; removing the TV removes it too. Like any user, it can see and
+control your devices.
+
+**Replacing Google Cast**: everything Home Assistant used Cast for on the
+TV works here, so you can remove the Google Cast integration's entries for
+your Google TVs (or disable their entities). Casting from your phone's apps
+(the Cast button in YouTube or Netflix) is unaffected: that's the TV's own
+Chromecast, not Home Assistant. Music Assistant has its own Chromecast
+support; it can use the TV through its Home Assistant media player provider
+instead.
+
+## Recipes
+
+**Dim the lights while something plays, bring them up when it pauses:**
 
 ```yaml
 triggers:
@@ -105,89 +273,27 @@ actions:
             data: { brightness_pct: 60, transition: 2 }
 ```
 
-**Current app** (`sensor.<tv>_current_app`): the app in front by name, its
-package in the `package` attribute.
-
-**Diagnostics** (read every 10 minutes): Connection (Ethernet or Wi-Fi),
-Wi-Fi signal (on Wi-Fi), Storage used and Storage free, Last restart; IP
-address and Memory free are there disabled. The device's **Download
-diagnostics** gives the TV's latest reading with its address and identifiers
-redacted, for bug reports.
-
-**Remote keys** (`button.<tv>_home`, …): Home, Back, Up, Down, Left, Right,
-OK, Play/pause, Volume up, Volume down, Mute and Settings, a button each.
-
-**Apps**: a device of its own, "<TV> Apps", linked under the TV, so the TV's
-page keeps its controls apart from the app list. A button per app
-(`button.<tv>_apps_netflix`, …), named and pictured from its Google Play
-listing; press to open it (the TV wakes first). An app installed later gets
-its button on its own; an uninstalled one goes unavailable. Hide or disable
-the ones you don't want (the button's ⚙️ → Visible / Enabled).
-
-**Remote** (`remote.<tv>`), for automations and dashboards:
-`remote.send_command` with any key: `HOME`, `BACK`,
-`DPAD_UP` / `DOWN` / `LEFT` / `RIGHT` / `CENTER`, `VOLUME_UP`, `MEDIA_PLAY_PAUSE`,
-`SETTINGS`, … or an Android key code number. `num_repeats` and `delay_secs` work.
-
-Apps open by their launch screen (`am start`), not by a Play Store link, so
-apps that Android TV Remote can no longer launch (YouTube TV, Apple TV, HBO Max,
-Hulu since the Play Store's 2026 update) open here.
-
-The TV is read every second: its screen and what's playing (about 100 ms
-of work on the TV), so playing, paused and the screen turning off show within
-a second; every 5 seconds the full read adds the app, volume and inputs (and
-at once when the screen turns on or off, or after a command). Its app list and
-diagnostics every 10 minutes.
-
-### Notifications: the TV app
-
-**Google TV by Raineworks** has a TV app too (`android/`): Home
-Assistant's notifications on the TV, as pop-ups over whatever's on screen,
-apps and HDMI inputs alike, or in the TV's notification panel.
-
-* **Installed when you add the TV** (**Install the TV app**, ticked by
-  default), or later with the **Install the TV app** action
-  (`googletv.install_tv_bridge`) on the TV's media player. Either way Home
-  Assistant downloads the app from the latest release, installs it over ADB,
-  allows its pop-ups (which many TVs have no settings screen for) and pairs
-  with it, no code to type.
-* **A notify entity** (`notify.<tv>_notifications`): a message pops up in the
-  top right.
-* **The `googletv.notify` action** for the rest:
-
-| Field | |
-| :--- | :--- |
-| `message`, `title` | The text |
-| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Google TV logo if not set |
-| `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`) |
-| `camera_entity` | A camera's live stream (`camera_view: live`, the default) or snapshot: who's at the door |
-| `video` | A video or live stream URL (HLS, RTSP, MP4) |
-| `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
-| `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's own setting when not given |
-| `duration` | Seconds on screen (8, or 20 with a video); `0` keeps it up until it's dismissed |
-| `until_entity`, `until_state` | Keep it up until this entity changes (or reaches `until_state`), then take it down: a live notification |
-| `progress` | A progress bar, 0 to 100 |
-| `size` | `compact` (a one-line pill; a camera or video plays in a small tile on it), `small`, `medium`, `large`; the TV's own setting when not given |
-| `color` | The pop-up's border (`#03A9F4`) |
-| `mute` | A video's sound (off by default) |
-| `tag` | Send again with the same tag to update it in place (a camera keeps playing); `googletv.dismiss_notifications` takes it down, from the screen and the panel |
-| `ignore_rules` | Pop up even where the rules say not to |
+**Who's at the door, live, in the corner:**
 
 ```yaml
-action: googletv.notify
-target:
-  entity_id: media_player.living_room_tv
-data:
-  title: Front door
-  message: Someone's at the door
-  icon: mdi:doorbell
-  camera_entity: camera.front_door
-  position: bottom_right
-  duration: 30
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.doorbell
+    to: "on"
+actions:
+  - action: googletv.notify
+    target:
+      entity_id: media_player.living_room_tv
+    data:
+      title: Front door
+      message: Someone's at the door
+      icon: mdi:doorbell
+      camera_entity: camera.front_door
+      position: bottom_right
+      duration: 30
 ```
 
-**Live notifications** stay up while something is true, and change as it
-does. A pill while the front door is open, gone when it closes:
+**A pill while the front door is open, gone when it closes:**
 
 ```yaml
 triggers:
@@ -205,11 +311,7 @@ actions:
       until_entity: binary_sensor.front_door
 ```
 
-With `until_entity` (or `duration: 0`) Home Assistant keeps the
-notification: it survives a restart of Home Assistant (and comes down if the
-door closed meanwhile), and is shown again if the TV app restarts. To show
-live values, send it again with the same `tag` whenever they change; it's
-updated where it is, with no animation, and a camera on it keeps playing:
+**The washer's progress, until it's done:**
 
 ```yaml
 triggers:
@@ -230,111 +332,104 @@ actions:
       until_state: idle
 ```
 
-**Stacking**: each corner (and the top, bottom and center) holds a stack.
-Three cards show at a time: live ones first, then the newest; a "+2 more"
-pill counts the others, which come back as cards go.
+**Say it over whatever's on** (the show ducks; a pill shows the words):
 
-**Rules**: pop-ups don't show over the apps and inputs you pick, on the TV
-(the app's screen) or with `googletv.set_notification_rules` (apps and
-inputs by name: `Netflix`, `Xbox`). Those notifications go to the panel
-instead, or nowhere (`when_blocked: drop`). Over ADB the integration tells
-the app which input is on screen, so input rules work; pop-ups show over
-HDMI inputs otherwise.
+```yaml
+action: tts.speak
+target:
+  entity_id: tts.home_assistant_cloud
+data:
+  media_player_entity_id: media_player.living_room_tv
+  message: Dinner's ready
+```
 
-The app's API is in `protocol/README.md`. On the Play Store later; until
-then it's installed from Home Assistant as above (sideloaded builds are
-signed with a development key kept in the repo).
+**The cameras on the TV when someone rings, back to the show after a minute:**
 
-### Online lookups
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.doorbell
+    to: "on"
+actions:
+  - action: googletv.show_dashboard
+    target:
+      entity_id: media_player.living_room_tv
+    data:
+      dashboard: dashboard-tv
+      view: cameras
+  - delay: 60
+  - action: media_player.media_stop
+    target:
+      entity_id: media_player.living_room_tv
+```
 
-The TV gives only an app's package, and only the title and artist of what's
-playing, so the integration looks the rest up:
+## Actions
 
-* **App names and icons** from each app's Google Play listing, kept in
-  `.storage/googletv.apps` and read again monthly. An app that isn't on Google
-  Play (a TV maker's own) keeps its package as its name.
-* **Artwork**: a song's cover from the iTunes Search API, matched by title and
-  artist; a show's poster from TVmaze; a film's poster from Google Play's
-  movie search (full size, in the store of the country set in Home
-  Assistant), else from Wikipedia (small copies), each matched by its exact
-  name. A title an app reports alone (Disney+'s "Cars") is tried as a film
-  first; one with a subtitle (YouTube TV's show and channel) as a show
-  first. YouTube videos show the app's icon. A lookup that fails is tried
-  again a minute later.
+| Action | |
+| :--- | :--- |
+| `googletv.notify` | A notification on the TV ([fields](#notifications)) |
+| `googletv.dismiss_notifications` | Take a notification down by `tag`, or all of them |
+| `googletv.set_notification_rules` | The apps and inputs pop-ups don't show over (`blocked_apps`, `blocked_inputs` by name or id) and `when_blocked` |
+| `googletv.show_dashboard` | A dashboard full screen (`dashboard`, `view`) |
+| `googletv.install_tv_bridge` | Install or update the TV app (`development: true` for the latest build from `master`) |
 
-None of them needs an account or a key. To keep everything on your network,
-turn off **Look up app icons and artwork online** in the TV's options
-(Settings → Devices & services → Google TV by Raineworks → Configure).
+## Privacy and security
 
-## Setting up a TV
+* **Local.** The integration talks to the TV over ADB and to the TV app over
+  HTTP on your network. Neither goes through Google or the internet.
+* **Online lookups**, on by default: app names and icons from Google Play
+  (kept in `.storage/googletv.apps`, read again monthly), and artwork for
+  what's playing from iTunes, TVmaze, Google Play and Wikipedia. No account
+  or key. Turn off **Look up app icons and artwork online** in the TV's
+  options (Settings → Devices & services → Google TV by Raineworks →
+  Configure) to keep everything on your network.
+* **ADB.** Home Assistant signs in to every TV with one key, kept in
+  `.storage/googletv_adbkey`; each TV trusts it once.
+* **The TV app** pairs with Home Assistant over ADB, so no code is shown or
+  typed; every request after that carries its token. Ten wrong pairing
+  codes lock pairing for ten minutes. Removing the TV from Home Assistant
+  unpairs it.
+* **Dashboards** use the TV's own Home Assistant user
+  ([above](#media-and-dashboards)), and stay on Home Assistant: a link to
+  another site isn't followed, and only Home Assistant's own pages get the
+  sign-in.
 
-1. **Turn on developer options.** Settings → System → About → tap **Android TV
-   OS build** seven times.
-2. **Turn on debugging.** Settings → System → Developer options: **USB
-   debugging** on, and **Network debugging** (or Wireless debugging) where it's
-   a separate switch. Some TVs (TCL) only offer it while the TV has a wired or
-   Wi-Fi connection, and some (Sony) call it **ADB debugging**.
-3. **Optionally give the TV a fixed address** in your router (a DHCP
-   reservation). A discovered TV that moves is followed anyway.
-4. **Add the TV.** Home Assistant finds Google TVs on your network by
-   themselves: one with network debugging on shows up under Settings →
-   Devices & services → **Discovered**. Choose **Add**, leave **Install the
-   TV app** ticked (for notifications), then **Submit**. (Or add it by hand:
-   Add integration → **Google TV by Raineworks**, with the TV's address and port 5555.)
-5. **Accept the prompt on the TV.** "Allow USB debugging?" appears with Home
-   Assistant's key: tick **Always allow from this computer** and choose
-   **Allow**. The setup waits up to a minute for it.
+## Troubleshooting
 
-If the TV forgets the key (debugging turned off and on, a factory reset), Home
-Assistant asks you to reconnect it: open the repair, be at the TV, and accept
-the prompt again. Until then the integration doesn't connect, so the TV
-doesn't keep showing its prompt.
+**The TV shows as off while it's on standby.** Keep it reachable in standby
+so it can be woken and read: on Sony, Settings → Network & Internet →
+**Remote start** (some models: Settings → System → Power and energy →
+**Network standby**); on TCL, Hisense and others, look for **Network
+standby**, **Wake on LAN** or **Quick start**. A TV that drops off its
+network anyway is shown **off**, not unavailable, and **Turn on** sends
+Wake-on-LAN to its MACs.
 
-A TV with a new address or port: the integration's **Reconfigure**. (A TV it
-found on the network follows a new address by itself.)
+**Home Assistant asks to reconnect the TV.** The TV forgot Home Assistant's
+key (debugging was turned off and on, or the TV was reset). Open the repair,
+be at the TV, and accept the prompt again.
 
-Home Assistant keeps one key for every TV, in `.storage/googletv_adbkey`.
+**The TV moved to a new address.** A discovered TV is followed by itself;
+otherwise use the integration's **Reconfigure**.
 
-### Discovery
+**A live notification is stuck.** Home Assistant takes it down when its
+entity changes, or with `googletv.dismiss_notifications`; on the TV, the
+app's **Clear pop-ups** clears them all.
 
-Every Google TV announces itself over mDNS (`_androidtvremote2._tcp`, the
-service its phone remote uses) with its name and Bluetooth address. Home
-Assistant offers a TV only when its ADB port (5555) answers, so turning on
-network debugging is what makes it appear. A TV with the TV app announces
-itself too (`_rwtvbridge._tcp`), and is offered with debugging off: Home
-Assistant says how to turn it on. The app's own screen, until Home Assistant
-pairs with it, walks through the same steps: a QR code to the integration in
-HACS, whether network debugging is on (with a button to its settings), and
-adding the TV. Each TV is known by its Bluetooth
-address (read over ADB too, else its serial number), so a TV already added is
-never offered again, and if it gets a new IP address its entry follows it.
+**Notifications don't show.** Check the media player's `tv_bridge`
+attribute. `not_installed`: run **Install the TV app**. `installed` but not
+`paired`: it pairs by itself within a few minutes. On the TV app's screen,
+**Pop-ups over other apps** must say Allowed (Home Assistant allows it when
+it installs the app).
 
-### When the TV is off
+**No inputs.** Inputs come from Android's TV input service, used by TCL
+(Google TV) and Sony (Android TV) among others; a TV whose maker doesn't use
+it shows none.
 
-Keep the TV reachable in standby, so it can be woken and its state read:
+**Another ADB integration.** Only one ADB client can hold a TV comfortably:
+remove the TV from Home Assistant's **Android Debug Bridge** integration (or
+anything else using ADB on it) first.
 
-* **Sony**: Settings → Network & Internet → **Remote start** on (some models:
-  Settings → System → Power and energy → **Network standby**).
-* **TCL, Hisense and others**: often reachable in standby already; if not,
-  look for **Network standby**, **Wake on LAN** or **Quick start**.
-
-A TV that drops off its network anyway is shown **off**, not unavailable: the
-media player, Activity and remote stay available (the rest wait until it's
-back), and **Turn on** sends Wake-on-LAN to its MACs (Ethernet and Wi-Fi,
-read when it was added). Whether that wakes it is up to the TV; with Remote
-start or network standby on, the integration wakes it with its own key.
-Home Assistant starting while a known TV is off sets it up as off too.
-
-## Notes
-
-* Requires Home Assistant 2025.2 or newer.
-* Only one ADB client can hold a TV's connection comfortably. Remove the TV
-  from Home Assistant's own **Android Debug Bridge** integration (or anything
-  else using ADB on it) before adding it here.
-* Inputs are read from Android's TV input service. Seen on TCL (Google TV) and
-  Sony (Android TV) sets; a TV whose maker doesn't use it shows no inputs.
-* Apps are named from a table of well-known apps, else from their Google Play
-  listing (with online lookups on), else by their package.
+Requires Home Assistant 2025.2 or newer.
 
 ## Development
 
@@ -346,12 +441,14 @@ pytest -q
 ```
 
 The parsers (`custom_components/googletv/parsers.py`) are tested on output
-captured from real TVs (`tests/test_parsers.py`).
+captured from real TVs. The TV app is in `android/` (built by CI, attached
+to each release); its API is documented in `protocol/README.md`. Sideloaded
+builds are signed with a development key kept in the repo.
 
 ## ☕ Support
 
-If you find this project helpful, consider buying me a coffee to support continued
-maintenance and development:
+If you find this project helpful, consider buying me a coffee to support
+continued maintenance and development:
 
 <a href="https://buymeacoffee.com/raineworks"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 
