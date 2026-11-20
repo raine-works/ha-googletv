@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home Assistant is usually plain HTTP on the local network: images and
+     camera streams it sends come from there -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

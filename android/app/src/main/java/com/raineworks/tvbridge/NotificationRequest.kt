@@ -1,0 +1,94 @@
+package com.raineworks.tvbridge
+
+import org.json.JSONObject
+
+/** A notification from Home Assistant (POST /api/notify; see protocol/README.md). */
+data class NotificationRequest(
+    val title: String?,
+    val message: String?,
+    val imageUrl: String?,
+    val videoUrl: String?,
+    val mode: String,
+    val position: String,
+    val durationS: Int,
+    val size: String,
+    val color: Int?,
+    val mute: Boolean,
+    val ignoreRules: Boolean,
+    val whenBlocked: String?,
+    val tag: String?,
+    val contextApp: String?,
+    val contextInput: String?,
+) {
+    val popup: Boolean get() = mode == MODE_POPUP || mode == MODE_BOTH
+    val panel: Boolean get() = mode == MODE_PANEL || mode == MODE_BOTH
+
+    companion object {
+        const val MODE_POPUP = "popup"
+        const val MODE_PANEL = "panel"
+        const val MODE_BOTH = "both"
+        val MODES = setOf(MODE_POPUP, MODE_PANEL, MODE_BOTH)
+        val POSITIONS = setOf(
+            "top_left", "top", "top_right", "center",
+            "bottom_left", "bottom", "bottom_right",
+        )
+        val SIZES = setOf("small", "medium", "large")
+
+        /** A request from JSON; a bad field is an [IllegalArgumentException]. */
+        fun parse(json: JSONObject): NotificationRequest {
+            fun text(name: String): String? =
+                json.optString(name, "").trim().takeIf { it.isNotEmpty() && !json.isNull(name) }
+
+            val title = text("title")
+            val message = text("message")
+            val imageUrl = text("image_url")
+            val videoUrl = text("video_url")
+            require(title != null || message != null || imageUrl != null || videoUrl != null) {
+                "Nothing to show: give a title, message, image_url or video_url"
+            }
+            val mode = text("mode") ?: MODE_POPUP
+            require(mode in MODES) { "mode must be one of $MODES" }
+            val position = text("position") ?: "top_right"
+            require(position in POSITIONS) { "position must be one of $POSITIONS" }
+            val size = text("size") ?: "medium"
+            require(size in SIZES) { "size must be one of $SIZES" }
+            val duration = if (json.has("duration")) json.getDouble("duration").toInt()
+            else if (videoUrl != null) 20 else 8
+            require(duration in 1..600) { "duration must be 1 to 600 seconds" }
+            val color = text("color")?.let {
+                try {
+                    android.graphics.Color.parseColor(if (it.startsWith("#")) it else "#$it")
+                } catch (e: IllegalArgumentException) {
+                    throw IllegalArgumentException("color must be a hex color like #03A9F4")
+                }
+            }
+            val whenBlocked = text("when_blocked")
+            require(whenBlocked == null || whenBlocked in setOf(Prefs.WHEN_BLOCKED_PANEL, Prefs.WHEN_BLOCKED_DROP)) {
+                "when_blocked must be panel or drop"
+            }
+            for (url in listOfNotNull(imageUrl, videoUrl)) {
+                require(Regex("^(https?|rtsp)://\\S+$", RegexOption.IGNORE_CASE).matches(url)) {
+                    "image_url and video_url must be http(s) or rtsp URLs"
+                }
+            }
+            val context = json.optJSONObject("context")
+            return NotificationRequest(
+                title = title,
+                message = message,
+                imageUrl = imageUrl,
+                videoUrl = videoUrl,
+                mode = mode,
+                position = position,
+                durationS = duration,
+                size = size,
+                color = color,
+                mute = json.optBoolean("mute", true),
+                ignoreRules = json.optBoolean("ignore_rules", false),
+                whenBlocked = whenBlocked,
+                tag = text("tag"),
+                contextApp = context?.optString("app", "")?.takeIf { it.isNotBlank() },
+                contextInput = context?.optString("input", "")?.takeIf { it.isNotBlank() },
+            )
+        }
+    }
+}

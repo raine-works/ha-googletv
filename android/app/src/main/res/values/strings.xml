@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Raineworks TV Bridge</string>
+    <string name="service_channel">TV Bridge service</string>
+    <string name="service_text">Ready for Home Assistant on port %1$d</string>
+    <string name="notification_channel">Home Assistant</string>
+    <string name="pairing_channel">Pairing</string>
+    <string name="pairing_title">Pair with Home Assistant</string>
+    <string name="pairing_text">Enter this code in Home Assistant: %1$s</string>
+    <string name="status_title">Status</string>
+    <string name="status_running">Running on %1$s, port %2$d</string>
+    <string name="status_paired">Paired with %1$d Home Assistant connection(s)</string>
+    <string name="status_not_paired">Not paired yet. Add this TV in Home Assistant (Google TV integration)</string>
+    <string name="permission_overlay_ok">Pop-ups: allowed</string>
+    <string name="permission_overlay_missing">Pop-ups: not allowed. Select to allow "Display over other apps"</string>
+    <string name="permission_usage_ok">App detection: allowed</string>
+    <string name="permission_usage_missing">App detection: not allowed. Select to allow "Usage access" (for the rules)</string>
+    <string name="permission_unavailable">This TV has no settings screen for it. The Google TV integration can grant it over ADB</string>
+    <string name="rules_title">Don\'t show pop-ups over</string>
+    <string name="rules_help">Notifications that arrive while one of these is on screen go to the notification panel instead.</string>
+    <string name="rules_apps">Apps</string>
+    <string name="rules_inputs">Inputs</string>
+    <string name="test_button">Show a test notification</string>
+    <string name="test_title">Raineworks TV Bridge</string>
+    <string name="test_message">Notifications from Home Assistant show up like this.</string>
+    <string name="forget_button">Forget all Home Assistant pairings</string>
+    <string name="forgotten">Pairings forgotten</string>
+    <string name="no_inputs">No HDMI inputs found</string>
+</resources>

@@ -1,0 +1,68 @@
+# Builds Raineworks TV Bridge (android/) and, on master, publishes the APK to
+# the rolling "tv-bridge-dev" prerelease that the integration can install
+# from for testing (googletv.install_tv_bridge with its URL).
+name: "TV Bridge app"
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "android/**"
+      - "custom_components/googletv/manifest.json"
+      - ".github/workflows/android.yaml"
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew --no-daemon assembleRelease lintRelease
+
+      - name: Keep the APK
+        run: cp app/build/outputs/apk/release/app-release.apk raineworks-tv-bridge.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raineworks-tv-bridge
+          path: android/raineworks-tv-bridge.apk
+
+      - name: Lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: android/app/build/reports/lint-results-release.*
+          if-no-files-found: ignore
+
+      - name: Publish to the tv-bridge-dev prerelease
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view tv-bridge-dev >/dev/null 2>&1; then
+            gh release create tv-bridge-dev --prerelease --target "$GITHUB_SHA" \
+              --title "TV Bridge (development build)" \
+              --notes "The latest build of Raineworks TV Bridge from master, for testing. Install it with the googletv.install_tv_bridge action and this release's APK URL."
+          fi
+          gh release upload tv-bridge-dev raineworks-tv-bridge.apk --clobber
