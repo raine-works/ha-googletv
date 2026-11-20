@@ -18,6 +18,10 @@
       "reauth_confirm": {
         "title": "Reconnect {name}",
         "description": "{name} no longer trusts Home Assistant (debugging was turned off and on, or the TV was reset). Make sure USB debugging is on, submit, then tick Always allow and choose Allow on the TV."
+      },
+      "zeroconf_confirm": {
+        "title": "Add {name}",
+        "description": "{name} ({host}) has network debugging on. Submit, then on the TV tick Always allow and choose Allow when it asks \"Allow USB debugging?\". This waits up to a minute for it."
       }
     },
     "error": {
@@ -27,8 +31,11 @@
     },
     "abort": {
       "already_configured": "This TV is already set up.",
-      "reauth_successful": "Reconnected."
-    }
+      "reauth_successful": "Reconnected.",
+      "adb_off": "Network debugging is off on this TV.",
+      "not_ipv4_address": "Only IPv4 addresses are supported."
+    },
+    "flow_title": "{name}"
   },
   "exceptions": {
     "command_failed": {

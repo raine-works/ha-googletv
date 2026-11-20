@@ -12,6 +12,13 @@ from homeassistant import config_entries  # noqa: E402
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT  # noqa: E402
 from homeassistant.core import HomeAssistant  # noqa: E402
 from homeassistant.data_entry_flow import FlowResultType  # noqa: E402
+
+try:
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+except ImportError:  # Home Assistant before 2025.1
+    from homeassistant.components.zeroconf import ZeroconfServiceInfo
+from ipaddress import ip_address  # noqa: E402
+
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
 
 from custom_components.googletv.adb import (  # noqa: E402
@@ -25,7 +32,9 @@ PROPS = {
     "model": "Smart TV Pro",
     "android": "12",
     "serial": "ABC123",
+    "bluetooth": "d0:76:02:55:7e:05",
 }
+TV_ID = "d0:76:02:55:7e:05"
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +73,7 @@ async def test_adds_a_tv(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "TCL Smart TV Pro"
     assert result["data"] == {CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
-    assert result["result"].unique_id == "ABC123"
+    assert result["result"].unique_id == TV_ID
     client.async_close.assert_awaited()
 
 
@@ -112,7 +121,7 @@ async def test_errors_show_on_the_form(
 async def test_the_same_tv_at_a_new_address_updates_it(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
-        unique_id="ABC123",
+        unique_id=TV_ID,
         data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555},
     )
     entry.add_to_hass(hass)
@@ -131,7 +140,7 @@ async def test_the_same_tv_at_a_new_address_updates_it(hass: HomeAssistant) -> N
 async def test_reauth(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
-        unique_id="ABC123",
+        unique_id=TV_ID,
         title="Lott's TV",
         data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555},
     )
@@ -147,3 +156,92 @@ async def test_reauth(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
+
+
+def test_without_bluetooth_the_serial_is_the_id() -> None:
+    from custom_components.googletv.config_flow import _tv_id
+
+    assert _tv_id({"serial": "ABC123"}) == "ABC123"
+    assert _tv_id(PROPS) == TV_ID
+
+
+def _discovery(address: str = "10.0.0.5", bt: str | None = "D0:76:02:55:7E:05"):
+    return ZeroconfServiceInfo(
+        ip_address=ip_address(address),
+        ip_addresses=[ip_address(address)],
+        hostname="Lott-s-TV.local.",
+        name="Lott's TV._androidtvremote2._tcp.local.",
+        port=6466,
+        type="_androidtvremote2._tcp.local.",
+        properties={"bt": bt} if bt else {},
+    )
+
+
+def _patch_probe(open_: bool):
+    return patch(
+        "custom_components.googletv.config_flow._adb_port_open",
+        AsyncMock(return_value=open_),
+    )
+
+
+async def test_discovers_a_tv_with_adb_on(hass: HomeAssistant) -> None:
+    with _patch_probe(True):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_discovery(),
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "zeroconf_confirm"
+    assert result["description_placeholders"] == {
+        "name": "Lott's TV",
+        "host": "10.0.0.5",
+    }
+
+    with _patch_client(_client(AsyncMock(return_value=PROPS))), _patch_setup():
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Lott's TV"
+    assert result["data"] == {CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    assert result["result"].unique_id == TV_ID
+
+
+async def test_a_tv_with_adb_off_is_not_offered(hass: HomeAssistant) -> None:
+    with _patch_probe(False):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_discovery(),
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "adb_off"
+
+
+async def test_a_known_tv_found_at_a_new_address(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=TV_ID, data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    )
+    entry.add_to_hass(hass)
+    with _patch_probe(True), _patch_setup():
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_discovery("10.0.0.9"),
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "10.0.0.9"
+
+
+async def test_without_an_address_a_known_host_is_skipped(hass: HomeAssistant) -> None:
+    MockConfigEntry(
+        domain=DOMAIN, unique_id="ABC123", data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    ).add_to_hass(hass)
+    with _patch_probe(True):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_discovery(bt=None),
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"

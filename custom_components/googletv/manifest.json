@@ -1,13 +1,22 @@
 {
   "domain": "googletv",
   "name": "Google TV",
-  "codeowners": ["@raine-works"],
+  "codeowners": [
+    "@raine-works"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/raine-works/ha-googletv",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/raine-works/ha-googletv/issues",
-  "loggers": ["adb_shell"],
-  "requirements": ["adb-shell[async]>=0.4.4"],
-  "version": "0.1.1"
+  "loggers": [
+    "adb_shell"
+  ],
+  "requirements": [
+    "adb-shell[async]>=0.4.4"
+  ],
+  "version": "0.2.0",
+  "zeroconf": [
+    "_androidtvremote2._tcp.local."
+  ]
 }

@@ -254,12 +254,17 @@ def test_names_and_props() -> None:
     assert app_name("com.tcl.tv") == "TV input"
     assert app_name("com.example.thing") == "com.example.thing"
     assert app_name(None) is None
-    assert parse_props("Sony\nBRAVIA 4K VH2\n12\n4074be004113896\n") == {
+    assert parse_props(
+        "Sony\nBRAVIA 4K VH2\n12\n4074be004113896\n38:B8:00:06:0E:41\n"
+    ) == {
         "manufacturer": "Sony",
         "model": "BRAVIA 4K VH2",
         "android": "12",
         "serial": "4074be004113896",
+        "bluetooth": "38:b8:00:06:0e:41",
     }
+    # Bluetooth off, or no adapter: no address
+    assert "bluetooth" not in parse_props("TCL\nSmart TV\n12\nX\nnull\n")
 
 
 # A whole poll from Lott's TCL, verbatim: on the Xbox (its own CEC input),

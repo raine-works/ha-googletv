@@ -58,14 +58,22 @@ APPS_COMMAND = (
 )
 
 # Who the TV is, for the device registry and the config entry's unique id
+# The Bluetooth address is the TV's id: Google TVs announce it on the network
+# (``bt`` in their ``_androidtvremote2._tcp`` record), so a TV found there is
+# matched to its entry before anyone accepts a prompt.
 PROPS_COMMAND = "; ".join(
-    f"getprop {prop}"
-    for prop in (
-        "ro.product.manufacturer",
-        "ro.product.model",
-        "ro.build.version.release",
-        "ro.serialno",
-    )
+    [
+        *(
+            f"getprop {prop}"
+            for prop in (
+                "ro.product.manufacturer",
+                "ro.product.model",
+                "ro.build.version.release",
+                "ro.serialno",
+            )
+        ),
+        "settings get secure bluetooth_address",
+    ]
 )
 
 # Android's PlaybackState codes
@@ -449,7 +457,10 @@ def parse_apps(text: str) -> list[App]:
 
 
 def parse_props(text: str) -> dict[str, str]:
-    """Maker, model, Android version and serial (``PROPS_COMMAND``)."""
-    keys = ("manufacturer", "model", "android", "serial")
+    """Maker, model, Android version, serial and Bluetooth address."""
+    keys = ("manufacturer", "model", "android", "serial", "bluetooth")
     values = [line.strip() for line in text.splitlines()]
-    return {k: v for k, v in zip(keys, values, strict=False) if v}
+    props = {k: v for k, v in zip(keys, values, strict=False) if v and v != "null"}
+    if "bluetooth" in props:
+        props["bluetooth"] = props["bluetooth"].lower()
+    return props

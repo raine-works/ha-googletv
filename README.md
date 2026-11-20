@@ -54,9 +54,13 @@ The TV is read every 5 seconds with a single shell command; its app list every
    debugging** on, and **Network debugging** (or Wireless debugging) where it's
    a separate switch. Some TVs (TCL) only offer it while the TV has a wired or
    Wi-Fi connection, and some (Sony) call it **ADB debugging**.
-3. **Give the TV a fixed address** in your router (a DHCP reservation).
-4. **Add the integration** in Home Assistant: Settings → Devices & services →
-   Add integration → **Google TV**, with the TV's address (port 5555).
+3. **Optionally give the TV a fixed address** in your router (a DHCP
+   reservation). A discovered TV that moves is followed anyway.
+4. **Add the TV.** Home Assistant finds Google TVs on your network by
+   themselves: one with network debugging on shows up under Settings →
+   Devices & services → **Discovered**. Choose **Add**, then **Submit**. (Or
+   add it by hand: Add integration → **Google TV**, with the TV's address and
+   port 5555.)
 5. **Accept the prompt on the TV.** "Allow USB debugging?" appears with Home
    Assistant's key: tick **Always allow from this computer** and choose
    **Allow**. The setup waits up to a minute for it.
@@ -66,6 +70,15 @@ Assistant asks you to reconnect it: open the repair, be at the TV, and accept
 the prompt again.
 
 Home Assistant keeps one key for every TV, in `.storage/googletv_adbkey`.
+
+### Discovery
+
+Every Google TV announces itself over mDNS (`_androidtvremote2._tcp`, the
+service its phone remote uses) with its name and Bluetooth address. Home
+Assistant offers a TV only when its ADB port (5555) answers, so turning on
+network debugging is what makes it appear. Each TV is known by its Bluetooth
+address (read over ADB too, else its serial number), so a TV already added is
+never offered again, and if it gets a new IP address its entry follows it.
 
 ## Notes
 
