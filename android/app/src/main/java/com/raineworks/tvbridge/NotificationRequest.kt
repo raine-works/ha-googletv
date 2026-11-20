@@ -22,12 +22,17 @@ data class NotificationRequest(
     val icon: String? = null,
     // 0 to 100: a progress bar
     val progress: Int? = null,
+    // Buttons: the card takes the remote's focus to offer them
+    val actions: List<Action> = emptyList(),
     val contextApp: String?,
     val contextInput: String?,
 ) {
     val popup: Boolean get() = mode == MODE_POPUP || mode == MODE_BOTH
     val panel: Boolean get() = mode == MODE_PANEL || mode == MODE_BOTH
     val persistent: Boolean get() = durationS == 0
+
+    /** A button on the notification: [id] goes to Home Assistant when it's pressed. */
+    data class Action(val id: String, val title: String)
 
     companion object {
         const val MODE_POPUP = "popup"
@@ -39,6 +44,7 @@ data class NotificationRequest(
             "bottom_left", "bottom", "bottom_right",
         )
         val SIZES = listOf("compact", "small", "medium", "large")
+        const val MAX_ACTIONS = 3
 
         /**
          * A request from JSON (a bad field is an [IllegalArgumentException]);
@@ -65,8 +71,20 @@ data class NotificationRequest(
             require(position in POSITIONS) { "position must be one of $POSITIONS" }
             val size = text("size") ?: defaultSize
             require(size in SIZES) { "size must be one of $SIZES" }
+            val actions = json.optJSONArray("actions")?.let { list ->
+                require(list.length() <= MAX_ACTIONS) { "At most $MAX_ACTIONS actions" }
+                (0 until list.length()).map { i ->
+                    val item = list.getJSONObject(i)
+                    val id = item.optString("action").trim()
+                    val label = item.optString("title").trim()
+                    require(Regex("^[A-Za-z0-9_.:-]{1,64}$").matches(id)) { "An action's id: letters, digits, _ . : -" }
+                    require(label.isNotEmpty() && label.length <= 40) { "An action's title: 1 to 40 characters" }
+                    Action(id, label)
+                }
+            } ?: emptyList()
+            // A card with buttons gives time to choose
             val duration = if (json.has("duration")) json.getDouble("duration").toInt()
-            else if (videoUrl != null) 20 else 8
+            else if (actions.isNotEmpty()) 30 else if (videoUrl != null) 20 else 8
             require(duration in 0..600) { "duration must be 0 (until dismissed) to 600 seconds" }
             val color = text("color")?.let {
                 try {
@@ -113,6 +131,7 @@ data class NotificationRequest(
                 tag = text("tag"),
                 icon = icon,
                 progress = progress,
+                actions = actions,
                 contextApp = context?.optString("app", "")?.takeIf { it.isNotBlank() },
                 contextInput = context?.optString("input", "")?.takeIf { it.isNotBlank() },
             )

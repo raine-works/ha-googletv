@@ -139,6 +139,21 @@ NOTIFY_SCHEMA = {
     vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=0, max=600)),
     vol.Optional("progress"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
     vol.Optional("until_entity"): cv.entity_id,
+    # Buttons: the card takes the remote's focus; a press fires googletv_event
+    vol.Optional("actions"): vol.All(
+        cv.ensure_list,
+        [
+            vol.Schema(
+                {
+                    vol.Required("action"): vol.Match(r"^[A-Za-z0-9_.:-]{1,64}$"),
+                    vol.Required("title"): vol.All(
+                        cv.string, vol.Length(min=1, max=40)
+                    ),
+                }
+            )
+        ],
+        vol.Length(max=3),
+    ),
     vol.Optional("until_state"): cv.string,
     vol.Optional("size"): vol.In(["compact", "small", "medium", "large"]),
     vol.Optional("color"): cv.string,
@@ -405,6 +420,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
                 "tag",
                 "ignore_rules",
                 "when_blocked",
+                "actions",
             )
             if key in kwargs
         }

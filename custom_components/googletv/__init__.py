@@ -26,6 +26,7 @@ from .online import get_lookups
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
+    Platform.EVENT,
     Platform.MEDIA_PLAYER,
     Platform.NOTIFY,
     Platform.REMOTE,
@@ -87,6 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         await client.async_close()
         raise
     entry.async_on_unload(coordinator.async_stop_live)
+    coordinator.async_start_events()
     if entry.data.get(CONF_INSTALL_BRIDGE):
         # Asked for when the TV was added: once
         hass.config_entries.async_update_entry(

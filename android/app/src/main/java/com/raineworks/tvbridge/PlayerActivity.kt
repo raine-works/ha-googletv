@@ -25,6 +25,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
+import org.json.JSONObject
 
 /**
  * Home Assistant's media, full screen: a video, a song (its cover, title and
@@ -74,6 +75,7 @@ class PlayerActivity : Activity() {
 
     override fun onDestroy() {
         if (current === this) current = null
+        Events.emit("player", JSONObject().put("state", "closed"))
         release()
         super.onDestroy()
     }
@@ -154,10 +156,15 @@ class PlayerActivity : Activity() {
             root.addView(nowPlaying(request), FrameLayout.LayoutParams(dp(880), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             progress?.post(tick)
         }
+        Events.emit("player", JSONObject().put("state", "opened").put("kind", request.kind).put("title", request.title ?: JSONObject.NULL))
         exo.addListener(
             object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
                     if (state == Player.STATE_ENDED) finish()
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    Events.emit("player", JSONObject().put("state", if (isPlaying) "playing" else "paused").put("kind", request.kind))
                 }
 
                 override fun onPlayerError(error: PlaybackException) {

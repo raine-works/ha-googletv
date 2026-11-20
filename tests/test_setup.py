@@ -18,6 +18,7 @@ pytest.importorskip("pytest_homeassistant_custom_component")
 
 from homeassistant.const import CONF_HOST, CONF_PORT  # noqa: E402
 from homeassistant.core import HomeAssistant  # noqa: E402
+from homeassistant.util import dt as dt_util  # noqa: E402
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
 from pytest_homeassistant_custom_component.test_util.aiohttp import (  # noqa: E402
     AiohttpClientMocker,
@@ -750,6 +751,8 @@ def _bridge_web(web: AiohttpClientMocker, token: str = "T0KEN") -> None:
         f"{BRIDGE}/api/rules",
         json={"blocked_apps": [], "blocked_inputs": [], "when_blocked": "panel"},
     )
+    # The event stream: the app's hello, then it ends (connected again later)
+    web.get(f"{BRIDGE}/api/events", text='{"type": "hello", "instance": "run-1"}\n')
 
 
 def _bridge_calls(web: AiohttpClientMocker, path: str) -> list:
@@ -1410,6 +1413,124 @@ async def test_a_dashboard_signs_in_as_the_tvs_own_user(
     await hass.async_block_till_done()
     assert await hass.auth.async_get_user(user.id) is None
     assert _bridge_calls(web, "/api/unpair")
+
+
+# The TV app's events
+
+
+async def test_the_event_stream_is_read_line_by_line(
+    hass: HomeAssistant, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+    from custom_components.googletv.bridge import BridgeClient
+
+    web.get(
+        f"{BRIDGE}/api/events",
+        text=(
+            '{"type": "hello", "instance": "run-1"}\n'
+            "not json\n"
+            '{"type": "ping"}\n'
+            '{"type": "notification_action", "tag": "door", "action": "UNLOCK"}\n'
+        ),
+    )
+    bridge = BridgeClient(async_get_clientsession(hass), "10.0.0.5", "T0KEN")
+    events = [event async for event in bridge.async_events()]
+    assert [e["type"] for e in events] == ["hello", "ping", "notification_action"]
+    assert web.mock_calls[-1][3]["Authorization"] == "Bearer T0KEN"
+
+
+async def test_a_button_pressed_on_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.helpers import device_registry as dr
+
+    entry = await _live_door(hass, client, web)
+    coordinator = entry.runtime_data
+    fired = []
+    hass.bus.async_listen("googletv_event", fired.append)
+    coordinator._async_handle_event({"type": "ping"})
+    coordinator._async_handle_event(
+        {
+            "type": "notification_action",
+            "tag": "until:binary_sensor.front_door",
+            "action": "UNLOCK",
+            "time": 1,
+        }
+    )
+    await hass.async_block_till_done()
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "X1")})
+    assert [e.data for e in fired] == [
+        {
+            "type": "notification_action",
+            "tag": "until:binary_sensor.front_door",
+            "action": "UNLOCK",
+            "device_id": device.id,
+        }
+    ]
+    # The event entity has it
+    state = hass.states.get("event.lott_s_tv_notification_events")
+    assert state.attributes["event_type"] == "action"
+    assert state.attributes["action"] == "UNLOCK"
+    assert state.attributes["tag"] == "until:binary_sensor.front_door"
+    # Down on the TV: the live notification isn't shown again, nor dismissed
+    assert coordinator._live == {}
+    hass.states.async_set("binary_sensor.front_door", "off")
+    await hass.async_block_till_done()
+    assert not _bridge_calls(web, "/api/dismiss")
+
+
+async def test_the_player_refreshes_at_once_and_a_new_run_is_checked(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _paired(hass, client, web)
+    coordinator = entry.runtime_data
+    with patch.object(coordinator, "async_request_refresh", AsyncMock()) as refresh:
+        coordinator._async_handle_event({"type": "player", "state": "playing"})
+        await hass.async_block_till_done()
+    refresh.assert_awaited()
+    coordinator._bridge_instance = "run-1"
+    coordinator._live_checked_at = dt_util.utcnow()
+    coordinator._async_handle_event({"type": "hello", "instance": "run-2"})
+    assert coordinator._live_checked_at is None
+
+
+async def test_buttons_on_a_notification(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    import voluptuous as vol
+
+    await _paired(hass, client, web)
+    reply = await hass.services.async_call(
+        DOMAIN,
+        "notify",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "title": "Doorbell",
+            "actions": [
+                {"action": "UNLOCK", "title": "Unlock"},
+                {"action": "IGNORE", "title": "Ignore"},
+            ],
+        },
+        blocking=True,
+        return_response=True,
+    )
+    call = _bridge_calls(web, "/api/notify")[-1]
+    assert call[2]["actions"][0] == {"action": "UNLOCK", "title": "Unlock"}
+    # Tagged, so its events name it
+    assert call[2]["tag"] == reply["media_player.lott_s_tv"]["tag"]
+    assert call[2]["tag"].startswith("actions-")
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {
+                "entity_id": "media_player.lott_s_tv",
+                "title": "Too many",
+                "actions": [{"action": f"A{i}", "title": "x"} for i in range(4)],
+            },
+            blocking=True,
+        )
 
 
 async def test_the_app_installs_when_asked_at_setup(

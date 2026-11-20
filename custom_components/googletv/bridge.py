@@ -8,6 +8,8 @@ ADB (no code to type), and sends it notifications.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+import json
 from typing import Any
 
 import aiohttp
@@ -28,6 +30,8 @@ BRIDGE_DEV_APK_URL = (
 BRIDGE_PAIRING_FILE = f"/sdcard/Android/data/{BRIDGE_PACKAGE}/files/pairing_code"
 
 TIMEOUT = aiohttp.ClientTimeout(total=10)
+# The event stream: open for good, a ping every 15 s; silent this long, it's gone
+EVENTS_TIMEOUT = aiohttp.ClientTimeout(total=None, connect=10, sock_read=45)
 
 
 class BridgeError(Exception):
@@ -71,6 +75,28 @@ class BridgeClient:
                 return reply
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             raise BridgeError(f"Can't reach the TV app on {self.host}: {err}") from err
+
+    async def async_events(self) -> AsyncIterator[dict[str, Any]]:
+        """What happens on the TV, as it happens, until the connection ends."""
+        headers = {"Authorization": f"Bearer {self.token}"}
+        url = f"http://{self.host}:{self.port}/api/events"
+        try:
+            async with self._session.get(
+                url, headers=headers, timeout=EVENTS_TIMEOUT
+            ) as response:
+                if response.status == 401:
+                    raise BridgeAuthError("Not paired")
+                if response.status >= 400:
+                    raise BridgeError(f"No event stream (HTTP {response.status})")
+                async for line in response.content:
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(event, dict):
+                        yield event
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise BridgeError(f"Event stream from {self.host} ended: {err}") from err
 
     async def async_info(self) -> dict[str, Any]:
         """Who the app is (no token needed)."""

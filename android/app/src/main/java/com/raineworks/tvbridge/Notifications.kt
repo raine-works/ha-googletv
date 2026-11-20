@@ -58,6 +58,13 @@ object Notifications {
                     .setAutoCancel(!request.persistent)
                 request.color?.let { builder.setColor(it) }
                 request.progress?.let { builder.setProgress(100, it, false) }
+                request.tag?.let { tag ->
+                    request.actions.forEachIndexed { i, action ->
+                        builder.addAction(
+                            Notification.Action.Builder(null, action.title, ActionReceiver.pending(app, tag, action.id, i)).build(),
+                        )
+                    }
+                }
                 if (image != null) {
                     builder.setLargeIcon(image)
                         .setStyle(Notification.BigPictureStyle().bigPicture(image))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine, Iterator
+from collections.abc import Callable, Coroutine, Iterator
 import contextlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
@@ -31,6 +31,7 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -76,6 +77,12 @@ BRIDGE_SETUP_COMMANDS = (
     f"cmd deviceidle whitelist +{BRIDGE_PACKAGE}",
     f"am broadcast -a {BRIDGE_PACKAGE}.START -n {BRIDGE_PACKAGE}/.StartReceiver",
 )
+
+# The TV app's event stream: tried again this soon after it ends, then less often
+EVENTS_RETRY_S = 5
+EVENTS_MAX_RETRY_S = 300
+# Fired on Home Assistant's bus for each event from the TV
+EVENT_TYPE = f"{DOMAIN}_event"
 
 # How long the TV's dashboard token lasts (it's made again if revoked)
 DASHBOARD_TOKEN_LIFETIME = timedelta(days=3650)
@@ -179,6 +186,8 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self._live_checking = False
         # One TV user and token, however many dashboards are asked for at once
         self._dashboard_lock = asyncio.Lock()
+        # The event entity, told of notification events
+        self._event_listeners: list[Callable[[dict[str, Any]], None]] = []
 
     async def _async_update_data(self) -> GoogleTvData:
         """Read the TV (fully every few seconds, quickly between), and its apps."""
@@ -353,6 +362,72 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 translation_placeholders={"error": "its SHA-256 doesn't match"},
             )
 
+    # The TV app's events
+
+    @callback
+    def async_start_events(self) -> None:
+        """Listen to the TV app's events while the TV is set up."""
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_events(), f"{DOMAIN} TV app events"
+        )
+
+    @callback
+    def async_add_event_listener(
+        self, listener: Callable[[dict[str, Any]], None]
+    ) -> CALLBACK_TYPE:
+        """Call ``listener`` with each notification event; returns its removal."""
+        self._event_listeners.append(listener)
+        return lambda: self._event_listeners.remove(listener)
+
+    async def _async_events(self) -> None:
+        """The event stream, kept open: connected again when it ends."""
+        retry = EVENTS_RETRY_S
+        while True:
+            if self.bridge.token and (self.data is None or self.data.reachable):
+                try:
+                    async for event in self.bridge.async_events():
+                        retry = EVENTS_RETRY_S
+                        self._async_handle_event(event)
+                except BridgeAuthError:
+                    self._forget_pairing()
+                except BridgeError as err:
+                    # An app from before 2.2 has no stream: tried now and then
+                    _LOGGER.debug("TV app events: %s", err)
+            await asyncio.sleep(retry)
+            retry = min(retry * 2, EVENTS_MAX_RETRY_S)
+
+    @callback
+    def _async_handle_event(self, event: dict[str, Any]) -> None:
+        """An event from the TV: on Home Assistant's bus (googletv_event)."""
+        kind = event.get("type")
+        if kind == "ping":
+            return
+        if kind == "hello":
+            # A new run of the app: its live notifications are checked at once
+            instance = event.get("instance")
+            if self._bridge_instance is None:
+                self._bridge_instance = instance
+            elif instance != self._bridge_instance:
+                self._live_checked_at = None
+            return
+        if kind in ("notification_action", "notification_dismissed"):
+            # Down on the TV: a live one isn't shown again
+            if (tag := event.get("tag")) in self._live:
+                self._forget_live(tag)
+                self._save_live()
+            for listener in list(self._event_listeners):
+                listener(event)
+        elif kind in ("player", "dashboard"):
+            self.hass.async_create_task(self.async_request_refresh())
+        data = {k: v for k, v in event.items() if k != "time"}
+        if device := dr.async_get(self.hass).async_get_device(
+            identifiers={
+                (DOMAIN, self.config_entry.unique_id or self.config_entry.entry_id)
+            }
+        ):
+            data["device_id"] = device.id
+        self.hass.bus.async_fire(EVENT_TYPE, data)
+
     async def async_install_bridge_quietly(self) -> None:
         """Install the app when the TV is added; a failure is only logged."""
         try:
@@ -403,6 +478,9 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             payload = {**payload, "duration": 0}
         if payload.get("duration") == 0:
             tag = tag or f"live-{uuid4().hex[:12]}"
+        if payload.get("actions"):
+            # Its buttons' events name it
+            tag = tag or f"actions-{uuid4().hex[:12]}"
         if tag:
             payload = {**payload, "tag": tag}
         reply = await self._async_send(payload)

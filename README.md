@@ -24,8 +24,11 @@ Remote, Google Cast and ADB integrations together, and a few things none of them
 * **Know what it's doing**: an Activity sensor (`off`, `home`, `app`,
   `playing`, `paused`, `input`, `screensaver`) to drive your automations.
 * **Notifications on the TV**, over whatever's on, HDMI inputs included:
-  text, an image, a live camera, a progress bar. **Live notifications** stay
-  up while something's true (the front door is open) and update in place.
+  text, an image, a live camera, a progress bar, **buttons you answer with
+  the remote**. **Live notifications** stay up while something's true (the
+  front door is open) and update in place.
+* **Events from the TV**: a button pressed, a notification dismissed, media
+  played or closed, as they happen, to trigger automations on.
 * **A media target, in place of Google Cast**: Home Assistant's media
   browser, text-to-speech and cameras play on the TV. Announcements are
   spoken *over* your show, which ducks, instead of stopping it.
@@ -177,6 +180,7 @@ top right. The **`googletv.notify`** action does the rest:
 | `duration` | Seconds on screen (8, or 20 with a video); `0` keeps it up until it's dismissed |
 | `until_entity`, `until_state` | Keep it up until this entity changes, or reaches `until_state`: a [live notification](#live-notifications) |
 | `progress` | A progress bar, 0 to 100 |
+| `actions` | Up to 3 buttons, `[{action: UNLOCK, title: Unlock}, …]`: see [Events from the TV](#events-from-the-tv) |
 | `color` | The pop-up's border (`#03A9F4`) |
 | `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
 | `mute` | A video's sound (off by default) |
@@ -213,6 +217,31 @@ Pop-ups can stay off the apps and inputs you pick: on the TV app's screen,
 or with **`googletv.set_notification_rules`** (by name: `Netflix`, `Xbox`).
 Those notifications go to the panel instead, or nowhere. The integration
 tells the app which input is on screen, so input rules work.
+
+## Events from the TV
+
+The TV app tells Home Assistant what happens on the TV, as it happens, on a
+connection the integration keeps open. Each event fires **`googletv_event`**
+on Home Assistant's event bus, with the TV's `device_id`:
+
+| `type` | Data | When |
+| :--- | :--- | :--- |
+| `notification_action` | `tag`, `action` | A notification's button was pressed |
+| `notification_dismissed` | `tag`, `by` (`remote`, `timeout`) | A tagged notification came down on the TV: Back, or its time ran out |
+| `player` | `state` (`opened`, `playing`, `paused`, `closed`), `kind`, `title` | Home Assistant's media on the TV |
+| `dashboard` | `state` (`opened`, `closed`), `url` | A dashboard on the TV |
+
+Each TV also has a **Notification events** entity
+(`event.<tv>_notification_events`): `action` (with `action` and `tag`) or
+`dismissed` (with `by` and `tag`).
+
+**Buttons on notifications**: give `googletv.notify` up to three `actions`.
+The card takes the remote's focus while it's up, so the remote moves
+between its buttons: select one, and its `action` comes back as an event;
+press Back to dismiss it. Once it's gone, the remote is the app's again. A
+card with buttons stays 30 seconds unless its `duration` says otherwise.
+The copy in the notification panel has the same buttons. A live
+notification dismissed on the TV isn't shown again.
 
 ## Media and dashboards
 
@@ -293,6 +322,41 @@ actions:
       camera_entity: camera.front_door
       position: bottom_right
       duration: 30
+```
+
+**Unlock the door from the couch:**
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.doorbell
+    to: "on"
+actions:
+  - action: googletv.notify
+    target:
+      entity_id: media_player.living_room_tv
+    data:
+      tag: doorbell
+      title: Front door
+      message: Someone's at the door
+      camera_entity: camera.front_door
+      actions:
+        - action: UNLOCK
+          title: Unlock
+        - action: IGNORE
+          title: Ignore
+  - wait_for_trigger:
+      - trigger: event
+        event_type: googletv_event
+        event_data:
+          type: notification_action
+          tag: doorbell
+          action: UNLOCK
+    timeout: 60
+    continue_on_timeout: false
+  - action: lock.unlock
+    target:
+      entity_id: lock.front_door
 ```
 
 **A pill while the front door is open, gone when it closes:**

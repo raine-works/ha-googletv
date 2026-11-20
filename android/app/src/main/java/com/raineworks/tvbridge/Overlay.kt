@@ -13,6 +13,8 @@ import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
+import android.view.ViewGroup
 import android.view.TextureView
 import android.view.View
 import android.view.WindowManager
@@ -24,6 +26,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import org.json.JSONObject
 
 /**
  * Pop-ups over whatever is on screen (an app, the home screen, an HDMI
@@ -41,6 +44,8 @@ class Overlay private constructor(private val context: Context) {
         var player: ExoPlayer?,
         var videoUrl: String?,
         var pinned: Boolean,
+        // Has buttons: its window takes the remote's focus while it's up
+        var actionable: Boolean = false,
         var hide: Runnable? = null,
     )
 
@@ -50,6 +55,7 @@ class Overlay private constructor(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private val windows = context.getSystemService(WindowManager::class.java)
     private val containers = HashMap<String, LinearLayout>()
+    private val windowParams = HashMap<String, WindowManager.LayoutParams>()
     private val mores = HashMap<String, TextView>()
     private val cards = LinkedHashMap<String, Card>()
     private var nextTag = 0
@@ -116,12 +122,12 @@ class Overlay private constructor(private val context: Context) {
         // Dismissed, or updated again, while its images loaded
         if (!Notifier.isCurrent(request.tag, ticket)) return
         if (!Settings.canDrawOverlays(context)) return
-        val built = if (request.size == "compact") {
-            compactCard(request, image, iconBitmap)
-        } else {
-            fullCard(request, image, iconBitmap)
-        }
         val tag = request.tag ?: "$AUTO_TAG${nextTag++}"
+        val built = if (request.size == "compact") {
+            compactCard(request, tag, image, iconBitmap)
+        } else {
+            fullCard(request, tag, image, iconBitmap)
+        }
         val existing = cards[tag]
         if (existing != null && existing.position == request.position) {
             update(tag, existing, built, request)
@@ -129,6 +135,10 @@ class Overlay private constructor(private val context: Context) {
             existing?.let { remove(tag, it, animate = false) }
             val player = built.texture?.let { startVideo(request.videoUrl!!, it, request.mute) }
             attach(tag, request.position, built.view, player, request.videoUrl, request.durationS, request.persistent)
+            cards[tag]?.let {
+                it.actionable = request.actions.isNotEmpty()
+                layout(request.position)
+            }
         }
     }
 
@@ -152,6 +162,7 @@ class Overlay private constructor(private val context: Context) {
         card.view = built.view
         card.videoUrl = request.videoUrl
         card.pinned = request.persistent
+        card.actionable = request.actions.isNotEmpty()
         schedule(tag, card, request.durationS)
         layout(card.position)
     }
@@ -160,7 +171,7 @@ class Overlay private constructor(private val context: Context) {
      * A one-line pill: the logo (or the icon, or the image, small; or the
      * live video as a small tile), the title and message.
      */
-    private fun compactCard(request: NotificationRequest, image: Bitmap?, iconBitmap: Bitmap?): Built {
+    private fun compactCard(request: NotificationRequest, tag: String, image: Bitmap?, iconBitmap: Bitmap?): Built {
         val pill = cardLayout(LinearLayout.LayoutParams.WRAP_CONTENT, request.color, pill = true).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -209,6 +220,12 @@ class Overlay private constructor(private val context: Context) {
                 LinearLayout.LayoutParams(dp(56), dp(4)).apply { marginStart = dp(12) },
             )
         }
+        if (request.actions.isNotEmpty()) {
+            pill.addView(actionsRow(request, tag), LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(10) })
+            // Room for the buttons' focus ring
+            pill.clipToOutline = false
+            pill.clipChildren = false
+        }
         return Built(pill, texture)
     }
 
@@ -216,7 +233,7 @@ class Overlay private constructor(private val context: Context) {
      * A card: the image or video on top, then the logo, title and message,
      * then its progress, or the time it has left.
      */
-    private fun fullCard(request: NotificationRequest, image: Bitmap?, iconBitmap: Bitmap?): Built {
+    private fun fullCard(request: NotificationRequest, tag: String, image: Bitmap?, iconBitmap: Bitmap?): Built {
         val width = dp(
             when (request.size) {
                 "medium" -> 340
@@ -273,6 +290,12 @@ class Overlay private constructor(private val context: Context) {
             row.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             card.addView(row, LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
+        if (request.actions.isNotEmpty()) {
+            card.addView(
+                actionsRow(request, tag).apply { setPadding(dp(10 * scale), 0, dp(10 * scale), dp(12 * scale)) },
+                LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT),
+            )
+        }
         val progress = request.progress
         if (progress != null) {
             card.addView(progressBar(progress, request.color), LinearLayout.LayoutParams(width, dp(3)))
@@ -289,6 +312,89 @@ class Overlay private constructor(private val context: Context) {
             )
         }
         return Built(card, texture)
+    }
+
+    /**
+     * The notification's buttons: the remote moves between them; one pressed
+     * tells Home Assistant (notification_action) and takes the card down.
+     */
+    private fun actionsRow(request: NotificationRequest, tag: String): LinearLayout =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
+            request.actions.forEach { action ->
+                addView(
+                    text(action.title, 13f, Theme.medium(context), Theme.FOREGROUND, 1).apply {
+                        isFocusable = true
+                        isClickable = true
+                        gravity = Gravity.CENTER
+                        setPadding(dp(18), dp(10), dp(18), dp(10))
+                        background = Theme.focusable(context, Theme.withAlpha(Theme.FOREGROUND, 20), 999, Theme.BORDER)
+                        Theme.lift(this)
+                        setOnClickListener {
+                            Events.emit("notification_action", JSONObject().put("tag", tag).put("action", action.id))
+                            Notifier.dismiss(context, tag)
+                        }
+                    },
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT),
+                )
+            }
+        }
+
+    /** Back on a card with buttons: dismissed (notification_dismissed, by the remote). */
+    private fun back(position: String) {
+        val container = containers[position] ?: return
+        val focused = container.findFocus()
+        val card = cards.entries.lastOrNull { (_, c) ->
+            c.position == position && c.actionable && c.view.visibility == View.VISIBLE &&
+                (focused == null || isAncestor(c.view, focused))
+        } ?: cards.entries.lastOrNull { (_, c) -> c.position == position && c.actionable } ?: return
+        Events.emit("notification_dismissed", JSONObject().put("tag", card.key).put("by", "remote"))
+        Notifier.dismiss(context, card.key)
+    }
+
+    private fun isAncestor(parent: View, view: View): Boolean {
+        var v: View? = view
+        while (v != null) {
+            if (v === parent) return true
+            v = v.parent as? View
+        }
+        return false
+    }
+
+    /** A window takes the remote's focus while one of its shown cards has buttons, and gives it back after. */
+    private fun focus(position: String) {
+        val container = containers[position] ?: return
+        val params = windowParams[position] ?: return
+        val here = cards.values.filter { it.position == position && it.actionable && it.view.visibility == View.VISIBLE }
+        val wanted = here.isNotEmpty()
+        val focusable = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE == 0
+        if (wanted != focusable) {
+            params.flags = if (wanted) {
+                params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            } else {
+                params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            }
+            try {
+                windows.updateViewLayout(container, params)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "Overlay window gone: $e")
+            }
+        }
+        // The newest card with buttons, its first button, unless one already has the focus
+        if (wanted && container.findFocus() == null) {
+            (here.last().view as? ViewGroup)?.let { firstFocusable(it)?.requestFocus() }
+        }
+    }
+
+    private fun firstFocusable(group: ViewGroup): View? {
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            if (child.isFocusable) return child
+            if (child is ViewGroup) firstFocusable(child)?.let { return it }
+        }
+        return null
     }
 
     /** A bar filled to [progress] (0 to 100) in the notification's color. */
@@ -424,7 +530,12 @@ class Overlay private constructor(private val context: Context) {
     private fun schedule(tag: String, card: Card, seconds: Int) {
         card.hide?.let { main.removeCallbacks(it) }
         card.hide = if (seconds > 0) {
-            Runnable { remove(tag, card, animate = true) }.also { main.postDelayed(it, seconds * 1000L) }
+            Runnable {
+                if (!tag.startsWith(AUTO_TAG) && tag != PAIRING_TAG) {
+                    Events.emit("notification_dismissed", JSONObject().put("tag", tag).put("by", "timeout"))
+                }
+                remove(tag, card, animate = true)
+            }.also { main.postDelayed(it, seconds * 1000L) }
         } else {
             null
         }
@@ -478,6 +589,7 @@ class Overlay private constructor(private val context: Context) {
             container.removeView(more)
             mores.remove(position)
         }
+        focus(position)
         // Cards still fading out keep the window until they've gone
         if (container.childCount == 0) {
             try {
@@ -486,6 +598,7 @@ class Overlay private constructor(private val context: Context) {
                 Log.w(TAG, "Overlay window already gone: $e")
             }
             containers.remove(position)
+            windowParams.remove(position)
         }
     }
 
@@ -504,13 +617,28 @@ class Overlay private constructor(private val context: Context) {
     ).apply { setMargins(0, dp(5), 0, dp(5)) }
 
     private fun newContainer(position: String): LinearLayout? {
-        val container = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val container = object : LinearLayout(context) {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (event.action == KeyEvent.ACTION_UP) back(position)
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+        }.apply {
+            orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
+        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            // Not FLAG_NOT_TOUCHABLE: Android 12+ caps such windows at 80%
+            // opacity (see-through cards). Touches outside the cards still
+            // go to what's under them (NOT_TOUCH_MODAL); a TV has none anyway
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT,
@@ -533,6 +661,7 @@ class Overlay private constructor(private val context: Context) {
         return try {
             windows.addView(container, params)
             containers[position] = container
+            windowParams[position] = params
             container
         } catch (e: RuntimeException) {
             // No permission to draw over other apps after all

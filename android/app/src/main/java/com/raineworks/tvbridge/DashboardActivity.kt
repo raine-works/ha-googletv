@@ -101,6 +101,7 @@ class DashboardActivity : Activity() {
 
     override fun onDestroy() {
         if (current === this) current = null
+        Events.emit("dashboard", JSONObject().put("state", "closed"))
         (web.parent as? android.view.ViewGroup)?.removeView(web)
         web.destroy()
         super.onDestroy()
@@ -122,6 +123,7 @@ class DashboardActivity : Activity() {
             return
         }
         token = access
+        Events.emit("dashboard", JSONObject().put("state", "opened").put("url", url))
         origin = originOf(url)
         pageUrl = url
         val separator = if ('?' in url) '&' else '?'

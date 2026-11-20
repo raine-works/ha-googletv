@@ -173,6 +173,19 @@
       "notifications": {
         "name": "Notifications"
       }
+    },
+    "event": {
+      "notification_events": {
+        "name": "Notification events",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "action": "Button pressed",
+              "dismissed": "Dismissed"
+            }
+          }
+        }
+      }
     }
   },
   "exceptions": {
@@ -263,6 +276,10 @@
         "progress": {
           "name": "Progress",
           "description": "A progress bar, 0 to 100: send again with the same tag to move it."
+        },
+        "actions": {
+          "name": "Actions",
+          "description": "Up to 3 buttons, each an action (its id) and a title. The card takes the remote's focus; a button pressed fires googletv_event (type notification_action) with its action and the notification's tag, and Back dismisses it (notification_dismissed). 30 seconds on screen unless the duration says."
         },
         "size": {
           "name": "Size",

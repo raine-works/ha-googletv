@@ -36,6 +36,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | Endpoint | Returns |
 | :--- | :--- |
 | `GET /api/info` | `{api, app_version, name, manufacturer, model, android, paired}` |
+| `GET /api/events` | What happens on the TV, as it happens: see [Events](#events) |
 | `GET /api/state` | `{screen_on, foreground_app, overlay_permission, usage_access, instance, popups}`: `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
 | `GET /api/apps` | `{apps: [{package, name}]}`: the launcher's apps |
 | `GET /api/inputs` | `{inputs: [{id, name}]}`: HDMI and other external inputs, by their names on the TV |
@@ -61,6 +62,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `position` | the TV's setting (`top_right`) | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
 | `duration` | 8 (20 with a video) | Seconds on screen, 1 to 600; `0` until it's dismissed (in the panel, it can't be swiped away) |
 | `progress` | | A progress bar, 0 to 100 |
+| `actions` | | Up to 3 buttons, `[{action, title}]` (`action`: letters, digits, `_ . : -`; `title`: up to 40 characters). The card takes the remote's focus while it's up: a button pressed is a `notification_action` event, Back a `notification_dismissed` one. The panel copy has them too. 30 seconds on screen when no `duration` is given |
 | `size` | the TV's setting (`small`) | `compact` (a one-line pill; a video plays in a small tile on it), `small`, `medium`, `large` |
 | `color` | | The pop-up's border, a hex color (`#03A9F4`) |
 | `mute` | `true` | A video's sound off |
@@ -103,3 +105,19 @@ video hold media audio focus: another app's media pauses them. The app
 starts it over whatever's on, which its overlay permission allows: without
 it, `/api/play` (but an announcement) and `/api/dashboard` answer `409`.
 An announcement plays for at most a minute; up to 8 wait their turn.
+
+## Events
+
+`GET /api/events` streams JSON events, one a line (`application/x-ndjson`),
+for as long as the connection stays open. Every event has `type` and `time`
+(milliseconds since the epoch). Up to 4 streams at once (the oldest closes);
+a stream that stops reading loses its oldest events.
+
+| `type` | Fields | When |
+| :--- | :--- | :--- |
+| `hello` | `instance`, `app_version` | First, on connecting. A new `instance`: the app restarted |
+| `ping` | | Every 15 seconds with nothing else: the connection's alive |
+| `notification_action` | `tag`, `action` | A notification's button was pressed (on a pop-up or in the panel); the notification comes down |
+| `notification_dismissed` | `tag`, `by` | A tagged notification came down on the TV: `by` is `remote` (Back on a card with buttons) or `timeout` |
+| `player` | `state` (`opened`, `playing`, `paused`, `closed`), `kind`, `title` | The full-screen player |
+| `dashboard` | `state` (`opened`, `closed`), `url` | The dashboard view |

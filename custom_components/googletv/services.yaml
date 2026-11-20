@@ -70,6 +70,10 @@ notify:
       example: "off"
       selector:
         text:
+    actions:
+      example: '[{"action": "UNLOCK", "title": "Unlock"}, {"action": "IGNORE", "title": "Ignore"}]'
+      selector:
+        object:
     progress:
       selector:
         number:

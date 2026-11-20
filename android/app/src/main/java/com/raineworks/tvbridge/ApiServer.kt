@@ -57,6 +57,8 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         if (!prefs.isPaired(token)) return error(Response.Status.UNAUTHORIZED, "Not paired")
         return when {
             method == Method.GET && path == "/api/state" -> json(state())
+            method == Method.GET && path == "/api/events" ->
+                newChunkedResponse(Response.Status.OK, "application/x-ndjson", Events.open())
             method == Method.GET && path == "/api/apps" -> json(JSONObject().put("apps", apps()))
             method == Method.GET && path == "/api/inputs" -> json(JSONObject().put("inputs", inputs()))
             method == Method.GET && path == "/api/rules" -> json(rules())

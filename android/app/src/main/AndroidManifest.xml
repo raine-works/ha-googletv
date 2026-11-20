@@ -82,6 +82,11 @@
                 android:value="Local network API that shows Home Assistant notifications on the TV" />
         </service>
 
+        <!-- Buttons pressed on notifications in the panel -->
+        <receiver
+            android:name=".ActionReceiver"
+            android:exported="false" />
+
         <!-- Starts the service after a restart, an update, or when asked
              (com.raineworks.tvbridge.START, sent by the integration over ADB) -->
         <receiver
