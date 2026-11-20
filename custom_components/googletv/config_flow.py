@@ -10,6 +10,10 @@ TVs are also found on their own: every Google TV announces
 (``bt``). One whose ADB port answers is offered; the Bluetooth address is the
 entry's unique id (read over ADB too), so a TV already set up isn't offered
 again, and its entry follows it to a new address.
+
+A TV with the app (Raineworks TV Bridge) announces ``_rwtvbridge._tcp`` too:
+it's offered even with network debugging off, and the flow says how to turn
+it on. Adding a TV without the app offers to install it.
 """
 
 from __future__ import annotations
@@ -35,7 +39,8 @@ import voluptuous as vol
 
 from . import async_get_client
 from .adb import GoogleTvAuthError, GoogleTvError
-from .const import CONF_ONLINE_LOOKUPS, DEFAULT_PORT, DOMAIN
+from .bridge import BRIDGE_SERVICE_TYPE
+from .const import CONF_INSTALL_BRIDGE, CONF_ONLINE_LOOKUPS, DEFAULT_PORT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,12 +68,19 @@ def _tv_id(props: dict[str, str]) -> str | None:
     return props.get("serial")
 
 
-def _schema(host: str = "", port: int = DEFAULT_PORT, name: str = "") -> vol.Schema:
+# The app's mDNS name before 2.0: "Raineworks TV Bridge <the TV's name>"
+OLD_BRIDGE_PREFIX = "Raineworks TV Bridge "
+
+
+def _schema(
+    host: str = "", port: int = DEFAULT_PORT, name: str = "", install: bool = True
+) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_HOST, default=host): str,
             vol.Required(CONF_PORT, default=port): vol.All(int, vol.Range(1, 65535)),
             vol.Optional(CONF_NAME, default=name): str,
+            vol.Required(CONF_INSTALL_BRIDGE, default=install): bool,
         }
     )
 
@@ -88,6 +100,8 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         """Start a flow."""
         self._host = ""
         self._name = ""
+        # Found by the app's own announcement: it's installed
+        self._has_app = False
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -112,7 +126,11 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 await client.async_close()
                 return await self._async_finish(
-                    host, port, user_input.get(CONF_NAME, "").strip(), props
+                    host,
+                    port,
+                    user_input.get(CONF_NAME, "").strip(),
+                    props,
+                    install=user_input.get(CONF_INSTALL_BRIDGE, False),
                 )
             await client.async_close()
 
@@ -123,6 +141,7 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
                 defaults.get(CONF_HOST, ""),
                 defaults.get(CONF_PORT, DEFAULT_PORT),
                 defaults.get(CONF_NAME, ""),
+                defaults.get(CONF_INSTALL_BRIDGE, True),
             ),
             errors=errors,
         )
@@ -130,21 +149,54 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
-        """A Google TV announced itself: offer it if its ADB port answers."""
+        """A Google TV announced itself: offer it if its ADB port answers.
+
+        One the app announced is offered with debugging off too: it says how
+        to turn it on.
+        """
         if discovery_info.ip_address.version != 4:
             return self.async_abort(reason="not_ipv4_address")
         host = str(discovery_info.ip_address)
         name = discovery_info.name.split("._", 1)[0].strip()
+        self._has_app = discovery_info.type == BRIDGE_SERVICE_TYPE
+        if self._has_app:
+            name = discovery_info.properties.get("name") or name.removeprefix(
+                OLD_BRIDGE_PREFIX
+            )
         if bluetooth := discovery_info.properties.get("bt"):
             await self.async_set_unique_id(format_mac(bluetooth))
             self._abort_if_unique_id_configured(updates={CONF_HOST: host})
         # Also a TV set up by its address (or, before 0.2, by its serial)
         self._async_abort_entries_match({CONF_HOST: host})
-        if not await _adb_port_open(host, DEFAULT_PORT):
-            return self.async_abort(reason="adb_off")
+        # One TV, two announcements (Google's remote service and the app)
+        if any(
+            flow["context"].get(CONF_HOST) == host
+            for flow in self._async_in_progress(include_uninitialized=True)
+        ):
+            return self.async_abort(reason="already_in_progress")
+        self.context[CONF_HOST] = host
         self._host, self._name = host, name
         self.context["title_placeholders"] = {"name": name}
+        if not await _adb_port_open(host, DEFAULT_PORT):
+            if self._has_app:
+                return await self.async_step_enable_debugging()
+            return self.async_abort(reason="adb_off")
         return await self.async_step_zeroconf_confirm()
+
+    async def async_step_enable_debugging(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The app is on the TV, debugging isn't: how to turn it on."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if await _adb_port_open(self._host, DEFAULT_PORT):
+                return await self.async_step_zeroconf_confirm()
+            errors["base"] = "adb_off"
+        return self.async_show_form(
+            step_id="enable_debugging",
+            description_placeholders={"name": self._name, "host": self._host},
+            errors=errors,
+        )
 
     async def async_step_zeroconf_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -162,11 +214,21 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 await client.async_close()
                 return await self._async_finish(
-                    self._host, DEFAULT_PORT, self._name, props
+                    self._host,
+                    DEFAULT_PORT,
+                    self._name,
+                    props,
+                    install=user_input.get(CONF_INSTALL_BRIDGE, False),
                 )
             await client.async_close()
         return self.async_show_form(
             step_id="zeroconf_confirm",
+            # The app's offered only to a TV without it
+            data_schema=vol.Schema(
+                {}
+                if self._has_app
+                else {vol.Required(CONF_INSTALL_BRIDGE, default=True): bool}
+            ),
             description_placeholders={"name": self._name, "host": self._host},
             errors=errors,
         )
@@ -241,9 +303,17 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_finish(
-        self, host: str, port: int, name: str, props: dict[str, str]
+        self,
+        host: str,
+        port: int,
+        name: str,
+        props: dict[str, str],
+        install: bool = False,
     ) -> ConfigFlowResult:
-        """Create the entry (or update it on reauth or reconfigure), one per TV."""
+        """Create the entry (or update it on reauth or reconfigure), one per TV.
+
+        ``install``: install the app once it's set up.
+        """
         data = {CONF_HOST: host, CONF_PORT: port}
         if self.source in (SOURCE_REAUTH, SOURCE_RECONFIGURE):
             entry = (
@@ -264,6 +334,8 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
             or " ".join(p for p in (props.get("manufacturer"), props.get("model")) if p)
             or host
         )
+        if install:
+            data[CONF_INSTALL_BRIDGE] = True
         return self.async_create_entry(title=title, data=data)
 
 

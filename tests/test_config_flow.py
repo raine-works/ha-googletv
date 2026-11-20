@@ -68,7 +68,12 @@ async def test_adds_a_tv(hass: HomeAssistant) -> None:
         )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "TCL Smart TV Pro"
-    assert result["data"] == {CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    # The TV app installs once it's set up
+    assert result["data"] == {
+        CONF_HOST: "10.0.0.5",
+        CONF_PORT: 5555,
+        "install_tv_app": True,
+    }
     assert result["result"].unique_id == TV_ID
     client.async_close.assert_awaited()
 
@@ -195,11 +200,68 @@ async def test_discovers_a_tv_with_adb_on(hass: HomeAssistant) -> None:
     }
 
     with _patch_client(_client(AsyncMock(return_value=PROPS))), _patch_setup():
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"install_tv_app": False}
+        )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Lott's TV"
     assert result["data"] == {CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
     assert result["result"].unique_id == TV_ID
+
+
+def _app_discovery(address: str = "10.0.0.5", name: str = "Lott's TV"):
+    return ZeroconfServiceInfo(
+        ip_address=ip_address(address),
+        ip_addresses=[ip_address(address)],
+        hostname="Lott-s-TV.local.",
+        name=f"{name}._rwtvbridge._tcp.local.",
+        port=8721,
+        type="_rwtvbridge._tcp.local.",
+        properties={"api": "1", "id": "a1b2c3", "model": "Smart TV Pro"},
+    )
+
+
+async def test_the_tv_app_found_with_debugging_off(hass: HomeAssistant) -> None:
+    with _patch_probe(False):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            # Before 2.0 the app put its own name first
+            data=_app_discovery(name="Raineworks TV Bridge Lott's TV"),
+        )
+        # Offered anyway, with how to turn debugging on
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "enable_debugging"
+        assert result["description_placeholders"]["name"] == "Lott's TV"
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["errors"] == {"base": "adb_off"}
+    with _patch_probe(True):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "zeroconf_confirm"
+    # The app's there already: nothing to install
+    assert "install_tv_app" not in result["data_schema"].schema
+    with _patch_client(_client(AsyncMock(return_value=PROPS))), _patch_setup():
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Lott's TV"
+    assert result["data"] == {CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+
+
+async def test_one_tv_announced_twice_is_offered_once(hass: HomeAssistant) -> None:
+    with _patch_probe(True):
+        first = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_discovery(),
+        )
+        second = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_app_discovery(),
+        )
+    assert first["step_id"] == "zeroconf_confirm"
+    assert second["type"] is FlowResultType.ABORT
+    assert second["reason"] == "already_in_progress"
 
 
 async def test_a_tv_with_adb_off_is_not_offered(hass: HomeAssistant) -> None:

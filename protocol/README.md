@@ -4,8 +4,10 @@ The TV app (`android/`) serves a small JSON API on the local network, which
 the Home Assistant integration (`custom_components/googletv/`) calls.
 
 * **Port** 8721, plain HTTP on the LAN.
-* **Discovery**: mDNS service `_rwtvbridge._tcp` with TXT records `api` (this
-  API's version), `version` (the app's), `id` (the TV's Android ID), `model`.
+* **Discovery**: mDNS service `_rwtvbridge._tcp` named after the TV, with TXT
+  records `api` (this API's version), `version` (the app's), `id` (the TV's
+  Android ID), `model`, `name` (the TV's name). Home Assistant discovers TVs
+  by it, network debugging on or not.
 * **Auth**: every endpoint but `GET /api/info` and the two pairing ones needs
   `Authorization: Bearer <token>`. A missing or unknown token is `401`.
 * **Errors**: a bad request is `400`, a wrong pairing code `403`, an unknown

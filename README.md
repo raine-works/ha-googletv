@@ -143,10 +143,12 @@ diagnostics every 10 minutes.
 Assistant's notifications on the TV, as pop-ups over whatever's on screen,
 apps and HDMI inputs alike, or in the TV's notification panel.
 
-* **Install it from Home Assistant**: the **Install Raineworks TV Bridge** action
-  (`googletv.install_tv_bridge`) on the TV's media player downloads the app
-  from the latest release, installs it over ADB, allows its pop-ups (which
-  many TVs have no settings screen for) and pairs with it, no code to type.
+* **Installed when you add the TV** (**Install the TV app**, ticked by
+  default), or later with the **Install Raineworks TV Bridge** action
+  (`googletv.install_tv_bridge`) on the TV's media player. Either way Home
+  Assistant downloads the app from the latest release, installs it over ADB,
+  allows its pop-ups (which many TVs have no settings screen for) and pairs
+  with it, no code to type.
 * **A notify entity** (`notify.<tv>_notifications`): a message pops up in the
   top right.
 * **The `googletv.notify` action** for the rest:
@@ -274,9 +276,9 @@ turn off **Look up app icons and artwork online** in the TV's options
    reservation). A discovered TV that moves is followed anyway.
 4. **Add the TV.** Home Assistant finds Google TVs on your network by
    themselves: one with network debugging on shows up under Settings →
-   Devices & services → **Discovered**. Choose **Add**, then **Submit**. (Or
-   add it by hand: Add integration → **Google TV**, with the TV's address and
-   port 5555.)
+   Devices & services → **Discovered**. Choose **Add**, leave **Install the
+   TV app** ticked (for notifications), then **Submit**. (Or add it by hand:
+   Add integration → **Google TV**, with the TV's address and port 5555.)
 5. **Accept the prompt on the TV.** "Allow USB debugging?" appears with Home
    Assistant's key: tick **Always allow from this computer** and choose
    **Allow**. The setup waits up to a minute for it.
@@ -296,7 +298,12 @@ Home Assistant keeps one key for every TV, in `.storage/googletv_adbkey`.
 Every Google TV announces itself over mDNS (`_androidtvremote2._tcp`, the
 service its phone remote uses) with its name and Bluetooth address. Home
 Assistant offers a TV only when its ADB port (5555) answers, so turning on
-network debugging is what makes it appear. Each TV is known by its Bluetooth
+network debugging is what makes it appear. A TV with the TV app announces
+itself too (`_rwtvbridge._tcp`), and is offered with debugging off: Home
+Assistant says how to turn it on. The app's own screen, until Home Assistant
+pairs with it, walks through the same steps: a QR code to the integration in
+HACS, whether network debugging is on (with a button to its settings), and
+adding the TV. Each TV is known by its Bluetooth
 address (read over ADB too, else its serial number), so a TV already added is
 never offered again, and if it gets a new IP address its entry follows it.
 

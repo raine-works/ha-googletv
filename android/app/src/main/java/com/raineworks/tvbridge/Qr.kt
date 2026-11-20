@@ -1,0 +1,29 @@
+package com.raineworks.tvbridge
+
+import android.graphics.Bitmap
+import android.graphics.Color
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+
+/** QR codes for the setup screen: dark modules on white, as phones read best. */
+object Qr {
+    /** Where the QR code leads: the integration in HACS, in your own Home Assistant. */
+    const val HACS_URL =
+        "https://my.home-assistant.io/redirect/hacs_repository/?owner=raine-works&repository=ha-googletv&category=integration"
+
+    fun bitmap(text: String, sizePx: Int): Bitmap {
+        val matrix = QRCodeWriter().encode(
+            text,
+            BarcodeFormat.QR_CODE,
+            sizePx,
+            sizePx,
+            mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 0),
+        )
+        val pixels = IntArray(matrix.width * matrix.height) { i ->
+            if (matrix.get(i % matrix.width, i / matrix.width)) Color.BLACK else Color.WHITE
+        }
+        return Bitmap.createBitmap(pixels, matrix.width, matrix.height, Bitmap.Config.ARGB_8888)
+    }
+}

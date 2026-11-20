@@ -1102,6 +1102,35 @@ async def test_install_tv_bridge(
     assert entry.data[CONF_BRIDGE_TOKEN] == "T0KEN"
 
 
+async def test_the_app_installs_when_asked_at_setup(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.bridge import BRIDGE_APK_URL
+
+    _bridge_web(web)
+    web.get(BRIDGE_APK_URL, content=b"PK\x03\x04 an apk")
+    client.async_read_file.return_value = "p1 123456\n"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="X1",
+        title="Lott's TV",
+        data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555, "install_tv_app": True},
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.googletv.async_get_client",
+            AsyncMock(return_value=client),
+        ),
+        patch("custom_components.googletv.coordinator.BRIDGE_PAIRING_ATTEMPTS", 1),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    client.async_install_apk.assert_awaited_once_with(b"PK\x03\x04 an apk")
+    # Once: not again at the next start
+    assert "install_tv_app" not in entry.data
+
+
 async def test_a_forgotten_pairing_pairs_again(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:

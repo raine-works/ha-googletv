@@ -7,21 +7,33 @@
         "data": {
           "host": "Address",
           "port": "Port",
-          "name": "Name"
+          "name": "Name",
+          "install_tv_app": "Install the TV app"
         },
         "data_description": {
           "host": "The TV's IP address or host name.",
           "port": "The TV's ADB port, 5555 unless you changed it.",
-          "name": "Optional. The TV's maker and model when empty."
+          "name": "Optional. The TV's maker and model when empty.",
+          "install_tv_app": "Raineworks TV Bridge: Home Assistant's notifications on the TV. Installed over ADB once the TV is added."
         }
       },
       "reauth_confirm": {
         "title": "Reconnect {name}",
         "description": "{name} no longer trusts Home Assistant (debugging was turned off and on, or the TV was reset). Make sure USB debugging is on, submit, then tick Always allow and choose Allow on the TV."
       },
+      "enable_debugging": {
+        "title": "Turn on network debugging on {name}",
+        "description": "Home Assistant reaches {name} ({host}) over network debugging, which is off. On the TV:\n\n1. Settings → System → About: select **Android TV OS build** seven times (\"You are now a developer\").\n2. Settings → System → Developer options: turn on **USB debugging**, and **Network debugging** (or Wireless debugging) where it's a separate switch.\n\nThen submit. The TV app's screen shows these steps too."
+      },
       "zeroconf_confirm": {
         "title": "Add {name}",
-        "description": "{name} ({host}) has network debugging on. Submit, then on the TV tick Always allow and choose Allow when it asks \"Allow USB debugging?\". This waits up to a minute for it."
+        "description": "{name} ({host}) has network debugging on. Submit, then on the TV tick Always allow and choose Allow when it asks \"Allow USB debugging?\". This waits up to a minute for it.",
+        "data": {
+          "install_tv_app": "Install the TV app"
+        },
+        "data_description": {
+          "install_tv_app": "Raineworks TV Bridge: Home Assistant's notifications on the TV. Installed over ADB once the TV is added."
+        }
       },
       "reconfigure": {
         "title": "Reconfigure {name}",
@@ -39,7 +51,8 @@
     "error": {
       "cannot_connect": "Can't reach the TV. Check its address and that network debugging is on.",
       "not_authorized": "The TV didn't allow the connection. Submit again and accept the prompt on the TV within a minute.",
-      "unknown": "Unexpected error."
+      "unknown": "Unexpected error.",
+      "adb_off": "Network debugging is still off on the TV."
     },
     "abort": {
       "already_configured": "This TV is already set up.",
@@ -47,7 +60,8 @@
       "adb_off": "Network debugging is off on this TV.",
       "not_ipv4_address": "Only IPv4 addresses are supported.",
       "reconfigure_successful": "Reconfigured.",
-      "wrong_device": "That's a different TV. Add it as a new device instead."
+      "wrong_device": "That's a different TV. Add it as a new device instead.",
+      "already_in_progress": "This TV is already being set up."
     },
     "flow_title": "{name}"
   },

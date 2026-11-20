@@ -8,7 +8,13 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.storage import STORAGE_DIR, Store
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError, load_signer
-from .const import ADB_KEY_FILE, CONF_ONLINE_LOOKUPS, CONF_PROPS, DOMAIN
+from .const import (
+    ADB_KEY_FILE,
+    CONF_INSTALL_BRIDGE,
+    CONF_ONLINE_LOOKUPS,
+    CONF_PROPS,
+    DOMAIN,
+)
 from .coordinator import LIVE_STORAGE_VERSION, GoogleTvConfigEntry, GoogleTvCoordinator
 from .online import get_lookups
 
@@ -71,6 +77,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
     entry.runtime_data = coordinator
     await coordinator.async_load_live()
     entry.async_on_unload(coordinator.async_stop_live)
+    if entry.data.get(CONF_INSTALL_BRIDGE):
+        # Asked for when the TV was added: once
+        hass.config_entries.async_update_entry(
+            entry,
+            data={k: v for k, v in entry.data.items() if k != CONF_INSTALL_BRIDGE},
+        )
+        if not coordinator.bridge_installed:
+            entry.async_create_background_task(
+                hass, coordinator.async_install_bridge_quietly(), f"{DOMAIN} TV app"
+            )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))

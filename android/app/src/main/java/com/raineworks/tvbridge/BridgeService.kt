@@ -59,9 +59,11 @@ class BridgeService : Service() {
 
     private fun announce() {
         val info = NsdServiceInfo().apply {
-            serviceName = "Raineworks TV Bridge ${TvInfo.deviceName(this@BridgeService)}"
+            // The TV's own name: Home Assistant offers it by that name
+            serviceName = TvInfo.deviceName(this@BridgeService)
             serviceType = SERVICE_TYPE
             port = ApiServer.PORT
+            setAttribute("name", TvInfo.deviceName(this@BridgeService))
             setAttribute("api", ApiServer.API_VERSION.toString())
             setAttribute("version", BuildConfig.VERSION_NAME)
             setAttribute("id", Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID))

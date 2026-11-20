@@ -14,6 +14,8 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.TypedValue
@@ -40,6 +42,30 @@ class MainActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var content: LinearLayout
     private lateinit var scroll: ScrollView
+    private val main = Handler(Looper.getMainLooper())
+    // Network debugging, while setting up: null until checked
+    private var debugging: Boolean? = null
+    private var resumed = false
+
+    /** While it's not paired: watch for debugging and pairing, and move on as they happen. */
+    private val watch = object : Runnable {
+        override fun run() {
+            if (!resumed) return
+            val wasPaired = prefs.tokens.isNotEmpty()
+            Thread {
+                val on = TvInfo.networkDebugging()
+                main.post {
+                    if (!resumed) return@post
+                    val paired = prefs.tokens.isNotEmpty()
+                    if (on != debugging || paired != wasPaired) {
+                        debugging = on
+                        build()
+                    }
+                    if (!paired) main.postDelayed(this, WATCH_MS)
+                }
+            }.start()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,7 +94,15 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        resumed = true
         build()
+        if (prefs.tokens.isEmpty()) main.post(watch)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        resumed = false
+        main.removeCallbacks(watch)
     }
 
     private fun build() {
@@ -78,6 +112,7 @@ class MainActivity : Activity() {
         header()
 
         val paired = prefs.tokens.size
+        if (paired == 0) setupCard()
         card(getString(R.string.status_title)) {
             row(it, getString(R.string.status_address), "${ipAddress() ?: "?"}:${ApiServer.PORT}")
             row(
@@ -169,6 +204,112 @@ class MainActivity : Activity() {
         if (focusedIndex >= 0) {
             content.getFocusables(View.FOCUS_DOWN).getOrNull(focusedIndex)?.requestFocus()
         }
+    }
+
+    /**
+     * Setting up, while Home Assistant isn't paired: a QR code to the
+     * integration in HACS, network debugging (with a way to its settings),
+     * then adding the TV in Home Assistant, which pairs by itself.
+     */
+    private fun setupCard() {
+        card(getString(R.string.setup_title), getString(R.string.setup_subtitle)) { body ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+                setPadding(0, dp(8), 0, 0)
+                clipChildren = false
+                clipToPadding = false
+            }
+            row.addView(
+                ImageView(this).apply {
+                    setImageBitmap(Qr.bitmap(Qr.HACS_URL, dp(176)))
+                    background = Theme.surface(this@MainActivity, Color.WHITE, 12, Color.WHITE)
+                    setPadding(dp(12), dp(12), dp(12), dp(12))
+                    contentDescription = getString(R.string.setup_qr)
+                },
+                LinearLayout.LayoutParams(dp(200), dp(200)),
+            )
+            val steps = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(28), 0, 0, 0)
+                clipChildren = false
+                clipToPadding = false
+            }
+            step(steps, 1, getString(R.string.setup_hacs_title), getString(R.string.setup_hacs_text))
+            val developer = TvInfo.developerOptions(this)
+            val on = debugging
+            step(
+                steps,
+                2,
+                getString(R.string.setup_debugging_title),
+                getString(if (developer) R.string.setup_debugging_text else R.string.setup_developer_text),
+                when (on) {
+                    null -> null
+                    true -> getString(R.string.setup_on) to Theme.SUCCESS
+                    false -> getString(R.string.setup_off) to Theme.WARNING
+                },
+            )
+            if (on == false) {
+                button(steps, getString(R.string.setup_open_settings), primary = true) {
+                    val settings = Intent(
+                        if (developer) Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS else Settings.ACTION_DEVICE_INFO_SETTINGS,
+                    )
+                    if (settings.resolveActivity(packageManager) != null) {
+                        startActivity(settings)
+                    } else {
+                        Toast.makeText(this, R.string.permission_unavailable, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            step(steps, 3, getString(R.string.setup_add_title), getString(R.string.setup_add_text))
+            row.addView(steps, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            body.addView(row)
+        }
+    }
+
+    /** A numbered step: its title (and a status pill), the text under it. */
+    private fun step(parent: LinearLayout, number: Int, title: String, value: String, status: Pair<String, Int>? = null) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            setPadding(0, if (parent.childCount == 0) 0 else dp(16), 0, 0)
+        }
+        row.addView(
+            text(number.toString(), 13f, Theme.semibold(this), Theme.FOREGROUND).apply {
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Theme.MUTED)
+                }
+            },
+            LinearLayout.LayoutParams(dp(26), dp(26)),
+        )
+        val texts = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(3), 0, 0)
+        }
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        heading.addView(text(title, 15f, Theme.semibold(this), Theme.FOREGROUND))
+        status?.let { (word, color) ->
+            heading.addView(
+                pill(word, color),
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = dp(10)
+                },
+            )
+        }
+        texts.addView(heading)
+        texts.addView(
+            text(value, 13f, Theme.regular(this), Theme.MUTED_FOREGROUND).apply {
+                setPadding(0, dp(4), 0, 0)
+                setLineSpacing(0f, 1.15f)
+            },
+        )
+        row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        parent.addView(row)
     }
 
     // Pieces
@@ -427,6 +568,10 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Number): Int = Theme.dp(this, value)
+
+    companion object {
+        private const val WATCH_MS = 3000L
+    }
 
     /** The TV's address on the network, for the status card. */
     private fun ipAddress(): String? = try {

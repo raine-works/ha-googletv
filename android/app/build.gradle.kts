@@ -68,6 +68,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-rtsp:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+    // The setup screen's QR code
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

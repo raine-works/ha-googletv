@@ -36,6 +36,7 @@ from homeassistant.util import dt as dt_util
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
 from .bridge import (
+    BRIDGE_APK_URL,
     BRIDGE_PACKAGE,
     BRIDGE_PAIRING_FILE,
     BridgeAuthError,
@@ -303,6 +304,18 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if not self.bridge.token:
             await self._async_pair_bridge(attempts=BRIDGE_PAIRING_ATTEMPTS)
         await self.async_request_refresh()
+
+    async def async_install_bridge_quietly(self) -> None:
+        """Install the app when the TV is added; a failure is only logged."""
+        try:
+            await self.async_install_bridge(BRIDGE_APK_URL)
+        except HomeAssistantError as err:
+            _LOGGER.warning(
+                "Couldn't install Raineworks TV Bridge on %s (install it with the "
+                "googletv.install_tv_bridge action): %s",
+                self.client.host,
+                err,
+            )
 
     async def async_notify(
         self, payload: dict[str, Any], until: dict[str, Any] | None = None

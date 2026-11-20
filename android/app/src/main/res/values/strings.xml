@@ -11,6 +11,20 @@
     <string name="pill_paired">Connected</string>
     <string name="pill_not_paired">Not paired</string>
 
+    <string name="setup_title">Set up with Home Assistant</string>
+    <string name="setup_subtitle">Three steps; this screen follows along</string>
+    <string name="setup_qr">QR code: the Google TV integration in HACS</string>
+    <string name="setup_hacs_title">Add the integration</string>
+    <string name="setup_hacs_text">Scan with your phone to open the Google TV integration in HACS. Download it, then restart Home Assistant.</string>
+    <string name="setup_debugging_title">Turn on network debugging</string>
+    <string name="setup_developer_text">In About, select Android TV OS build seven times. Then in Developer options, turn on USB debugging and Network debugging.</string>
+    <string name="setup_debugging_text">In Developer options, turn on USB debugging, and Network debugging where it\'s a separate switch.</string>
+    <string name="setup_open_settings">Open settings</string>
+    <string name="setup_on">On</string>
+    <string name="setup_off">Off</string>
+    <string name="setup_add_title">Add this TV</string>
+    <string name="setup_add_text">In Home Assistant, it\'s under Settings → Devices &amp; services → Discovered. Choose Add, then choose Allow here when the TV asks.</string>
+
     <string name="status_title">Connection</string>
     <string name="status_address">Address</string>
     <string name="status_home_assistant">Home Assistant</string>

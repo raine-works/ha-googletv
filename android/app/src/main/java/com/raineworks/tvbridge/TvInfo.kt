@@ -13,6 +13,23 @@ import android.provider.Settings
 
 /** What the bridge can see of the TV without ADB. */
 object TvInfo {
+    /** Developer options are on (the build number was selected seven times). */
+    fun developerOptions(context: Context): Boolean =
+        Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) != 0
+
+    /**
+     * Network debugging is on: ADB answers on its port, as Home Assistant
+     * will connect to it. It blocks for a moment: not on the main thread.
+     */
+    fun networkDebugging(): Boolean = try {
+        java.net.Socket().use { it.connect(java.net.InetSocketAddress("127.0.0.1", ADB_PORT), 500) }
+        true
+    } catch (e: java.io.IOException) {
+        false
+    }
+
+    private const val ADB_PORT = 5555
+
     data class App(val packageName: String, val name: String)
     data class Input(val id: String, val name: String)
 
