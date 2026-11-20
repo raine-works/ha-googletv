@@ -3,6 +3,42 @@
     "button": {
       "app": {
         "default": "mdi:application-outline"
+      },
+      "home": {
+        "default": "mdi:home"
+      },
+      "back": {
+        "default": "mdi:arrow-left"
+      },
+      "up": {
+        "default": "mdi:chevron-up"
+      },
+      "down": {
+        "default": "mdi:chevron-down"
+      },
+      "left": {
+        "default": "mdi:chevron-left"
+      },
+      "right": {
+        "default": "mdi:chevron-right"
+      },
+      "select": {
+        "default": "mdi:circle-outline"
+      },
+      "play_pause": {
+        "default": "mdi:play-pause"
+      },
+      "volume_up": {
+        "default": "mdi:volume-plus"
+      },
+      "volume_down": {
+        "default": "mdi:volume-minus"
+      },
+      "mute": {
+        "default": "mdi:volume-mute"
+      },
+      "settings": {
+        "default": "mdi:cog"
       }
     },
     "remote": {

@@ -54,6 +54,42 @@
     "button": {
       "app": {
         "name": "App"
+      },
+      "home": {
+        "name": "Home"
+      },
+      "back": {
+        "name": "Back"
+      },
+      "up": {
+        "name": "Up"
+      },
+      "down": {
+        "name": "Down"
+      },
+      "left": {
+        "name": "Left"
+      },
+      "right": {
+        "name": "Right"
+      },
+      "select": {
+        "name": "OK"
+      },
+      "play_pause": {
+        "name": "Play/pause"
+      },
+      "volume_up": {
+        "name": "Volume up"
+      },
+      "volume_down": {
+        "name": "Volume down"
+      },
+      "mute": {
+        "name": "Mute"
+      },
+      "settings": {
+        "name": "Settings"
       }
     },
     "select": {

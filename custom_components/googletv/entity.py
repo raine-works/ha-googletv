@@ -19,13 +19,24 @@ class GoogleTvEntity(CoordinatorEntity[GoogleTvCoordinator]):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: GoogleTvCoordinator, key: str) -> None:
-        """Initialize the entity."""
+    def __init__(
+        self, coordinator: GoogleTvCoordinator, key: str, *, apps: bool = False
+    ) -> None:
+        """Initialize the entity (``apps``: on the TV's Apps device)."""
         super().__init__(coordinator)
         entry = coordinator.config_entry
         assert entry is not None
         unique = entry.unique_id or entry.entry_id
         self._attr_unique_id = f"{unique}_{key}"
+        if apps:
+            # The app buttons are a device of their own, linked under the TV,
+            # so the TV's page keeps its controls apart from a long app list
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{unique}_apps")},
+                name=f"{entry.title} Apps",
+                via_device=(DOMAIN, unique),
+            )
+            return
         props = coordinator.props
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, unique)},

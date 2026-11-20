@@ -1,12 +1,18 @@
-"""A button per installed app: press to open it (the TV wakes first)."""
+"""Buttons: the remote's keys on the TV, and one per app on its Apps device.
+
+The keys (Home, Back, the d-pad, OK, playback, volume, Settings) are the TV's
+own controls; each app's button opens it, waking the TV first.
+"""
 
 from __future__ import annotations
 
-from homeassistant.components.button import ButtonEntity
+from dataclasses import dataclass
+
+from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator
+from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, translate_errors
 from .entity import GoogleTvEntity
 from .parsers import App
 
@@ -16,8 +22,9 @@ async def async_setup_entry(
     entry: GoogleTvConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """A button for each app in the launcher, and for apps installed later."""
+    """The remote's keys, and a button for each app (and apps installed later)."""
     coordinator = entry.runtime_data
+    async_add_entities(GoogleTvKeyButton(coordinator, d) for d in KEYS)
     known: set[str] = set()
 
     @callback
@@ -31,6 +38,51 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(add_new_apps))
 
 
+@dataclass(frozen=True, kw_only=True)
+class GoogleTvKeyDescription(ButtonEntityDescription):
+    """A remote key: the ``KEYCODES`` name it presses."""
+
+    keycode: str
+
+
+KEYS: tuple[GoogleTvKeyDescription, ...] = tuple(
+    GoogleTvKeyDescription(key=key, translation_key=key, keycode=keycode)
+    for key, keycode in (
+        ("home", "HOME"),
+        ("back", "BACK"),
+        ("up", "DPAD_UP"),
+        ("down", "DPAD_DOWN"),
+        ("left", "DPAD_LEFT"),
+        ("right", "DPAD_RIGHT"),
+        ("select", "DPAD_CENTER"),
+        ("play_pause", "MEDIA_PLAY_PAUSE"),
+        ("volume_up", "VOLUME_UP"),
+        ("volume_down", "VOLUME_DOWN"),
+        ("mute", "VOLUME_MUTE"),
+        ("settings", "SETTINGS"),
+    )
+)
+
+
+class GoogleTvKeyButton(GoogleTvEntity, ButtonEntity):
+    """Presses one of the remote's keys."""
+
+    entity_description: GoogleTvKeyDescription
+
+    def __init__(
+        self, coordinator: GoogleTvCoordinator, description: GoogleTvKeyDescription
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator, f"key_{description.key}")
+        self.entity_description = description
+
+    async def async_press(self) -> None:
+        """Press the key."""
+        with translate_errors():
+            await self.coordinator.client.async_key(self.entity_description.keycode)
+        await self.coordinator.async_request_refresh()
+
+
 class GoogleTvAppButton(GoogleTvEntity, ButtonEntity):
     """Opens one app, named and pictured from its Play Store listing."""
 
@@ -38,7 +90,7 @@ class GoogleTvAppButton(GoogleTvEntity, ButtonEntity):
 
     def __init__(self, coordinator: GoogleTvCoordinator, package: str) -> None:
         """Initialize the button."""
-        super().__init__(coordinator, f"app_{package}")
+        super().__init__(coordinator, f"app_{package}", apps=True)
         self._package = package
 
     @property

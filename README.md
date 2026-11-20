@@ -21,7 +21,7 @@ integrations to combine, and no helpers to make.
 
 ## What you get
 
-Each TV is one device with:
+Each TV is a device with:
 
 **Media player** (`media_player.<tv>`, device class TV)
 
@@ -39,12 +39,18 @@ Each TV is one device with:
 **Input** (`select.<tv>_input`): the HDMI inputs by their names on the TV,
 showing the one on screen; pick one to switch to it (the TV wakes first).
 
-**A button per app** (`button.<tv>_netflix`, …): named and pictured from the
-app's Google Play listing; press to open it (the TV wakes first). An app
-installed later gets its button on its own; an uninstalled one goes
-unavailable.
+**Remote keys** (`button.<tv>_home`, …): Home, Back, Up, Down, Left, Right,
+OK, Play/pause, Volume up, Volume down, Mute and Settings, a button each.
 
-**Remote** (`remote.<tv>`): `remote.send_command` with any key: `HOME`, `BACK`,
+**Apps**: a device of its own, "<TV> Apps", linked under the TV, so the TV's
+page keeps its controls apart from the app list. A button per app
+(`button.<tv>_apps_netflix`, …), named and pictured from its Google Play
+listing; press to open it (the TV wakes first). An app installed later gets
+its button on its own; an uninstalled one goes unavailable. Hide or disable
+the ones you don't want (the button's ⚙️ → Visible / Enabled).
+
+**Remote** (`remote.<tv>`), for automations and dashboards:
+`remote.send_command` with any key: `HOME`, `BACK`,
 `DPAD_UP` / `DOWN` / `LEFT` / `RIGHT` / `CENTER`, `VOLUME_UP`, `MEDIA_PLAY_PAUSE`,
 `SETTINGS`, … or an Android key code number. `num_repeats` and `delay_secs` work.
 
