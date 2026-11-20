@@ -16,16 +16,27 @@ object Pairing {
     private const val CODE_TTL_MS = 5 * 60 * 1000L
     private const val MAX_ATTEMPTS = 5
     private const val MAX_PENDING = 4
+    // Wrong codes, across pairings: this many in the window locks pairing
+    private const val MAX_FAILURES = 10
+    private const val FAILURE_WINDOW_MS = 10 * 60 * 1000L
+    private const val LOCKOUT_MS = 10 * 60 * 1000L
     private val random = SecureRandom()
 
     private data class Pending(val code: String, val expires: Long, var attempts: Int)
 
     private val pending = LinkedHashMap<String, Pending>()
+    private val failures = ArrayDeque<Long>()
+    private var lockedUntil = 0L
+
+    /** Pairing is locked a while after too many wrong codes (a guess at every code takes ~1M). */
+    @Synchronized
+    fun locked(): Boolean = System.currentTimeMillis() < lockedUntil
 
     /** A new pairing: its id; its code shown on screen, or written for ADB. */
     @Synchronized
     fun start(context: Context, via: String): String {
         val now = System.currentTimeMillis()
+        check(now >= lockedUntil) { "Too many wrong codes: try again later" }
         pending.entries.removeAll { it.value.expires < now }
         while (pending.size >= MAX_PENDING) pending.remove(pending.keys.first())
         val id = ByteArray(12).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
@@ -35,8 +46,11 @@ object Pairing {
             // The app's own external folder: ADB (the shell) can read it, other
             // apps and the network can't
             codeFile(context)?.writeText("$id $code\n")
-        } else {
+        } else if (TvInfo.overlayAllowed(context)) {
             Overlay.get(context).showPairingCode(code)
+        } else {
+            // No pop-ups allowed: the notification panel
+            Notifications.postPairingCode(context, code)
         }
         return id
     }
@@ -51,11 +65,20 @@ object Pairing {
         }
         entry.attempts++
         if (!MessageDigest.isEqual(entry.code.toByteArray(), code.trim().toByteArray())) {
+            val now = System.currentTimeMillis()
+            failures.addLast(now)
+            while (failures.isNotEmpty() && failures.first() < now - FAILURE_WINDOW_MS) failures.removeFirst()
+            if (failures.size >= MAX_FAILURES) {
+                lockedUntil = now + LOCKOUT_MS
+                failures.clear()
+                pending.clear()
+            }
             return null
         }
         pending.remove(id)
         codeFile(context)?.delete()
         Overlay.get(context).dismiss(Overlay.PAIRING_TAG)
+        Notifications.cancelPairingCode(context)
         return Prefs(context).newToken()
     }
 

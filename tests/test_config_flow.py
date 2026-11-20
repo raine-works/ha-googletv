@@ -143,7 +143,12 @@ async def test_reauth(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         unique_id=TV_ID,
         title="Lott's TV",
-        data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555},
+        data={
+            CONF_HOST: "10.0.0.5",
+            CONF_PORT: 5555,
+            "bridge_token": "T0KEN",
+            "props": {"wifi_mac": "aa:bb:cc:dd:ee:ff"},
+        },
     )
     entry.add_to_hass(hass)
     result = await entry.start_reauth_flow(hass)
@@ -157,6 +162,9 @@ async def test_reauth(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
+    # The TV app's pairing and the TV's MACs stay
+    assert entry.data["bridge_token"] == "T0KEN"
+    assert entry.data["props"] == {"wifi_mac": "aa:bb:cc:dd:ee:ff"}
 
 
 def test_without_bluetooth_the_serial_is_the_id() -> None:

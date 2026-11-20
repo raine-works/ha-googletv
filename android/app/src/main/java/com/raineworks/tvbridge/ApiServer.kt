@@ -34,6 +34,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         when {
             method == Method.GET && path == "/api/info" -> return json(info())
             method == Method.POST && path == "/api/pair/start" -> {
+                if (Pairing.locked()) return error(Response.Status.TOO_MANY_REQUESTS, "Too many wrong codes: try again later")
                 val body = body(session)
                 val via = body.optString("via", Pairing.VIA_SCREEN)
                 require(via == Pairing.VIA_SCREEN || via == Pairing.VIA_ADB) { "via must be screen or adb" }
@@ -90,10 +91,13 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
             }
             method == Method.POST && path == "/api/play" -> {
                 val request = PlayRequest.parse(body(session))
+                // Android lets the app open over what's on only with it
+                if (!request.announce && !TvInfo.overlayAllowed(context)) return overlayNeeded()
                 if (request.announce) Announcer.announce(context, request) else PlayerActivity.start(context, request)
                 json(JSONObject().put("ok", true))
             }
             method == Method.POST && path == "/api/dashboard" -> {
+                if (!TvInfo.overlayAllowed(context)) return overlayNeeded()
                 val body = body(session)
                 val url = body.getString("url")
                 require(Regex("^https?://\\S+$", RegexOption.IGNORE_CASE).matches(url)) { "url must be an http(s) URL" }
@@ -168,6 +172,9 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     private fun json(body: JSONObject, status: Response.Status = Response.Status.OK): Response =
         newFixedLengthResponse(status, "application/json; charset=utf-8", body.toString())
+
+    private fun overlayNeeded(): Response =
+        error(Response.Status.CONFLICT, "The TV app needs Pop-ups over other apps allowed to open media and dashboards")
 
     private fun error(status: Response.Status, message: String): Response =
         json(JSONObject().put("error", message), status)

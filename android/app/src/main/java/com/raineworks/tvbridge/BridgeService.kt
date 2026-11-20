@@ -36,8 +36,10 @@ class BridgeService : Service() {
                 it.start(SOCKET_READ_TIMEOUT_MS, false)
             } catch (e: java.io.IOException) {
                 Log.e(TAG, "Couldn't start the API on port ${ApiServer.PORT}", e)
+                return
             }
         }
+        // Announced only once it's listening
         announce()
     }
 

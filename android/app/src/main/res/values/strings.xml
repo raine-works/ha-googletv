@@ -58,6 +58,8 @@
     <string name="player_untitled">Playing from Home Assistant</string>
     <string name="player_from">From Home Assistant</string>
     <string name="more_popups">+%1$d more</string>
+    <string name="clear_button">Clear pop-ups</string>
+    <string name="cleared">Pop-ups cleared</string>
     <string name="test_button">Show a test notification</string>
     <string name="test_title">Google TV by Raineworks</string>
     <string name="test_message">Notifications from Home Assistant look like this.</string>

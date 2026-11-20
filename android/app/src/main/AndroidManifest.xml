@@ -62,13 +62,13 @@
         <!-- Home Assistant's media and dashboards, full screen -->
         <activity
             android:name=".PlayerActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|orientation"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|orientation|density|uiMode|locale|layoutDirection"
             android:exported="false"
             android:launchMode="singleTask"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
         <activity
             android:name=".DashboardActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|orientation"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|orientation|density|uiMode|locale|layoutDirection"
             android:exported="false"
             android:launchMode="singleTask"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />

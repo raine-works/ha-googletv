@@ -79,10 +79,11 @@ data class NotificationRequest(
             require(whenBlocked == null || whenBlocked in setOf(Prefs.WHEN_BLOCKED_PANEL, Prefs.WHEN_BLOCKED_DROP)) {
                 "when_blocked must be panel or drop"
             }
-            for (url in listOfNotNull(imageUrl, videoUrl)) {
-                require(Regex("^(https?|rtsp)://\\S+$", RegexOption.IGNORE_CASE).matches(url)) {
-                    "image_url and video_url must be http(s) or rtsp URLs"
-                }
+            require(imageUrl == null || Regex("^https?://\\S+$", RegexOption.IGNORE_CASE).matches(imageUrl)) {
+                "image_url must be an http(s) URL"
+            }
+            require(videoUrl == null || Regex("^(https?|rtsp)://\\S+$", RegexOption.IGNORE_CASE).matches(videoUrl)) {
+                "video_url must be an http(s) or rtsp URL"
             }
             val icon = text("icon")
             require(

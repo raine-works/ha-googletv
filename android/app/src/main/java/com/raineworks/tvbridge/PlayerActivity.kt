@@ -101,6 +101,7 @@ class PlayerActivity : Activity() {
     }
 
     private fun release() {
+        progress?.removeCallbacks(tick)
         session?.release()
         session = null
         player?.release()

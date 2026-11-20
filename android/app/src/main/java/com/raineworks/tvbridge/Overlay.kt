@@ -444,7 +444,12 @@ class Overlay private constructor(private val context: Context) {
         val here = cards.values.filter { it.position == position }
         val visible = (here.filter { it.pinned } + here.filterNot { it.pinned }.asReversed())
             .take(MAX_VISIBLE).toSet()
-        here.forEach { it.view.visibility = if (it in visible) View.VISIBLE else View.GONE }
+        here.forEach {
+            val shown = it in visible
+            it.view.visibility = if (shown) View.VISIBLE else View.GONE
+            // A camera counted in "+N more" doesn't stream unseen
+            it.player?.playWhenReady = shown
+        }
         val hidden = here.size - visible.size
         val more = mores[position]
         if (hidden > 0) {

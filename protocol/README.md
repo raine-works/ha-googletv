@@ -24,6 +24,9 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
    reaches over ADB without anyone at the TV.
 2. `POST /api/pair/finish` `{"pairing_id": "…", "code": "123456"}` →
    `{"token": "…"}`, or `403`. A code works for 5 minutes and 5 tries.
+   10 wrong codes in 10 minutes, across pairings, lock pairing for 10
+   minutes: `/api/pair/start` answers `429` (tokens already given keep
+   working).
 
 `POST /api/unpair` forgets the calling token.
 
@@ -39,7 +42,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules |
 | `POST /api/notify` | shows a notification; see below |
 | `POST /api/play` | Plays media; see below |
-| `POST /api/dashboard` | `{url, token}`: a Home Assistant dashboard full screen, signed in with `token` (the frontend's external auth, as Home Assistant's phone apps do) |
+| `POST /api/dashboard` | `{url, token}`: a Home Assistant dashboard full screen, signed in with `token` (the frontend's external auth, as Home Assistant's phone apps do). It stays on `url`'s address (scheme, host, port): links elsewhere aren't followed, and the token is given only to a page from there. It closes on Back from its first page, or when another app comes to the front |
 | `POST /api/stop` | Closes the player and the dashboard, and stops announcing |
 | `POST /api/dismiss` | `{tag}` takes that notification down, from the screen and the panel; no tag takes them all down (but a pairing code) |
 
@@ -51,7 +54,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | :--- | :--- | :--- |
 | `title`, `message` | | Text; at least one of these, `image_url` or `video_url` |
 | `icon` | | The badge: `mdi:<name>` (Material Design Icons 7.4.47, bundled) or an http(s) image URL; the logo if not set |
-| `image_url` | | An image (http/https), shown on the pop-up and in the panel |
+| `image_url` | | An image (http/https only), shown on the pop-up and in the panel |
 | `video_url` | | A video or live stream (http/https, HLS `.m3u8`, rtsp), played on the pop-up: a doorbell camera |
 | `mode` | `popup` | `popup` over what's on screen, `panel` (the notification panel only), or `both` |
 | `position` | the TV's setting (`top_right`) | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
@@ -96,4 +99,6 @@ Full screen media has a media session like any app's (so the TV's media
 state shows it, and the remote's media keys work), and closes at its end,
 on Back, when another app comes to the front, or on `/api/stop`. Audio and
 video hold media audio focus: another app's media pauses them. The app
-starts it over whatever's on, which its overlay permission allows.
+starts it over whatever's on, which its overlay permission allows: without
+it, `/api/play` (but an announcement) and `/api/dashboard` answer `409`.
+An announcement plays for at most a minute; up to 8 wait their turn.

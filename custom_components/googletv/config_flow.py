@@ -325,7 +325,9 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
             known = {_tv_id(props), props.get("serial")} - {None}
             if entry.unique_id and known and entry.unique_id not in known:
                 return self.async_abort(reason="wrong_device")
-            return self.async_update_reload_and_abort(entry, data=data)
+            # Only the address: its pairing with the TV app, its MACs and the
+            # TV's own user stay
+            return self.async_update_reload_and_abort(entry, data_updates=data)
         if tv_id := _tv_id(props):
             await self.async_set_unique_id(tv_id, raise_on_progress=False)
         self._abort_if_unique_id_configured(updates=data)

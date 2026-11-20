@@ -9,7 +9,9 @@ import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.net.Uri
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewCompat
@@ -21,12 +23,19 @@ import org.json.JSONObject
  * phone apps do ("external auth"): the frontend asks this app for its access
  * token, which the integration made for this TV's own user and sent with the
  * dashboard. The sidebar is hidden; Back goes back, then closes it.
+ *
+ * It stays on Home Assistant: a link elsewhere isn't followed, and the
+ * token is given only to a page from Home Assistant's own address.
  */
 class DashboardActivity : Activity() {
 
     private lateinit var web: WebView
     // Read from the frontend's thread (JavaScript calls)
     @Volatile private var token: String = ""
+    // Home Assistant's address (scheme, host, port): the only one it shows
+    @Volatile private var origin: String = ""
+    // The page's address, kept on the main thread for the JavaScript calls
+    @Volatile private var pageUrl: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,7 +46,14 @@ class DashboardActivity : Activity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                    originOf(request.url.toString()) != origin
+
+                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    pageUrl = url
+                }
+            }
             addJavascriptInterface(Bridge(), "externalApp")
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
@@ -59,8 +75,15 @@ class DashboardActivity : Activity() {
         load(intent)
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Left for another app or the home screen: closed, signed out
+        finish()
+    }
+
     override fun onDestroy() {
         if (current === this) current = null
+        (web.parent as? android.view.ViewGroup)?.removeView(web)
         web.destroy()
         super.onDestroy()
     }
@@ -81,9 +104,14 @@ class DashboardActivity : Activity() {
             return
         }
         token = access
+        origin = originOf(url)
+        pageUrl = url
         val separator = if ('?' in url) '&' else '?'
         web.loadUrl("$url${separator}external_auth=1")
     }
+
+    /** Only for a page on Home Assistant's own address. */
+    private fun trusted(): Boolean = origin.isNotEmpty() && originOf(pageUrl) == origin
 
     private fun js(script: String) {
         runOnUiThread { web.evaluateJavascript(script, null) }
@@ -93,22 +121,27 @@ class DashboardActivity : Activity() {
     private inner class Bridge {
         @JavascriptInterface
         fun getExternalAuth(payload: String) {
-            val callback = JSONObject(payload).optString("callback")
-            if (!CALLBACK.matches(callback)) return
+            val callback = callbackOf(payload) ?: return
+            if (!trusted()) {
+                Log.w(TAG, "A page off Home Assistant asked for its token: refused")
+                js("window.$callback(false);")
+                return
+            }
             val auth = JSONObject().put("access_token", token).put("expires_in", TOKEN_SECONDS)
             js("window.$callback(true, $auth);")
         }
 
         @JavascriptInterface
         fun revokeExternalAuth(payload: String) {
-            val callback = JSONObject(payload).optString("callback")
-            if (CALLBACK.matches(callback)) js("window.$callback(true);")
+            if (!trusted()) return
+            callbackOf(payload)?.let { js("window.$it(true);") }
             runOnUiThread { finish() }
         }
 
         /** The frontend's messages: it waits for its config; the rest needs no answer. */
         @JavascriptInterface
         fun externalBus(message: String) {
+            if (!trusted()) return
             val json = try {
                 JSONObject(message)
             } catch (e: org.json.JSONException) {
@@ -133,9 +166,24 @@ class DashboardActivity : Activity() {
         }
     }
 
+    /** The JavaScript callback a payload names, if it's a plain name and the payload is JSON. */
+    private fun callbackOf(payload: String): String? = try {
+        JSONObject(payload).optString("callback").takeIf { CALLBACK.matches(it) }
+    } catch (e: org.json.JSONException) {
+        null
+    }
+
     companion object {
         private const val TAG = "TvBridge"
         private const val EXTRA_URL = "url"
+
+        /** scheme://host:port, the parts that make an address the same site. */
+        fun originOf(url: String): String {
+            val uri = Uri.parse(url)
+            val scheme = uri.scheme?.lowercase() ?: return ""
+            val port = if (uri.port != -1) uri.port else if (scheme == "https") 443 else 80
+            return "$scheme://${uri.host?.lowercase()}:$port"
+        }
         private const val EXTRA_TOKEN = "token"
         // The integration's tokens last for years: the frontend needn't ask often
         private const val TOKEN_SECONDS = 86_400

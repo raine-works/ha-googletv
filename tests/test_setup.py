@@ -11,6 +11,7 @@ import json
 import pathlib
 from unittest.mock import AsyncMock, patch
 
+import aiohttp
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component")
@@ -737,7 +738,13 @@ def _bridge_web(web: AiohttpClientMocker, token: str = "T0KEN") -> None:
     web.post(f"{BRIDGE}/api/pair/finish", json={"token": token})
     web.post(
         f"{BRIDGE}/api/notify",
-        json={"popup": True, "panel": False, "blocked_by": None, "reason": None},
+        json={
+            "popup": True,
+            "panel": False,
+            "blocked_by": None,
+            "reason": None,
+            "instance": "run-1",
+        },
     )
     web.post(
         f"{BRIDGE}/api/rules",
@@ -1013,15 +1020,106 @@ async def test_live_notifications_come_back_when_the_app_restarts(
     assert len(_bridge_calls(web, "/api/notify")) == sent + 1
 
 
+async def test_a_notification_after_the_app_restarts_doesnt_skip_the_replay(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _live_door(hass, client, web)
+    coordinator = entry.runtime_data
+    # The app restarted (run-2), and a plain notification went out before
+    # the check: its reply mustn't count as the live ones being shown again
+    web.get(f"{BRIDGE}/api/state", json={"instance": "run-2", "popups": []})
+    coordinator._bridge_instance = "run-1"
+    await hass.services.async_call(
+        "notify",
+        "send_message",
+        {"entity_id": "notify.lott_s_tv_notifications", "message": "Hi"},
+        blocking=True,
+    )
+    sent = len(_bridge_calls(web, "/api/notify"))
+    await coordinator._async_check_live()
+    assert len(_bridge_calls(web, "/api/notify")) == sent + 1
+    assert coordinator._bridge_instance == "run-2"
+
+
+async def test_a_dismissal_that_fails_is_tried_again(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    entry = await _live_door(hass, client, web)
+    coordinator = entry.runtime_data
+    web.clear_requests()
+    web.post(f"{BRIDGE}/api/dismiss", exc=aiohttp.ClientError("TV asleep"))
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN,
+            "dismiss_notifications",
+            {
+                "entity_id": "media_player.lott_s_tv",
+                "tag": "until:binary_sensor.front_door",
+            },
+            blocking=True,
+        )
+    assert coordinator._dismiss_pending == {"until:binary_sensor.front_door"}
+    web.clear_requests()
+    web.post(f"{BRIDGE}/api/dismiss", json={"ok": True})
+    await coordinator._async_check_live()
+    assert coordinator._dismiss_pending == set()
+    assert _bridge_calls(web, "/api/dismiss")
+
+
+async def test_until_makes_it_live_whatever_the_duration(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    hass.states.async_set("binary_sensor.garage", "on")
+    entry = await _paired(hass, client, web)
+    await hass.services.async_call(
+        DOMAIN,
+        "notify",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "title": "Garage open",
+            "duration": 30,
+            "until_entity": "binary_sensor.garage",
+        },
+        blocking=True,
+    )
+    assert _bridge_calls(web, "/api/notify")[-1][2]["duration"] == 0
+    assert "until:binary_sensor.garage" in entry.runtime_data._live
+
+
+async def test_a_live_notification_waits_for_its_entity_after_a_restart(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _live_door(hass, client, web)
+    await hass.config_entries.async_unload(entry.entry_id)
+    # Home Assistant starting again: the door's integration isn't up yet
+    hass.states.async_remove("binary_sensor.front_door")
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    assert "until:binary_sensor.front_door" in coordinator._live
+    assert not coordinator._dismiss_pending
+    # Then it's there, still open; then it closes
+    hass.states.async_set("binary_sensor.front_door", "on")
+    await hass.async_block_till_done()
+    assert "until:binary_sensor.front_door" in coordinator._live
+    hass.states.async_set("binary_sensor.front_door", "off")
+    await hass.async_block_till_done()
+    assert _bridge_calls(web, "/api/dismiss")[-1][2] == {
+        "tag": "until:binary_sensor.front_door"
+    }
+
+
 async def test_live_notifications_outlast_a_restart(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:
     entry = await _live_door(hass, client, web)
     await hass.async_block_till_done()
-    # Saved, then Home Assistant stops; the door closes while it's down
-    await entry.runtime_data._live_store.async_save(
-        {"instance": None, "live": entry.runtime_data._live, "dismiss": []}
-    )
+    # Home Assistant stops (saving them); the door closes while it's down
     await hass.config_entries.async_unload(entry.entry_id)
     hass.states.async_set("binary_sensor.front_door", "off")
     with patch(
@@ -1106,7 +1204,7 @@ async def test_install_tv_bridge(
 
 
 def _media_web(web: AiohttpClientMocker) -> None:
-    for path in ("/api/play", "/api/dashboard", "/api/stop"):
+    for path in ("/api/play", "/api/dashboard", "/api/stop", "/api/unpair"):
         web.post(f"{BRIDGE}{path}", json={"ok": True})
 
 
@@ -1284,10 +1382,12 @@ async def test_a_dashboard_signs_in_as_the_tvs_own_user(
     refresh = hass.auth.async_get_refresh_token(entry.data[CONF_DASHBOARD_TOKEN])
     assert refresh.token_type == "long_lived_access_token"
     assert hass.auth.async_validate_access_token(call[2]["token"]).user.id == user.id
-    # Removing the TV removes its user
+    # Removing the TV removes its user, and the app forgets Home Assistant
+    web.post(f"{BRIDGE}/api/dismiss", json={"ok": True})
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert await hass.auth.async_get_user(user.id) is None
+    assert _bridge_calls(web, "/api/unpair")
 
 
 async def test_the_app_installs_when_asked_at_setup(

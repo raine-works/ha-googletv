@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
+
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import STORAGE_DIR, Store
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError, load_signer
+from .bridge import BridgeClient, BridgeError
 from .const import (
     ADB_KEY_FILE,
+    CONF_BRIDGE_TOKEN,
     CONF_DASHBOARD_USER,
     CONF_INSTALL_BRIDGE,
     CONF_ONLINE_LOOKUPS,
@@ -76,7 +81,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         await client.async_close()
         raise
     entry.runtime_data = coordinator
-    await coordinator.async_load_live()
+    try:
+        await coordinator.async_load_live()
+    except BaseException:
+        await client.async_close()
+        raise
     entry.async_on_unload(coordinator.async_stop_live)
     if entry.data.get(CONF_INSTALL_BRIDGE):
         # Asked for when the TV was added: once
@@ -89,7 +98,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
                 hass, coordinator.async_install_bridge_quietly(), f"{DOMAIN} TV app"
             )
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except BaseException:
+        await coordinator.async_stop_live()
+        await client.async_close()
+        raise
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
@@ -103,7 +117,18 @@ async def _async_options_updated(
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> None:
-    """Forget a removed TV's live notifications, and remove its own user."""
+    """Forget a removed TV: its live notifications, its user, its pairing.
+
+    The TV app takes its pop-ups down and forgets Home Assistant, if it's
+    reachable.
+    """
+    if token := entry.data.get(CONF_BRIDGE_TOKEN):
+        bridge = BridgeClient(
+            async_get_clientsession(hass), entry.data[CONF_HOST], token
+        )
+        with contextlib.suppress(BridgeError):
+            await bridge.async_dismiss()
+            await bridge.async_unpair()
     await Store(
         hass, LIVE_STORAGE_VERSION, f"{DOMAIN}.live.{entry.entry_id}"
     ).async_remove()

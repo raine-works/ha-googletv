@@ -113,6 +113,10 @@ class BridgeClient:
         """Close the player and dashboard, and stop announcing."""
         await self._request("POST", "/api/stop")
 
+    async def async_unpair(self) -> None:
+        """Make the app forget this token."""
+        await self._request("POST", "/api/unpair")
+
     async def async_rules(
         self, changes: dict[str, Any] | None = None
     ) -> dict[str, Any]:

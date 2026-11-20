@@ -164,6 +164,11 @@ class MainActivity : Activity() {
                     ),
                 )
             }
+            // Live ones stay until Home Assistant takes them down: or this
+            button(it, getString(R.string.clear_button)) {
+                Notifier.dismiss(this, null)
+                Toast.makeText(this, R.string.cleared, Toast.LENGTH_SHORT).show()
+            }
         }
 
         card(getString(R.string.rules_title), getString(R.string.rules_subtitle)) {

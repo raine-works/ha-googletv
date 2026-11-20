@@ -87,6 +87,25 @@ object Notifications {
         }
     }
 
+    private const val PAIRING_ID = 999
+
+    /** A pairing code, when pop-ups aren't allowed to show it over the screen. */
+    fun postPairingCode(context: Context, code: String) {
+        if (!allowed(context)) return
+        val app = context.applicationContext
+        val notification = Notification.Builder(app, CHANNEL_HOME_ASSISTANT)
+            .setSmallIcon(R.drawable.ic_stat_logo)
+            .setContentTitle(app.getString(R.string.pairing_title))
+            .setContentText("${code.chunked(3).joinToString(" ")} · ${app.getString(R.string.pairing_hint)}")
+            .setTimeoutAfter(5 * 60 * 1000L)
+            .build()
+        app.getSystemService(NotificationManager::class.java).notify(PAIRING_ID, notification)
+    }
+
+    fun cancelPairingCode(context: Context) {
+        context.getSystemService(NotificationManager::class.java).cancel(PAIRING_ID)
+    }
+
     /** The service's own, always there while it runs. */
     fun serviceNotification(context: Context, port: Int): Notification =
         Notification.Builder(context, CHANNEL_SERVICE)

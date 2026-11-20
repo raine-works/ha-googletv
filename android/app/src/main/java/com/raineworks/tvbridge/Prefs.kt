@@ -14,13 +14,13 @@ class Prefs(context: Context) {
     val tokens: Set<String>
         get() = prefs.getStringSet(KEY_TOKENS, emptySet())!!.toSet()
 
-    fun newToken(): String {
+    fun newToken(): String = synchronized(LOCK) {
         val bytes = ByteArray(32).also { random.nextBytes(it) }
         val token = Base64.encodeToString(
             bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP,
         )
         prefs.edit().putStringSet(KEY_TOKENS, tokens + token).apply()
-        return token
+        token
     }
 
     /** Whether a request carries a token Home Assistant paired with. */
@@ -31,7 +31,7 @@ class Prefs(context: Context) {
         return tokens.any { MessageDigest.isEqual(it.toByteArray(), given) }
     }
 
-    fun forget(token: String) {
+    fun forget(token: String) = synchronized(LOCK) {
         prefs.edit().putStringSet(KEY_TOKENS, tokens - token).apply()
     }
 
@@ -65,6 +65,8 @@ class Prefs(context: Context) {
         set(value) = prefs.edit().putString(KEY_WHEN_BLOCKED, value).apply()
 
     companion object {
+        // Pairing and unpairing change the token set one at a time
+        private val LOCK = Any()
         const val WHEN_BLOCKED_PANEL = "panel"
         const val WHEN_BLOCKED_DROP = "drop"
         private const val KEY_TOKENS = "tokens"

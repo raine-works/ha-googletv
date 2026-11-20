@@ -21,15 +21,20 @@ import androidx.media3.exoplayer.ExoPlayer
 object Announcer {
     private const val TAG = "TvBridge"
     const val PILL_TAG = "announcement"
+    // Longest an announcement may hold the TV's sound (a stalled stream)
+    private const val MAX_MS = 60_000L
+    private const val MAX_QUEUED = 8
 
     private val main = Handler(Looper.getMainLooper())
     private var player: ExoPlayer? = null
     private var focus: AudioFocusRequest? = null
     private val queue = ArrayDeque<PlayRequest>()
+    private var watchdog: Runnable? = null
 
     fun announce(context: Context, request: PlayRequest) {
         val app = context.applicationContext
         main.post {
+            if (queue.size >= MAX_QUEUED) queue.removeFirst()
             queue.addLast(request)
             if (player == null) next(app)
         }
@@ -54,9 +59,17 @@ object Announcer {
                         .build(),
                 )
                 .build()
-                .also { audio.requestAudioFocus(it) }
+                .also {
+                    if (audio.requestAudioFocus(it) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                        Log.w(TAG, "Audio focus refused: announcing anyway")
+                    }
+                }
         }
         showPill(context, request)
+        watchdog = Runnable {
+            Log.w(TAG, "Announcement ${request.url} took too long: stopped")
+            done(context)
+        }.also { main.postDelayed(it, MAX_MS) }
         player = ExoPlayer.Builder(context).build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_ASSISTANT).setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(),
@@ -81,12 +94,16 @@ object Announcer {
     }
 
     private fun done(context: Context) {
+        watchdog?.let { main.removeCallbacks(it) }
+        watchdog = null
         player?.release()
         player = null
         if (queue.isEmpty()) finish(context) else next(context)
     }
 
     private fun finish(context: Context) {
+        watchdog?.let { main.removeCallbacks(it) }
+        watchdog = null
         player?.release()
         player = null
         focus?.let { context.getSystemService(AudioManager::class.java).abandonAudioFocusRequest(it) }
@@ -96,7 +113,12 @@ object Announcer {
 
     /** What's being said, on a compact pill (kept out of the panel). */
     private fun showPill(context: Context, request: PlayRequest) {
-        val text = request.message ?: request.title ?: return
+        val text = request.message ?: request.title
+        // Nothing to say, or nowhere to say it (not to the panel): no pill
+        if (text == null || !TvInfo.overlayAllowed(context)) {
+            Notifier.dismiss(context, PILL_TAG)
+            return
+        }
         val prefs = Prefs(context)
         Notifier.handle(
             context,
