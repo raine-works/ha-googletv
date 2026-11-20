@@ -142,6 +142,22 @@ set_notification_rules:
             - drop
           translation_key: when_blocked
 
+show_dashboard:
+  target:
+    entity:
+      integration: googletv
+      domain: media_player
+  fields:
+    dashboard:
+      default: lovelace
+      example: dashboard-tv
+      selector:
+        text:
+    view:
+      example: cameras
+      selector:
+        text:
+
 install_tv_bridge:
   target:
     entity:

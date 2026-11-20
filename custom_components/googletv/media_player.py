@@ -5,13 +5,19 @@ from __future__ import annotations
 from collections.abc import Coroutine
 from datetime import datetime
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
+from homeassistant.components import media_source
 from homeassistant.components.media_player import (
+    ATTR_MEDIA_ANNOUNCE,
+    ATTR_MEDIA_EXTRA,
+    BrowseMedia,
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
+    async_process_play_media_url,
 )
 from homeassistant.core import (
     HomeAssistant,
@@ -26,7 +32,7 @@ from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from .bridge import BRIDGE_APK_URL, BRIDGE_DEV_APK_URL
+from .bridge import BRIDGE_APK_URL, BRIDGE_DEV_APK_URL, BRIDGE_PACKAGE
 from .const import DOMAIN
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, translate_errors
 from .entity import GoogleTvEntity
@@ -35,6 +41,32 @@ from .parsers import MUSIC_APPS, PLAYBACK_PAUSED, App, TvInput, app_name
 # play_media's types beyond Home Assistant's own: an app by package, an input by id
 MEDIA_TYPE_APP = "app"
 MEDIA_TYPE_INPUT = "input"
+
+# Media the TV app plays, by Home Assistant's media types
+AUDIO_TYPES = {MediaType.MUSIC, MediaType.PODCAST, MediaType.TRACK, "audio"}
+VIDEO_TYPES = {
+    MediaType.VIDEO,
+    MediaType.MOVIE,
+    MediaType.EPISODE,
+    MediaType.TVSHOW,
+    MediaType.CHANNEL,
+    "video",
+    "application/x-mpegurl",
+    "application/vnd.apple.mpegurl",
+}
+TTS_SOURCE = "media-source://tts/"
+
+
+def _kind(media_type: str) -> str | None:
+    """Audio, video or an image, for the TV app's player; None if it's none."""
+    media_type = media_type.lower()
+    if media_type.startswith("audio/") or media_type in AUDIO_TYPES:
+        return "audio"
+    if media_type.startswith("video/") or media_type in VIDEO_TYPES:
+        return "video"
+    if media_type.startswith("image/") or media_type == MediaType.IMAGE:
+        return "image"
+    return None
 
 
 async def async_setup_entry(
@@ -65,6 +97,14 @@ async def async_setup_entry(
         },
         "async_set_notification_rules",
         supports_response=SupportsResponse.OPTIONAL,
+    )
+    platform.async_register_entity_service(
+        "show_dashboard",
+        {
+            vol.Optional("dashboard", default="lovelace"): cv.string,
+            vol.Optional("view"): cv.string,
+        },
+        "async_show_dashboard",
     )
     platform.async_register_entity_service(
         "install_tv_bridge",
@@ -129,6 +169,8 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         | MediaPlayerEntityFeature.PREVIOUS_TRACK
         | MediaPlayerEntityFeature.SELECT_SOURCE
         | MediaPlayerEntityFeature.PLAY_MEDIA
+        | MediaPlayerEntityFeature.BROWSE_MEDIA
+        | MediaPlayerEntityFeature.MEDIA_ANNOUNCE
     )
 
     def __init__(self, coordinator: GoogleTvCoordinator) -> None:
@@ -465,7 +507,11 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         await self._run(self.coordinator.client.async_key("MEDIA_PAUSE"))
 
     async def async_media_stop(self) -> None:
-        """Stop."""
+        """Stop; Home Assistant's own media and dashboards close."""
+        if self._state.app == BRIDGE_PACKAGE:
+            await self.coordinator.async_stop_media()
+            await self.coordinator.async_request_refresh()
+            return
         await self._run(self.coordinator.client.async_key("MEDIA_STOP"))
 
     async def async_media_next_track(self) -> None:
@@ -499,8 +545,27 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
     async def async_play_media(
         self, media_type: MediaType | str, media_id: str, **kwargs: Any
     ) -> None:
-        """Open an app (``app``: a package), an input (``input``) or a ``url``."""
+        """Play media, open an app, an input or a link.
+
+        Home Assistant's media (its media browser, text-to-speech, a camera,
+        an audio or video URL) plays through the TV app: full screen, or
+        with ``announce`` (text-to-speech's default) spoken over what's on,
+        which ducks. ``app`` opens an app by package, ``input`` an input,
+        ``url`` a link the TV opens (a YouTube video in YouTube).
+        """
         client = self.coordinator.client
+        announce = kwargs.get(ATTR_MEDIA_ANNOUNCE)
+        extra: dict[str, Any] = kwargs.get(ATTR_MEDIA_EXTRA) or {}
+        message = None
+        if media_source.is_media_source_id(media_id):
+            if media_id.startswith(TTS_SOURCE):
+                message = parse_qs(urlsplit(media_id).query).get("message", [None])[0]
+                if announce is None:
+                    announce = True
+            item = await media_source.async_resolve_media(
+                self.hass, media_id, self.entity_id
+            )
+            media_type, media_id = item.mime_type, item.url
         if media_type == MEDIA_TYPE_APP:
             app = self._app(media_id) or App(media_id, "", media_id)
             await self.coordinator.async_open_app(app)
@@ -509,11 +574,55 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             await self.coordinator.async_select_input(
                 tv_input.id if tv_input else media_id
             )
-        elif media_type in (MediaType.URL, "url"):
+        elif media_type in (MediaType.URL, "url") and not announce:
             await self._run(client.async_open_url(media_id))
+        elif kind := "audio" if announce else _kind(media_type):
+            payload: dict[str, Any] = {
+                "url": async_process_play_media_url(self.hass, media_id),
+                "kind": kind,
+                "announce": bool(announce),
+            }
+            if "/" in media_type:
+                payload["mime"] = media_type
+            metadata = extra.get("metadata") or {}
+            for key, value in (
+                ("title", extra.get("title") or metadata.get("title")),
+                ("artist", metadata.get("artist")),
+                ("message", message),
+            ):
+                if value:
+                    payload[key] = str(value)
+            if thumb := extra.get("thumb") or metadata.get("thumb"):
+                payload["image_url"] = self._home_assistant_url(str(thumb))
+            await self.coordinator.async_play(payload)
+            await self.coordinator.async_request_refresh()
         else:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="unsupported_media_type",
                 translation_placeholders={"media_type": str(media_type)},
             )
+
+    async def async_browse_media(
+        self,
+        media_content_type: MediaType | str | None = None,
+        media_content_id: str | None = None,
+    ) -> BrowseMedia:
+        """Home Assistant's media the TV can play: audio, video and images."""
+        return await media_source.async_browse_media(
+            self.hass,
+            media_content_id,
+            content_filter=lambda item: item.media_content_type.startswith(
+                ("audio/", "video/", "image/")
+            ),
+        )
+
+    async def async_show_dashboard(
+        self, dashboard: str = "lovelace", view: str | None = None
+    ) -> None:
+        """Show a dashboard full screen (googletv.show_dashboard)."""
+        path = "/" + dashboard.strip("/")
+        if view:
+            path += "/" + view.strip("/")
+        await self.coordinator.async_show_dashboard(self._home_assistant_url(path))
+        await self.coordinator.async_request_refresh()

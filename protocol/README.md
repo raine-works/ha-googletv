@@ -38,6 +38,9 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `GET /api/rules` | `{blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}` |
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules |
 | `POST /api/notify` | shows a notification; see below |
+| `POST /api/play` | Plays media; see below |
+| `POST /api/dashboard` | `{url, token}`: a Home Assistant dashboard full screen, signed in with `token` (the frontend's external auth, as Home Assistant's phone apps do) |
+| `POST /api/stop` | Closes the player and the dashboard, and stops announcing |
 | `POST /api/dismiss` | `{tag}` takes that notification down, from the screen and the panel; no tag takes them all down (but a pairing code) |
 
 ## Notifications
@@ -75,3 +78,22 @@ which show again as others go (up to 12 are kept per position).
 `blocked_inputs`. What's on screen is `context` when given (Home Assistant
 knows the HDMI input over ADB), else the app in front (with usage access).
 Pop-ups do show over HDMI inputs unless a rule says otherwise.
+
+## Media
+
+`POST /api/play`:
+
+| Field | Default | |
+| :--- | :--- | :--- |
+| `url` | | The media (http/https, HLS, rtsp) |
+| `kind` | from `mime`, else `video` | `audio`, `video` or `image` |
+| `mime` | | Its type (`audio/mpeg`) |
+| `title`, `artist`, `image_url` | | Shown with a song (its cover), and in the TV's media session |
+| `announce` | `false` | Audio only: spoken over what's on, which ducks (audio focus `GAIN_TRANSIENT_MAY_DUCK`, as an assistant), instead of full screen. Announcements queue |
+| `message` | | With `announce`: shown on a compact pill while it plays |
+
+Full screen media has a media session like any app's (so the TV's media
+state shows it, and the remote's media keys work), and closes at its end,
+on Back, when another app comes to the front, or on `/api/stop`. Audio and
+video hold media audio focus: another app's media pauses them. The app
+starts it over whatever's on, which its overlay permission allows.

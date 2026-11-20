@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+from collections.abc import Coroutine, Iterator
 import contextlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
@@ -13,6 +13,8 @@ from typing import Any
 from uuid import uuid4
 
 import aiohttp
+from homeassistant.auth.const import GROUP_ID_USER
+from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import (
@@ -47,6 +49,8 @@ from .bridge import (
 from .const import (
     APPS_INTERVAL,
     CONF_BRIDGE_TOKEN,
+    CONF_DASHBOARD_TOKEN,
+    CONF_DASHBOARD_USER,
     DOMAIN,
     FULL_INTERVAL,
     SCAN_INTERVAL,
@@ -69,6 +73,9 @@ BRIDGE_SETUP_COMMANDS = (
     f"cmd deviceidle whitelist +{BRIDGE_PACKAGE}",
     f"am broadcast -a {BRIDGE_PACKAGE}.START -n {BRIDGE_PACKAGE}/.StartReceiver",
 )
+
+# How long the TV's dashboard token lasts (it's made again if revoked)
+DASHBOARD_TOKEN_LIFETIME = timedelta(days=3650)
 
 # Live notifications (duration 0): kept across restarts, and shown again
 # when the app has restarted (checked this often while there are any)
@@ -527,6 +534,88 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             self._save_live()
         finally:
             self._live_checking = False
+
+    async def async_play(self, payload: dict[str, Any]) -> None:
+        """Play media through the app: full screen, or announced over what's on."""
+        await self._async_bridge_call(self.bridge.async_play(payload))
+
+    async def async_stop_media(self) -> None:
+        """Close the app's player and dashboard."""
+        await self._async_bridge_call(self.bridge.async_stop())
+
+    async def async_show_dashboard(self, url: str) -> None:
+        """Show a dashboard on the TV, signed in as the TV's own user."""
+        token = await self._async_dashboard_token()
+        await self._async_bridge_call(self.bridge.async_dashboard(url, token))
+
+    async def _async_dashboard_token(self) -> str:
+        """An access token for the TV's own user, made (once) when first needed.
+
+        The user is an ordinary one (not an administrator), local only, named
+        after the TV: it's in Settings → People → Users, where it can be
+        removed. Its long-lived token is made again if it's revoked.
+        """
+        auth = self.hass.auth
+        data = self.config_entry.data
+        user = None
+        if user_id := data.get(CONF_DASHBOARD_USER):
+            user = await auth.async_get_user(user_id)
+        if user is None:
+            # Home Assistant's first user is its owner: never the TV's
+            if await auth.async_get_owner() is None:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN, translation_key="no_owner"
+                )
+            user = await auth.async_create_user(
+                f"{self.config_entry.title} (TV)",
+                group_ids=[GROUP_ID_USER],
+                local_only=True,
+            )
+        refresh = None
+        if token_id := data.get(CONF_DASHBOARD_TOKEN):
+            refresh = auth.async_get_refresh_token(token_id)
+        if refresh is None or refresh.user.id != user.id:
+            refresh = await auth.async_create_refresh_token(
+                user,
+                client_name=f"Google TV by Raineworks: {self.config_entry.title}",
+                token_type=TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN,
+                access_token_expiration=DASHBOARD_TOKEN_LIFETIME,
+            )
+        if (data.get(CONF_DASHBOARD_USER), data.get(CONF_DASHBOARD_TOKEN)) != (
+            user.id,
+            refresh.id,
+        ):
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data={
+                    **data,
+                    CONF_DASHBOARD_USER: user.id,
+                    CONF_DASHBOARD_TOKEN: refresh.id,
+                },
+            )
+        return auth.async_create_access_token(refresh)
+
+    async def _async_bridge_call[T](self, call: Coroutine[Any, Any, T]) -> T:
+        """A call to the app, its errors as Home Assistant's."""
+        if not self.bridge.token:
+            call.close()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_not_paired"
+            )
+        try:
+            return await call
+        except BridgeAuthError as err:
+            self.bridge.token = None
+            self._bridge_retry_at = None
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_not_paired"
+            ) from err
+        except BridgeError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
     async def async_bridge_rules(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Change the app's notification rules."""

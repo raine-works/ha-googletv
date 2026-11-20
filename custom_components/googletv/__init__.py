@@ -10,6 +10,7 @@ from homeassistant.helpers.storage import STORAGE_DIR, Store
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError, load_signer
 from .const import (
     ADB_KEY_FILE,
+    CONF_DASHBOARD_USER,
     CONF_INSTALL_BRIDGE,
     CONF_ONLINE_LOOKUPS,
     CONF_PROPS,
@@ -102,10 +103,14 @@ async def _async_options_updated(
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> None:
-    """Forget a removed TV's live notifications."""
+    """Forget a removed TV's live notifications, and remove its own user."""
     await Store(
         hass, LIVE_STORAGE_VERSION, f"{DOMAIN}.live.{entry.entry_id}"
     ).async_remove()
+    if (user_id := entry.data.get(CONF_DASHBOARD_USER)) and (
+        user := await hass.auth.async_get_user(user_id)
+    ):
+        await hass.auth.async_remove_user(user)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> bool:

@@ -21,6 +21,9 @@ CONF_PROPS = "props"
 CONF_BRIDGE_TOKEN = "bridge_token"
 # Install the app once the TV is set up (asked when it's added)
 CONF_INSTALL_BRIDGE = "install_tv_app"
+# The TV's own Home Assistant user, and its long-lived token, for dashboards
+CONF_DASHBOARD_USER = "dashboard_user"
+CONF_DASHBOARD_TOKEN = "dashboard_token"
 
 # The RSA key Home Assistant signs in to every TV with, kept in its storage
 # folder. Each TV trusts it once ("Allow USB debugging?", Always allow).

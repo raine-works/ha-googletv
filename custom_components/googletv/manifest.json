@@ -5,6 +5,10 @@
     "@raine-works"
   ],
   "config_flow": true,
+  "dependencies": [
+    "http",
+    "media_source"
+  ],
   "documentation": "https://github.com/raine-works/ha-googletv",
   "integration_type": "device",
   "iot_class": "local_polling",
@@ -15,7 +19,7 @@
   "requirements": [
     "adb-shell[async]>=0.4.4"
   ],
-  "version": "2.0.0",
+  "version": "2.1.0",
   "zeroconf": [
     "_androidtvremote2._tcp.local.",
     "_rwtvbridge._tcp.local."

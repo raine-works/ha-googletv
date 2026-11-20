@@ -59,6 +59,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Home Assistant's media and dashboards, full screen -->
+        <activity
+            android:name=".PlayerActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|orientation"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+        <activity
+            android:name=".DashboardActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|orientation"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+
         <service
             android:name=".BridgeService"
             android:exported="false"

@@ -88,6 +88,24 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 Notifier.dismiss(context, tag)
                 json(JSONObject().put("ok", true))
             }
+            method == Method.POST && path == "/api/play" -> {
+                val request = PlayRequest.parse(body(session))
+                if (request.announce) Announcer.announce(context, request) else PlayerActivity.start(context, request)
+                json(JSONObject().put("ok", true))
+            }
+            method == Method.POST && path == "/api/dashboard" -> {
+                val body = body(session)
+                val url = body.getString("url")
+                require(Regex("^https?://\\S+$", RegexOption.IGNORE_CASE).matches(url)) { "url must be an http(s) URL" }
+                DashboardActivity.start(context, url, body.getString("token"))
+                json(JSONObject().put("ok", true))
+            }
+            method == Method.POST && path == "/api/stop" -> {
+                PlayerActivity.stop()
+                DashboardActivity.stop()
+                Announcer.stop(context)
+                json(JSONObject().put("ok", true))
+            }
             method == Method.POST && path == "/api/unpair" -> {
                 prefs.forget(token!!)
                 json(JSONObject().put("ok", true))

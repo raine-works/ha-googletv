@@ -101,6 +101,18 @@ class BridgeClient:
         """Take a pop-up (or all of them) down."""
         await self._request("POST", "/api/dismiss", {"tag": tag} if tag else {})
 
+    async def async_play(self, payload: dict[str, Any]) -> None:
+        """Play media full screen, or announce it over what's on."""
+        await self._request("POST", "/api/play", payload)
+
+    async def async_dashboard(self, url: str, token: str) -> None:
+        """Show a Home Assistant dashboard full screen, signed in with ``token``."""
+        await self._request("POST", "/api/dashboard", {"url": url, "token": token})
+
+    async def async_stop(self) -> None:
+        """Close the player and dashboard, and stop announcing."""
+        await self._request("POST", "/api/stop")
+
     async def async_rules(
         self, changes: dict[str, Any] | None = None
     ) -> dict[str, Any]:

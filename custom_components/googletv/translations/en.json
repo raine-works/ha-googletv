@@ -181,7 +181,7 @@
       "message": "The TV has no app or input called {source}."
     },
     "unsupported_media_type": {
-      "message": "Google TV plays an app, an input or a url, not {media_type}."
+      "message": "Google TV plays audio, video, images, an app, an input or a url, not {media_type}."
     },
     "unreachable": {
       "message": "The TV is off its network and Home Assistant doesn't know its network address (MAC) to wake it. Turn on its network standby (Sony: Remote start) so it stays reachable."
@@ -200,6 +200,9 @@
     },
     "unknown_entity": {
       "message": "There's no entity {entity_id}."
+    },
+    "no_owner": {
+      "message": "Finish setting up Home Assistant (its owner's account) before showing a dashboard on the TV."
     }
   },
   "services": {
@@ -310,6 +313,20 @@
         "when_blocked": {
           "name": "When blocked",
           "description": "A blocked pop-up goes to the panel, or nowhere."
+        }
+      }
+    },
+    "show_dashboard": {
+      "name": "Show a dashboard",
+      "description": "Shows a Home Assistant dashboard full screen on the TV, through the TV app. It signs in as the TV's own user (made the first time, in Settings → People → Users). Back, or the media player's stop, closes it.",
+      "fields": {
+        "dashboard": {
+          "name": "Dashboard",
+          "description": "The dashboard's path: lovelace (the Overview), or another's (dashboard-tv)."
+        },
+        "view": {
+          "name": "View",
+          "description": "A view's path or number; its first view if not set."
         }
       }
     },

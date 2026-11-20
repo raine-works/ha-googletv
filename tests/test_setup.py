@@ -1102,6 +1102,194 @@ async def test_install_tv_bridge(
     assert entry.data[CONF_BRIDGE_TOKEN] == "T0KEN"
 
 
+# Home Assistant's media, through the TV app
+
+
+def _media_web(web: AiohttpClientMocker) -> None:
+    for path in ("/api/play", "/api/dashboard", "/api/stop"):
+        web.post(f"{BRIDGE}{path}", json={"ok": True})
+
+
+async def test_media_from_the_media_browser_plays_full_screen(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.components.media_source import PlayMedia
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    await _paired(hass, client, web)
+    _media_web(web)
+    with patch(
+        "homeassistant.components.media_source.async_resolve_media",
+        AsyncMock(return_value=PlayMedia("/media/local/holiday.mp4", "video/mp4")),
+    ):
+        await hass.services.async_call(
+            "media_player",
+            "play_media",
+            {
+                "entity_id": "media_player.lott_s_tv",
+                "media_content_type": "video",
+                "media_content_id": "media-source://media_source/local/holiday.mp4",
+                "extra": {"title": "Holiday"},
+            },
+            blocking=True,
+        )
+    call = _bridge_calls(web, "/api/play")[-1]
+    assert call[2]["url"].startswith("http://192.168.1.2:8123/media/local/holiday.mp4")
+    assert (call[2]["kind"], call[2]["mime"], call[2]["announce"]) == (
+        "video",
+        "video/mp4",
+        False,
+    )
+    assert call[2]["title"] == "Holiday"
+
+
+async def test_text_to_speech_is_announced_over_whats_on(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.components.media_source import PlayMedia
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    await _paired(hass, client, web)
+    _media_web(web)
+    with patch(
+        "homeassistant.components.media_source.async_resolve_media",
+        AsyncMock(return_value=PlayMedia("/api/tts_proxy/abc.mp3", "audio/mpeg")),
+    ):
+        await hass.services.async_call(
+            "media_player",
+            "play_media",
+            {
+                "entity_id": "media_player.lott_s_tv",
+                "media_content_type": "music",
+                "media_content_id": "media-source://tts/tts.cloud?message=Dinner%27s+ready",
+            },
+            blocking=True,
+        )
+    call = _bridge_calls(web, "/api/play")[-1]
+    assert call[2]["announce"] is True
+    assert call[2]["kind"] == "audio"
+    assert call[2]["message"] == "Dinner's ready"
+
+
+async def test_a_link_still_opens_its_app(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    await _paired(hass, client, web)
+    _media_web(web)
+    await hass.services.async_call(
+        "media_player",
+        "play_media",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "media_content_type": "url",
+            "media_content_id": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        },
+        blocking=True,
+    )
+    client.async_open_url.assert_awaited_once_with(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    )
+    assert not _bridge_calls(web, "/api/play")
+
+
+async def test_browsing_shows_what_the_tv_plays(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.components.media_player import BrowseMedia
+
+    await _paired(hass, client, web)
+    root = BrowseMedia(
+        media_class="directory",
+        media_content_id="media-source://",
+        media_content_type="",
+        title="Media",
+        can_play=False,
+        can_expand=True,
+    )
+    with patch(
+        "homeassistant.components.media_source.async_browse_media",
+        AsyncMock(return_value=root),
+    ) as browse:
+        player = hass.data["media_player"].get_entity("media_player.lott_s_tv")
+        assert await player.async_browse_media() is root
+    keep = browse.call_args.kwargs["content_filter"]
+
+    def item(media_type: str) -> BrowseMedia:
+        return BrowseMedia(
+            media_class="music",
+            media_content_id="x",
+            media_content_type=media_type,
+            title="x",
+            can_play=True,
+            can_expand=False,
+        )
+
+    assert keep(item("audio/mpeg"))
+    assert not keep(item("application/pdf"))
+
+
+async def test_stop_closes_home_assistants_media(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _paired(hass, client, web)
+    _media_web(web)
+    coordinator = entry.runtime_data
+    coordinator.async_set_updated_data(
+        replace(
+            coordinator.data,
+            state=replace(coordinator.data.state, app="com.raineworks.tvbridge"),
+        )
+    )
+    await hass.services.async_call(
+        "media_player",
+        "media_stop",
+        {"entity_id": "media_player.lott_s_tv"},
+        blocking=True,
+    )
+    assert _bridge_calls(web, "/api/stop")
+
+
+async def test_a_dashboard_signs_in_as_the_tvs_own_user(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.const import (
+        CONF_DASHBOARD_TOKEN,
+        CONF_DASHBOARD_USER,
+    )
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    await hass.auth.async_create_user("Lott")
+    entry = await _paired(hass, client, web)
+    _media_web(web)
+    for _ in range(2):
+        await hass.services.async_call(
+            DOMAIN,
+            "show_dashboard",
+            {
+                "entity_id": "media_player.lott_s_tv",
+                "dashboard": "dashboard-tv",
+                "view": "cameras",
+            },
+            blocking=True,
+        )
+    call = _bridge_calls(web, "/api/dashboard")[-1]
+    assert call[2]["url"] == "http://192.168.1.2:8123/dashboard-tv/cameras"
+    user = await hass.auth.async_get_user(entry.data[CONF_DASHBOARD_USER])
+    assert user.name == "Lott's TV (TV)"
+    assert not user.is_admin
+    assert not user.is_owner
+    assert user.local_only
+    # One user and one token, however often it's shown
+    assert len(user.refresh_tokens) == 1
+    refresh = hass.auth.async_get_refresh_token(entry.data[CONF_DASHBOARD_TOKEN])
+    assert refresh.token_type == "long_lived_access_token"
+    assert hass.auth.async_validate_access_token(call[2]["token"]).user.id == user.id
+    # Removing the TV removes its user
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.auth.async_get_user(user.id) is None
+
+
 async def test_the_app_installs_when_asked_at_setup(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:
