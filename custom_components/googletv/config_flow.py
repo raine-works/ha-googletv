@@ -21,6 +21,7 @@ from typing import Any
 
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
+    SOURCE_RECONFIGURE,
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
@@ -29,12 +30,8 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 import voluptuous as vol
-
-try:
-    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
-except ImportError:  # Home Assistant before 2025.1
-    from homeassistant.components.zeroconf import ZeroconfServiceInfo
 
 from . import async_get_client
 from .adb import GoogleTvAuthError, GoogleTvError
@@ -141,8 +138,8 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         if bluetooth := discovery_info.properties.get("bt"):
             await self.async_set_unique_id(format_mac(bluetooth))
             self._abort_if_unique_id_configured(updates={CONF_HOST: host})
-        else:
-            self._async_abort_entries_match({CONF_HOST: host})
+        # Also a TV set up by its address (or, before 0.2, by its serial)
+        self._async_abort_entries_match({CONF_HOST: host})
         if not await _adb_port_open(host, DEFAULT_PORT):
             return self.async_abort(reason="adb_off")
         self._host, self._name = host, name
@@ -206,17 +203,61 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change the TV's address or port (a new IP, network debugging moved)."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            port = user_input[CONF_PORT]
+            client = await async_get_client(self.hass, host, port)
+            try:
+                props = await client.async_pair()
+            except GoogleTvAuthError:
+                errors["base"] = "not_authorized"
+            except GoogleTvError:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected error reconfiguring the TV")
+                errors["base"] = "unknown"
+            else:
+                await client.async_close()
+                return await self._async_finish(host, port, entry.title, props)
+            await client.async_close()
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=entry.data[CONF_HOST]): str,
+                    vol.Required(CONF_PORT, default=entry.data[CONF_PORT]): vol.All(
+                        int, vol.Range(1, 65535)
+                    ),
+                }
+            ),
+            description_placeholders={"name": entry.title},
+            errors=errors,
+        )
+
     async def _async_finish(
         self, host: str, port: int, name: str, props: dict[str, str]
     ) -> ConfigFlowResult:
-        """Create the entry (or, on reauth, update it), one per TV."""
+        """Create the entry (or update it on reauth or reconfigure), one per TV."""
+        data = {CONF_HOST: host, CONF_PORT: port}
+        if self.source in (SOURCE_REAUTH, SOURCE_RECONFIGURE):
+            entry = (
+                self._get_reauth_entry()
+                if self.source == SOURCE_REAUTH
+                else self._get_reconfigure_entry()
+            )
+            # The same TV, by its Bluetooth address or (entries from 0.1) serial
+            known = {_tv_id(props), props.get("serial")} - {None}
+            if entry.unique_id and known and entry.unique_id not in known:
+                return self.async_abort(reason="wrong_device")
+            return self.async_update_reload_and_abort(entry, data=data)
         if tv_id := _tv_id(props):
             await self.async_set_unique_id(tv_id, raise_on_progress=False)
-        data = {CONF_HOST: host, CONF_PORT: port}
-        if self.source == SOURCE_REAUTH:
-            return self.async_update_reload_and_abort(
-                self._get_reauth_entry(), data=data
-            )
         self._abort_if_unique_id_configured(updates=data)
         title = (
             name

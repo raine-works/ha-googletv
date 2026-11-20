@@ -64,6 +64,21 @@ APPS_COMMAND = (
 # The Bluetooth address is the TV's id: Google TVs announce it on the network
 # (``bt`` in their ``_androidtvremote2._tcp`` record), so a TV found there is
 # matched to its entry before anyone accepts a prompt.
+# Read with the app list (every 10 minutes): the TV's network, storage and
+# memory, for its diagnostic sensors
+DIAGNOSTICS_COMMAND = "; ".join(
+    [
+        "echo @@net",
+        "ip -o -4 addr show | awk '{print $2, $4}'",
+        "echo @@wifi",
+        "dumpsys wifi | grep -m1 -oE 'RSSI: -?[0-9]+'",
+        "echo @@storage",
+        "df -k /data | tail -1",
+        "echo @@memory",
+        "grep -E 'MemTotal|MemAvailable' /proc/meminfo",
+    ]
+)
+
 PROPS_COMMAND = "; ".join(
     [
         *(
@@ -133,6 +148,33 @@ MUSIC_APPS = frozenset(
 )
 
 # The TVs' own apps for HDMI inputs: while one is in front, an input is on screen
+# The home screen
+HOME_APPS = frozenset(
+    {
+        "com.google.android.apps.tv.launcherx",  # Google TV
+        "com.google.android.tvlauncher",  # Android TV
+        "com.google.android.leanbacklauncher",  # older Android TV
+    }
+)
+
+# What the TV is doing (the Activity sensor's states)
+ACTIVITY_OFF = "off"
+ACTIVITY_SCREENSAVER = "screensaver"
+ACTIVITY_HOME = "home"
+ACTIVITY_APP = "app"
+ACTIVITY_PLAYING = "playing"
+ACTIVITY_PAUSED = "paused"
+ACTIVITY_INPUT = "input"
+ACTIVITIES = (
+    ACTIVITY_OFF,
+    ACTIVITY_SCREENSAVER,
+    ACTIVITY_HOME,
+    ACTIVITY_APP,
+    ACTIVITY_PLAYING,
+    ACTIVITY_PAUSED,
+    ACTIVITY_INPUT,
+)
+
 INPUT_APPS = frozenset(
     {
         "com.tcl.tv",
@@ -284,11 +326,16 @@ class MediaSession:
 class TvState:
     """One poll's worth of a TV."""
 
+    # The screen is on: awake, or showing the screensaver
     awake: bool = False
     app: str | None = None
     activity: str | None = None
     volume: float | None = None
     muted: bool | None = None
+    # The media stream's top step (100 on a Sony, 15 or 25 on others)
+    volume_max: int | None = None
+    # The screensaver ("Dreaming") is showing
+    screensaver: bool = False
     uptime_ms: int = 0
     sessions: list[MediaSession] = field(default_factory=list)
     inputs: list[TvInput] = field(default_factory=list)
@@ -299,6 +346,30 @@ class TvState:
     def now_playing(self) -> MediaSession | None:
         """The front app's session, else whichever is playing."""
         return now_playing(self.sessions, self.app)
+
+    @property
+    def activity_state(self) -> str:
+        """What the TV is doing, for automations (``ACTIVITIES``)."""
+        if not self.awake:
+            return ACTIVITY_OFF
+        playing = self.now_playing
+        if self.screensaver:
+            # Music plays on under the screensaver (Google TV's ambient mode)
+            return (
+                ACTIVITY_PLAYING
+                if playing and playing.playing
+                else ACTIVITY_SCREENSAVER
+            )
+        if self.input:
+            # The input's device is on screen, whatever plays behind it
+            return ACTIVITY_INPUT
+        if playing and playing.playing:
+            return ACTIVITY_PLAYING
+        if playing and playing.state == PLAYBACK_PAUSED:
+            return ACTIVITY_PAUSED
+        if self.app in HOME_APPS or not self.app:
+            return ACTIVITY_HOME
+        return ACTIVITY_APP
 
 
 def split_sections(raw: str) -> dict[str, str]:
@@ -313,10 +384,15 @@ def split_sections(raw: str) -> dict[str, str]:
     return {name: "\n".join(lines) for name, lines in sections.items()}
 
 
-def parse_awake(text: str) -> bool:
-    """The screen is on (``mWakefulness=Awake``); Asleep and Dreaming count as off."""
+def parse_wakefulness(text: str) -> str | None:
+    """``mWakefulness``: Awake, Dreaming (the screensaver), Dozing or Asleep."""
     match = re.search(r"mWakefulness=(\w+)", text)
-    return bool(match) and match.group(1) == "Awake"
+    return match.group(1) if match else None
+
+
+def parse_awake(text: str) -> bool:
+    """The screen is on: awake, or showing the screensaver (Dreaming)."""
+    return parse_wakefulness(text) in ("Awake", "Dreaming")
 
 
 def parse_front_app(text: str) -> tuple[str, str] | None:
@@ -330,15 +406,16 @@ def parse_front_app(text: str) -> tuple[str, str] | None:
     return package, activity
 
 
-def parse_audio(text: str) -> tuple[float | None, bool | None]:
-    """The media stream's volume (0 to 1) and whether it's muted."""
+def parse_audio(text: str) -> tuple[float | None, bool | None, int | None]:
+    """The media stream's volume (0 to 1), whether it's muted, its top step."""
     muted = re.search(r"^\s*Muted: (true|false)", text, re.M)
     volume = re.search(r"streamVolume:(\d+)", text)
     maximum = re.search(r"^\s*Max: (\d+)", text, re.M)
+    top = int(maximum.group(1)) if maximum else None
     level = None
-    if volume and maximum and int(maximum.group(1)) > 0:
-        level = int(volume.group(1)) / int(maximum.group(1))
-    return level, (muted.group(1) == "true") if muted else None
+    if volume and top:
+        level = min(1.0, int(volume.group(1)) / top)
+    return level, (muted.group(1) == "true") if muted else None, top or None
 
 
 def parse_uptime_ms(text: str) -> int:
@@ -522,7 +599,7 @@ def parse_state(raw: str) -> TvState:
     """A TV's state from ``POLL_COMMAND``'s output."""
     sections = split_sections(raw)
     front = parse_front_app(sections.get("app", ""))
-    volume, muted = parse_audio(sections.get("audio", ""))
+    volume, muted, volume_max = parse_audio(sections.get("audio", ""))
     inputs, current = parse_inputs(
         sections.get("inputs", ""),
         sections.get("labels", ""),
@@ -538,10 +615,12 @@ def parse_state(raw: str) -> TvState:
         shown = None
     return TvState(
         awake=parse_awake(sections.get("power", "")),
+        screensaver=parse_wakefulness(sections.get("power", "")) == "Dreaming",
         app=app,
         activity=front[1] if front else None,
         volume=volume,
         muted=muted,
+        volume_max=volume_max,
         uptime_ms=parse_uptime_ms(sections.get("uptime", "")),
         sessions=parse_sessions(sections.get("sessions", "")),
         inputs=inputs,
@@ -579,3 +658,68 @@ def parse_props(text: str) -> dict[str, str]:
     if "bluetooth" in props:
         props["bluetooth"] = props["bluetooth"].lower()
     return props
+
+
+CONNECTION_ETHERNET = "ethernet"
+CONNECTION_WIFI = "wifi"
+
+
+@dataclass(frozen=True)
+class Diagnostics:
+    """The TV's network, storage and memory (``DIAGNOSTICS_COMMAND``)."""
+
+    connection: str | None = None
+    ip_address: str | None = None
+    wifi_signal: int | None = None
+    storage_used: int | None = None
+    storage_free_mb: int | None = None
+    memory_free_mb: int | None = None
+    memory_total_mb: int | None = None
+
+
+def parse_diagnostics(raw: str) -> Diagnostics:
+    """The diagnostics from ``DIAGNOSTICS_COMMAND``'s output."""
+    sections = split_sections(raw)
+    connection = ip_address = None
+    for line in sections.get("net", "").splitlines():
+        fields = line.split()
+        if len(fields) < 2 or fields[0] == "lo":
+            continue
+        kind = (
+            CONNECTION_ETHERNET
+            if fields[0].startswith("eth")
+            else CONNECTION_WIFI
+            if fields[0].startswith("wlan")
+            else None
+        )
+        # Ethernet wins when both are up: it's the one the TV uses
+        if kind and connection != CONNECTION_ETHERNET:
+            connection, ip_address = kind, fields[1].split("/")[0]
+    rssi = re.search(r"RSSI: (-?\d+)", sections.get("wifi", ""))
+    wifi_signal = int(rssi.group(1)) if rssi and connection == CONNECTION_WIFI else None
+    # A plausible signal only: -127 means none
+    if wifi_signal is not None and not -110 <= wifi_signal < 0:
+        wifi_signal = None
+    storage_used = storage_free = None
+    df = re.search(r"\s(\d+)\s+(\d+)\s+(\d+)\s+(\d+)%", sections.get("storage", ""))
+    if df:
+        storage_free = int(df.group(3)) // 1024
+        storage_used = int(df.group(4))
+    memory = dict(
+        re.findall(
+            r"^(MemTotal|MemAvailable):\s+(\d+) kB", sections.get("memory", ""), re.M
+        )
+    )
+    return Diagnostics(
+        connection=connection,
+        ip_address=ip_address,
+        wifi_signal=wifi_signal,
+        storage_used=storage_used,
+        storage_free_mb=storage_free,
+        memory_free_mb=int(memory["MemAvailable"]) // 1024
+        if "MemAvailable" in memory
+        else None,
+        memory_total_mb=int(memory["MemTotal"]) // 1024
+        if "MemTotal" in memory
+        else None,
+    )

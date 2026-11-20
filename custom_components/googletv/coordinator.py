@@ -12,14 +12,14 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .adb import GoogleTvClient, GoogleTvError
+from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
 from .const import APPS_INTERVAL, DOMAIN, SCAN_INTERVAL
 from .online import Lookups
-from .parsers import MUSIC_APPS, App, TvState
+from .parsers import HOME_APPS, INPUT_APPS, MUSIC_APPS, App, Diagnostics, TvState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +39,8 @@ class GoogleTvData:
     apps: list[App] = field(default_factory=list)
     # A cover or poster for what's playing, when one was found online
     artwork: str | None = None
+    # Network, storage and memory, read with the apps
+    diagnostics: Diagnostics = field(default_factory=Diagnostics)
 
 
 @contextmanager
@@ -78,6 +80,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self.lookups = lookups
         self._launcher_apps: list[App] = []
         self._apps_read_at: datetime | None = None
+        self._diagnostics = Diagnostics()
         self._artwork_for: tuple[str, str, str | None] | None = None
         self._artwork_tried_at: datetime | None = None
 
@@ -89,17 +92,40 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             if self._apps_read_at is None or now - self._apps_read_at >= APPS_INTERVAL:
                 first = self._apps_read_at is None
                 self._launcher_apps = await self.client.async_get_apps()
+                self._diagnostics = await self.client.async_get_diagnostics()
                 self._apps_read_at = now
                 if first:
                     # Named before their buttons are made, which fixes their ids
                     await self._async_first_listings()
                 else:
                     self._look_up_listings()
+        except GoogleTvAuthError as err:
+            # The TV forgot Home Assistant's key: ask for it again (reauth)
+            raise ConfigEntryAuthFailed(str(err)) from err
         except GoogleTvError as err:
             raise UpdateFailed(f"Can't read the TV: {err}") from err
+        state = self._without_stale_input(state)
         return GoogleTvData(
-            state=state, apps=self._named_apps(), artwork=self._artwork(state)
+            state=state,
+            apps=self._named_apps(),
+            artwork=self._artwork(state),
+            diagnostics=self._diagnostics,
         )
+
+    def _without_stale_input(self, state: TvState) -> TvState:
+        """No input on screen while a launcher app or the home screen is.
+
+        The TV's input session can outlive leaving the input; an app the
+        launcher lists in front (Disney+, Netflix…) means the input is gone,
+        unless it's the TV's own input app.
+        """
+        if not state.input or not state.app or state.app in INPUT_APPS:
+            return state
+        if state.app in HOME_APPS or any(
+            a.package == state.app for a in self._launcher_apps
+        ):
+            return replace(state, input=None)
+        return state
 
     # The apps, named and pictured from their Play Store listings
 

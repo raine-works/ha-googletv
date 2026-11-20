@@ -70,7 +70,9 @@ com.sony.dtv.timers/.activity.TimersMainActivity
 def test_awake() -> None:
     assert parse_awake("  mWakefulness=Awake\nFailed to write while dumping")
     assert not parse_awake("  mWakefulness=Asleep")
-    assert not parse_awake("  mWakefulness=Dreaming")
+    # The screensaver is on screen: awake (the screensaver flag tells it apart)
+    assert parse_awake("  mWakefulness=Dreaming")
+    assert not parse_awake("  mWakefulness=Dozing")
     assert not parse_awake("")
 
 
@@ -93,9 +95,15 @@ def test_front_app() -> None:
 
 
 def test_audio() -> None:
-    assert parse_audio(TCL_AUDIO) == (0.19, False)
+    assert parse_audio(TCL_AUDIO) == (0.19, False, 100)
     assert parse_audio(TCL_AUDIO.replace("Muted: false", "Muted: true"))[1] is True
-    assert parse_audio("") == (None, None)
+    assert parse_audio("") == (None, None, None)
+    # A TV whose scale runs to 15: 9 of 15
+    assert parse_audio(
+        TCL_AUDIO.replace("Max: 100", "Max: 15").replace(
+            "streamVolume:19", "streamVolume:9"
+        )
+    ) == (0.6, False, 15)
 
 
 def test_sessions() -> None:
@@ -406,3 +414,36 @@ def test_an_unnamed_input_known_by_its_cec_name() -> None:
         "playstation",
     )
     assert hdmi3.icon == "mdi:video-input-hdmi"
+
+
+def test_screensaver_and_diagnostics() -> None:
+    from googletv_parsers import parse_awake, parse_diagnostics, parse_wakefulness
+
+    assert parse_awake("  mWakefulness=Dreaming") is True
+    assert parse_wakefulness("  mWakefulness=Dreaming") == "Dreaming"
+    assert parse_awake("  mWakefulness=Asleep") is False
+    state = parse_state(LOTTS_TCL_POLL.replace("Awake", "Dreaming"))
+    assert state.awake and state.screensaver
+    assert state.activity_state == "screensaver"
+
+    wifi = parse_diagnostics(
+        "@@net\nlo 127.0.0.1/8\nwlan0 10.0.4.20/24\n@@wifi\nRSSI: -61\n"
+        "@@storage\n/dev/block/dm-5 10000000 2500000 7500000 25% /data\n"
+        "@@memory\nMemTotal: 2000000 kB\nMemAvailable: 512000 kB\n"
+    )
+    assert (wifi.connection, wifi.ip_address, wifi.wifi_signal) == (
+        "wifi",
+        "10.0.4.20",
+        -61,
+    )
+    assert (wifi.storage_used, wifi.storage_free_mb, wifi.memory_free_mb) == (
+        25,
+        7324,
+        500,
+    )
+    # Both up: Ethernet is the one in use, and there's no Wi-Fi signal to show
+    both = parse_diagnostics(
+        "@@net\nwlan0 10.0.4.20/24\neth0 10.0.4.14/24\n@@wifi\nRSSI: -61\n"
+    )
+    assert (both.connection, both.wifi_signal) == ("ethernet", None)
+    assert parse_diagnostics("").connection is None

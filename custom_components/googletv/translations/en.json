@@ -22,6 +22,18 @@
       "zeroconf_confirm": {
         "title": "Add {name}",
         "description": "{name} ({host}) has network debugging on. Submit, then on the TV tick Always allow and choose Allow when it asks \"Allow USB debugging?\". This waits up to a minute for it."
+      },
+      "reconfigure": {
+        "title": "Reconfigure {name}",
+        "description": "Change {name}'s address or ADB port. If the TV asks \"Allow USB debugging?\", tick Always allow and choose Allow.",
+        "data": {
+          "host": "Address",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "The TV's IP address or host name.",
+          "port": "The TV's ADB port, 5555 unless you changed it."
+        }
       }
     },
     "error": {
@@ -33,7 +45,9 @@
       "already_configured": "This TV is already set up.",
       "reauth_successful": "Reconnected.",
       "adb_off": "Network debugging is off on this TV.",
-      "not_ipv4_address": "Only IPv4 addresses are supported."
+      "not_ipv4_address": "Only IPv4 addresses are supported.",
+      "reconfigure_successful": "Reconfigured.",
+      "wrong_device": "That's a different TV. Add it as a new device instead."
     },
     "flow_title": "{name}"
   },
@@ -95,6 +109,48 @@
     "select": {
       "input": {
         "name": "Input"
+      }
+    },
+    "sensor": {
+      "activity": {
+        "name": "Activity",
+        "state": {
+          "off": "Off",
+          "screensaver": "Screensaver",
+          "home": "Home screen",
+          "app": "In an app",
+          "playing": "Playing",
+          "paused": "Paused",
+          "input": "HDMI input"
+        }
+      },
+      "current_app": {
+        "name": "Current app"
+      },
+      "connection": {
+        "name": "Connection",
+        "state": {
+          "ethernet": "Ethernet",
+          "wifi": "Wi-Fi"
+        }
+      },
+      "ip_address": {
+        "name": "IP address"
+      },
+      "wifi_signal": {
+        "name": "Wi-Fi signal"
+      },
+      "storage_used": {
+        "name": "Storage used"
+      },
+      "storage_free": {
+        "name": "Storage free"
+      },
+      "memory_free": {
+        "name": "Memory free"
+      },
+      "last_boot": {
+        "name": "Last restart"
       }
     }
   },

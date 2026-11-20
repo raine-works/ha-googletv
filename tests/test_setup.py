@@ -36,10 +36,23 @@ from custom_components.googletv.lookups import (  # noqa: E402
 from custom_components.googletv.parsers import (  # noqa: E402
     App,
     MediaSession,
+    parse_diagnostics,
     parse_state,
 )
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+# The Master Suite Sony's diagnostics, verbatim: wired, 74% of /data used
+SONY_DIAGNOSTICS = """\
+@@net
+lo 127.0.0.1/8
+eth0 10.0.4.14/24
+@@wifi
+@@storage
+/dev/block/mmcblk0p50   4285648 3064504   1116348  74% /data/user/0
+@@memory
+MemTotal:        2997848 kB
+MemAvailable:     401020 kB
+"""
 PROPS = {
     "manufacturer": "TCL",
     "model": "Smart TV Pro",
@@ -101,6 +114,7 @@ def client() -> AsyncMock:
     tv.async_get_props.return_value = PROPS
     tv.async_get_state.return_value = parse_state(LOTTS_TCL_POLL)
     tv.async_get_apps.return_value = APPS
+    tv.async_get_diagnostics.return_value = parse_diagnostics(SONY_DIAGNOSTICS)
     return tv
 
 
@@ -322,7 +336,7 @@ async def test_commands_reach_the_tv(
     await hass.services.async_call(
         "media_player", "volume_set", {**target, "volume_level": 0.3}, blocking=True
     )
-    client.async_set_volume.assert_awaited_with(0.3)
+    client.async_set_volume.assert_awaited_with(0.3, 100)
     await hass.services.async_call(
         "remote",
         "send_command",
@@ -353,3 +367,201 @@ async def test_unload_closes_the_connection(
     entry = await _set_up(hass, client)
     assert await hass.config_entries.async_unload(entry.entry_id)
     client.async_close.assert_awaited()
+
+
+async def test_the_activity_sensor(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _set_up(hass, client)
+    coordinator = entry.runtime_data
+    activity = "sensor.lott_s_tv_activity"
+    # On the Xbox
+    assert hass.states.get(activity).state == "input"
+    assert hass.states.get(activity).attributes["input"] == "Xbox"
+    for state, expected in (
+        (_playing(YOUTUBE_TV, "Rick and Morty", "Adult Swim"), "playing"),
+        (
+            replace(
+                _playing(YOUTUBE_TV, "Rick and Morty", "Adult Swim"),
+                sessions=[
+                    MediaSession(
+                        YOUTUBE_TV, True, 2, 0, 0, 0.0, "Rick and Morty", "x", None
+                    )
+                ],
+            ),
+            "paused",
+        ),
+        (
+            replace(
+                parse_state(LOTTS_TCL_POLL),
+                app="com.google.android.apps.tv.launcherx",
+                input=None,
+                sessions=[],
+            ),
+            "home",
+        ),
+        (
+            replace(
+                parse_state(LOTTS_TCL_POLL),
+                app="com.netflix.ninja",
+                input=None,
+                sessions=[],
+            ),
+            "app",
+        ),
+        (replace(parse_state(LOTTS_TCL_POLL), screensaver=True), "screensaver"),
+        (replace(parse_state(LOTTS_TCL_POLL), awake=False), "off"),
+    ):
+        client.async_get_state.return_value = state
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert hass.states.get(activity).state == expected
+    # The screensaver is idle, not off; off is off
+    assert hass.states.get("media_player.lott_s_tv").state == "off"
+
+
+async def test_an_app_in_front_ends_the_input(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    # The TV still reports its input session while Netflix, a launcher app
+    # (and not one the integration knows by name), is in front
+    client.async_get_apps.return_value = [
+        *APPS,
+        App("com.example.streamer", "com.example.streamer.Main", "Streamer"),
+    ]
+    client.async_get_state.return_value = replace(
+        parse_state(LOTTS_TCL_POLL), app="com.example.streamer"
+    )
+    web.get(store_url("com.example.streamer"), status=404)
+    await _set_up(hass, client)
+    assert hass.states.get("select.lott_s_tv_input").state == "unknown"
+    assert hass.states.get("sensor.lott_s_tv_activity").state == "app"
+
+
+async def test_volume_on_the_tvs_own_scale(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    client.async_get_state.return_value = replace(
+        parse_state(LOTTS_TCL_POLL), volume_max=15
+    )
+    await _set_up(hass, client)
+    await hass.services.async_call(
+        "media_player",
+        "volume_set",
+        {"entity_id": "media_player.lott_s_tv", "volume_level": 0.4},
+        blocking=True,
+    )
+    client.async_set_volume.assert_awaited_with(0.4, 15)
+
+
+async def test_diagnostic_sensors(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    await _set_up(hass, client)
+    assert hass.states.get("sensor.lott_s_tv_connection").state == "ethernet"
+    assert hass.states.get("sensor.lott_s_tv_storage_used").state == "74"
+    # The TV's input app (the test lists it by its package)
+    assert hass.states.get("sensor.lott_s_tv_current_app").state == "com.tcl.tv"
+    # Wired: no Wi-Fi signal sensor
+    assert hass.states.get("sensor.lott_s_tv_wi_fi_signal") is None
+    assert hass.states.get("sensor.lott_s_tv_last_restart") is not None
+
+
+async def test_diagnostics_download(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    entry = await _set_up(hass, client)
+    report = await async_get_config_entry_diagnostics(hass, entry)
+    assert report["entry"]["data"]["host"] == "**REDACTED**"
+    assert report["entry"]["unique_id"] == "**REDACTED**"
+    assert report["device"]["serial"] == "**REDACTED**"
+    assert report["diagnostics"]["ip_address"] == "**REDACTED**"
+    assert report["state"]["activity_state"] == "input"
+    assert report["state"]["input"]["label"] == "Xbox"
+
+
+async def test_playing_under_the_screensaver(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    client.async_get_state.return_value = replace(
+        _playing("com.spotify.tv.android", "Everybody Grab a Broom", "J Scott Rakozy"),
+        screensaver=True,
+    )
+    await _set_up(hass, client)
+    assert hass.states.get("sensor.lott_s_tv_activity").state == "playing"
+    assert hass.states.get("media_player.lott_s_tv").state == "playing"
+
+
+async def test_the_position_isnt_redated_every_poll(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    # Paused at 60s: the position and its date stay put across polls
+    state = _playing(YOUTUBE_TV, "Rick and Morty", "Adult Swim")
+    paused = replace(
+        state,
+        sessions=[
+            MediaSession(
+                YOUTUBE_TV, True, 2, 60000, 0, 0.0, "Rick and Morty", "x", None
+            )
+        ],
+    )
+    client.async_get_state.return_value = paused
+    entry = await _set_up(hass, client)
+    first = hass.states.get("media_player.lott_s_tv").attributes
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    again = hass.states.get("media_player.lott_s_tv").attributes
+    assert first["media_position"] == again["media_position"] == 60
+    assert first["media_position_updated_at"] == again["media_position_updated_at"]
+
+
+async def test_an_untrusted_key_asks_to_reconnect(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.adb import GoogleTvAuthError
+
+    entry = await _set_up(hass, client)
+    client.async_get_state.side_effect = GoogleTvAuthError("not allowed")
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [f["context"]["source"] for f in flows] == ["reauth"]
+
+
+async def test_a_failed_first_update_closes_its_connection(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.config_entries import ConfigEntryState
+
+    from custom_components.googletv.adb import GoogleTvError
+
+    client.async_get_state.side_effect = GoogleTvError("timed out")
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="X1", data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    client.async_close.assert_awaited()
+
+
+async def test_a_wifi_signal_once_the_tv_is_on_wifi(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _set_up(hass, client)
+    assert hass.states.get("sensor.lott_s_tv_wi_fi_signal") is None
+    client.async_get_diagnostics.return_value = parse_diagnostics(
+        "@@net\nwlan0 10.0.4.20/24\n@@wifi\nRSSI: -61\n"
+    )
+    entry.runtime_data._apps_read_at = None
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.lott_s_tv_wi_fi_signal").state == "-61"

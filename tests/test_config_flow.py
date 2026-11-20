@@ -8,17 +8,13 @@ import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component")
 
+from ipaddress import ip_address  # noqa: E402
+
 from homeassistant import config_entries  # noqa: E402
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT  # noqa: E402
 from homeassistant.core import HomeAssistant  # noqa: E402
 from homeassistant.data_entry_flow import FlowResultType  # noqa: E402
-
-try:
-    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
-except ImportError:  # Home Assistant before 2025.1
-    from homeassistant.components.zeroconf import ZeroconfServiceInfo
-from ipaddress import ip_address  # noqa: E402
-
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
 
 from custom_components.googletv.adb import (  # noqa: E402
@@ -262,3 +258,59 @@ async def test_options_turn_lookups_off(hass: HomeAssistant) -> None:
         )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {CONF_ONLINE_LOOKUPS: False}
+
+
+async def test_reconfigure_a_new_address(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=TV_ID, data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+    assert result["step_id"] == "reconfigure"
+    with _patch_client(_client(AsyncMock(return_value=PROPS))), _patch_setup():
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_HOST: "10.0.0.9", CONF_PORT: 5556}
+        )
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data == {CONF_HOST: "10.0.0.9", CONF_PORT: 5556}
+
+
+async def test_reconfigure_refuses_another_tv(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=TV_ID, data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+    other = {**PROPS, "bluetooth": "aa:bb:cc:dd:ee:ff", "serial": "OTHER"}
+    with _patch_client(_client(AsyncMock(return_value=other))):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_HOST: "10.0.0.7", CONF_PORT: 5555}
+        )
+    assert result["reason"] == "wrong_device"
+    assert entry.data[CONF_HOST] == "10.0.0.5"
+
+
+async def test_reauth_an_entry_from_0_1(hass: HomeAssistant) -> None:
+    # Entries added by 0.1 are known by the TV's serial
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="ABC123", data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+    with _patch_client(_client(AsyncMock(return_value=PROPS))), _patch_setup():
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["reason"] == "reauth_successful"
+
+
+async def test_discovery_skips_a_tv_known_by_its_address(hass: HomeAssistant) -> None:
+    # An entry from 0.1 (by serial) at the address the TV announces
+    MockConfigEntry(
+        domain=DOMAIN, unique_id="ABC123", data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    ).add_to_hass(hass)
+    with _patch_probe(True):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_discovery(),
+        )
+    assert result["reason"] == "already_configured"

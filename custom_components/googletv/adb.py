@@ -12,6 +12,7 @@ import contextlib
 import logging
 import os
 import re
+import shlex
 
 from adb_shell.adb_device_async import AdbDeviceTcpAsync
 from adb_shell.auth.keygen import keygen
@@ -29,11 +30,14 @@ from adb_shell.exceptions import (
 from .const import AUTH_TIMEOUT_S, COMMAND_TIMEOUT_S, CONNECT_TIMEOUT_S, KEYCODES
 from .parsers import (
     APPS_COMMAND,
+    DIAGNOSTICS_COMMAND,
     POLL_COMMAND,
     PROPS_COMMAND,
     App,
+    Diagnostics,
     TvState,
     parse_apps,
+    parse_diagnostics,
     parse_props,
     parse_state,
 )
@@ -53,11 +57,13 @@ _CONNECTION_ERRORS = (
 )
 
 # What a shell command may carry from Home Assistant: package and activity
-# names, input ids and URLs are checked against these before they're sent.
-_PACKAGE = re.compile(r"^[A-Za-z][\w]*(\.[A-Za-z_][\w]*)+$")
-_ACTIVITY = re.compile(r"^[A-Za-z_][\w.$]*$")
-_INPUT_ID = re.compile(r"^[\w.]+/[\w.$]+/\w+$")
-_URL = re.compile(r"^[a-z][a-z0-9+.-]*://[^\s'\"\\`$;|&<>]*$", re.I)
+# names, input ids and URLs are checked against these (whole, fullmatch)
+# before they're sent, and quoted.
+_PACKAGE = re.compile(r"[A-Za-z][\w]*(\.[A-Za-z_][\w]*)+")
+_ACTIVITY = re.compile(r"[A-Za-z_][\w.$]*")
+_INPUT_ID = re.compile(r"[\w.]+/[\w.$]+/\w+")
+# Any link without spaces or control characters (it's quoted when sent)
+_URL = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\x00-\x1f\x7f]+", re.I)
 
 
 class GoogleTvError(Exception):
@@ -89,6 +95,9 @@ class GoogleTvClient:
         self._signer = signer
         self._device = AdbDeviceTcpAsync(host, port, default_transport_timeout_s=9.0)
         self._lock = asyncio.Lock()
+        # The TV turned our key down: it's prompting for it, so don't connect
+        # again (each try shows the prompt) until it's set up anew (reauth)
+        self._unauthorized = False
 
     @property
     def connected(self) -> bool:
@@ -96,20 +105,44 @@ class GoogleTvClient:
         return self._device.available
 
     async def async_connect(self, auth_timeout_s: float = 0.5) -> None:
-        """Open the connection, waiting ``auth_timeout_s`` for the TV's prompt."""
+        """Open the connection, waiting ``auth_timeout_s`` for the TV's prompt.
+
+        A TV that doesn't trust the key answers our signature with another
+        challenge; adb-shell then sends the public key (the TV's "Allow USB
+        debugging?" prompt) and times out unless it's accepted in time. That
+        timeout, after the prompt, is the TV turning the key down.
+        """
+        if self._unauthorized:
+            raise GoogleTvAuthError("The TV hasn't allowed Home Assistant's key")
+        prompted = False
+
+        def on_prompt(_device: object) -> None:
+            nonlocal prompted
+            prompted = True
+
         try:
             await self._device.connect(
                 rsa_keys=[self._signer],
                 transport_timeout_s=CONNECT_TIMEOUT_S,
                 auth_timeout_s=auth_timeout_s,
+                auth_callback=on_prompt,
             )
         except DeviceAuthError as err:
+            self._unauthorized = True
             raise GoogleTvAuthError(str(err)) from err
         except _CONNECTION_ERRORS as err:
+            if prompted:
+                self._unauthorized = True
+                with contextlib.suppress(*_CONNECTION_ERRORS):
+                    await self._device.close()
+                raise GoogleTvAuthError(
+                    "The TV didn't allow Home Assistant's key in time"
+                ) from err
             raise GoogleTvError(
                 f"Can't connect to {self.host}:{self.port}: {err}"
             ) from err
         if not self._device.available:
+            self._unauthorized = True
             raise GoogleTvAuthError("The TV didn't accept Home Assistant's key")
 
     async def async_pair(self) -> dict[str, str]:
@@ -127,15 +160,22 @@ class GoogleTvClient:
     ) -> str:
         """Run a shell command, reconnecting first if the connection dropped."""
         async with self._lock:
-            if not self._device.available:
-                await self.async_connect()
-            try:
-                result = await self._device.shell(
-                    command, read_timeout_s=timeout_s, timeout_s=timeout_s
-                )
-            except _CONNECTION_ERRORS as err:
-                await self.async_close()
-                raise GoogleTvError(f"{self.host}: {err}") from err
+            # A connection that dropped (the TV restarted, slept, the network
+            # blinked) is opened again and the command retried, once
+            for attempt in (1, 2):
+                if not self._device.available:
+                    await self.async_connect()
+                try:
+                    result = await self._device.shell(
+                        command, read_timeout_s=timeout_s, timeout_s=timeout_s
+                    )
+                except _CONNECTION_ERRORS as err:
+                    await self.async_close()
+                    if attempt == 2:
+                        raise GoogleTvError(f"{self.host}: {err}") from err
+                    _LOGGER.debug("%s: %s; connecting again", self.host, err)
+                else:
+                    break
         return result if isinstance(result, str) else ""
 
     async def async_get_state(self) -> TvState:
@@ -146,6 +186,10 @@ class GoogleTvClient:
         """The launcher's apps."""
         return parse_apps(await self.async_shell(APPS_COMMAND))
 
+    async def async_get_diagnostics(self) -> Diagnostics:
+        """Network, storage and memory."""
+        return parse_diagnostics(await self.async_shell(DIAGNOSTICS_COMMAND))
+
     async def async_get_props(self) -> dict[str, str]:
         """Maker, model, Android version and serial."""
         return parse_props(await self.async_shell(PROPS_COMMAND))
@@ -154,39 +198,44 @@ class GoogleTvClient:
         """Press a key (a ``KEYCODES`` name, or an Android key code number)."""
         code = KEYCODES.get(key.upper().removeprefix("KEYCODE_"))
         if code is None:
-            if not key.isdigit():
+            if not (key.isascii() and key.isdigit()):
                 raise GoogleTvError(f"Unknown key: {key}")
             code = int(key)
         await self.async_shell(f"input keyevent {code}")
 
     async def async_launch_app(self, package: str, activity: str | None = None) -> None:
         """Open an app by its launch screen (no Play Store link, so every app opens)."""
-        if not _PACKAGE.match(package) or (activity and not _ACTIVITY.match(activity)):
+        if not _PACKAGE.fullmatch(package) or (
+            activity and not _ACTIVITY.fullmatch(activity)
+        ):
             raise GoogleTvError(f"Not an app: {package}")
         if activity:
-            await self.async_shell(f"am start -n {package}/{activity}")
+            component = shlex.quote(f"{package}/{activity}")
+            await self.async_shell(f"am start -n {component}")
         else:
             await self.async_shell(
-                f"monkey -p {package} -c android.intent.category.LEANBACK_LAUNCHER 1"
+                f"monkey -p {shlex.quote(package)}"
+                " -c android.intent.category.LEANBACK_LAUNCHER 1"
             )
 
     async def async_open_url(self, url: str) -> None:
         """Open a link (a deep link, or a web address an app takes)."""
-        if not _URL.match(url):
+        if not _URL.fullmatch(url):
             raise GoogleTvError(f"Not a link: {url}")
-        await self.async_shell(f"am start -a android.intent.action.VIEW -d '{url}'")
+        await self.async_shell(
+            f"am start -a android.intent.action.VIEW -d {shlex.quote(url)}"
+        )
 
     async def async_select_input(self, input_id: str) -> None:
         """Switch to an HDMI input (Android's passthrough link to it)."""
-        if not _INPUT_ID.match(input_id):
+        if not _INPUT_ID.fullmatch(input_id):
             raise GoogleTvError(f"Not an input: {input_id}")
-        encoded = input_id.replace("/", "%2F")
+        uri = "content://android.media.tv/passthrough/" + input_id.replace("/", "%2F")
         await self.async_shell(
-            "am start -a android.intent.action.VIEW "
-            f"-d content://android.media.tv/passthrough/{encoded}"
+            f"am start -a android.intent.action.VIEW -d {shlex.quote(uri)}"
         )
 
-    async def async_set_volume(self, level: float) -> None:
-        """Set the media volume (0 to 1) on the TV's 0–100 scale."""
-        value = max(0, min(100, round(level * 100)))
+    async def async_set_volume(self, level: float, steps: int = 100) -> None:
+        """Set the media volume (0 to 1) on the TV's own scale (0 to ``steps``)."""
+        value = max(0, min(steps, round(level * steps)))
         await self.async_shell(f"cmd media_session volume --stream 3 --set {value}")

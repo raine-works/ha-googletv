@@ -50,6 +50,45 @@
       "input": {
         "default": "mdi:video-input-hdmi"
       }
+    },
+    "sensor": {
+      "activity": {
+        "default": "mdi:television",
+        "state": {
+          "off": "mdi:television-off",
+          "screensaver": "mdi:television-ambient-light",
+          "home": "mdi:home",
+          "app": "mdi:application-outline",
+          "playing": "mdi:play",
+          "paused": "mdi:pause",
+          "input": "mdi:video-input-hdmi"
+        }
+      },
+      "current_app": {
+        "default": "mdi:application-outline"
+      },
+      "connection": {
+        "default": "mdi:lan-connect",
+        "state": {
+          "ethernet": "mdi:ethernet",
+          "wifi": "mdi:wifi"
+        }
+      },
+      "ip_address": {
+        "default": "mdi:ip-network"
+      },
+      "storage_used": {
+        "default": "mdi:harddisk"
+      },
+      "storage_free": {
+        "default": "mdi:harddisk"
+      },
+      "memory_free": {
+        "default": "mdi:memory"
+      },
+      "last_boot": {
+        "default": "mdi:restart"
+      }
     }
   }
 }

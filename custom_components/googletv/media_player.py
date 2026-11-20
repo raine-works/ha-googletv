@@ -60,17 +60,41 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
     def __init__(self, coordinator: GoogleTvCoordinator) -> None:
         """Initialize the media player."""
         super().__init__(coordinator, "media_player")
-        self._position_updated_at = dt_util.utcnow()
+        self._position: float | None = None
+        self._position_updated_at: datetime | None = None
+        self._position_playing = False
         self._update_position()
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Take the new poll, dating what's playing by when it was read."""
+        """Take the new poll."""
         self._update_position()
         super()._handle_coordinator_update()
 
     def _update_position(self) -> None:
-        self._position_updated_at = dt_util.utcnow()
+        """Keep the position and when it was read, unless it moved unexpectedly.
+
+        Home Assistant extrapolates a playing position from when it was dated,
+        so it's only dated again when the reported one stops matching that (a
+        seek, a pause, a new title): no backward jumps, and no new state every
+        poll while it plays as expected.
+        """
+        state = self._state
+        playing = state.now_playing if state.awake else None
+        position = playing.position_at(state.uptime_ms) if playing else None
+        now = dt_util.utcnow()
+        is_playing = bool(playing and playing.playing)
+        if position is None:
+            self._position = self._position_updated_at = None
+            return
+        if self._position is not None and self._position_updated_at is not None:
+            expected = self._position
+            if self._position_playing:
+                expected += (now - self._position_updated_at).total_seconds()
+            if is_playing == self._position_playing and abs(position - expected) < 2:
+                return
+        self._position, self._position_updated_at = position, now
+        self._position_playing = is_playing
 
     # What the TV shows
 
@@ -83,6 +107,8 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         playing = state.now_playing
         if playing and playing.playing:
             return MediaPlayerState.PLAYING
+        if state.screensaver:
+            return MediaPlayerState.IDLE
         if playing and playing.state == PLAYBACK_PAUSED:
             return MediaPlayerState.PAUSED
         return MediaPlayerState.ON
@@ -172,17 +198,13 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
 
     @property
     def media_position(self) -> int | None:
-        """Seconds into what's playing, at the last poll."""
-        playing = self._state.now_playing if self._state.awake else None
-        if not playing:
-            return None
-        position = playing.position_at(self._state.uptime_ms)
-        return int(position) if position is not None else None
+        """Seconds into what's playing, when it was last dated."""
+        return int(self._position) if self._position is not None else None
 
     @property
     def media_position_updated_at(self) -> datetime | None:
-        """When the position was read."""
-        return self._position_updated_at if self.media_position is not None else None
+        """When the position was dated."""
+        return self._position_updated_at
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -235,7 +257,11 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set the volume."""
-        await self._run(self.coordinator.client.async_set_volume(volume))
+        await self._run(
+            self.coordinator.client.async_set_volume(
+                volume, self._state.volume_max or 100
+            )
+        )
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute or unmute (the TV's mute key toggles, so only when it changes)."""

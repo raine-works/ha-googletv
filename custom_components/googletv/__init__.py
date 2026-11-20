@@ -17,6 +17,7 @@ PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,
     Platform.REMOTE,
     Platform.SELECT,
+    Platform.SENSOR,
 ]
 
 
@@ -36,16 +37,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         props = await client.async_get_props()
     except GoogleTvAuthError as err:
         # The TV forgot Home Assistant's key (debugging turned off and on, a reset)
+        await client.async_close()
         raise ConfigEntryAuthFailed(str(err)) from err
     except GoogleTvError as err:
+        await client.async_close()
         raise ConfigEntryNotReady(str(err)) from err
 
     lookups = None
     if entry.options.get(CONF_ONLINE_LOOKUPS, True):
         lookups = get_lookups(hass)
-        await lookups.async_load()
+        try:
+            await lookups.async_load()
+        except BaseException:
+            await client.async_close()
+            raise
     coordinator = GoogleTvCoordinator(hass, entry, client, props, lookups)
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except BaseException:
+        # Set up again later with a connection of its own: close this one
+        await client.async_close()
+        raise
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

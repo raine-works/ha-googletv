@@ -63,6 +63,55 @@ every input's `icon`, `kind` and CEC `device` in their attributes.
 | `console` | Game, Console, Retro | `mdi:controller` |
 | `hdmi` | anything else | `mdi:video-input-hdmi` |
 
+**Activity** (`sensor.<tv>_activity`): what the TV is doing, the sensor to
+trigger automations on:
+
+| State | When |
+| :--- | :--- |
+| `off` | The screen is off |
+| `screensaver` | The screensaver is on (music playing under it counts as `playing`) |
+| `home` | The home screen |
+| `app` | An app is open, nothing playing |
+| `playing` | Something's playing |
+| `paused` | It's paused |
+| `input` | An HDMI input is on screen (its name in the `input` attribute) |
+
+Dim the lights when the TV plays, bring them up when it pauses:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.living_room_tv_activity
+    to: playing
+    id: playing
+  - trigger: state
+    entity_id: sensor.living_room_tv_activity
+    from: playing
+    to: paused
+    id: paused
+actions:
+  - choose:
+      - conditions: "{{ trigger.id == 'playing' }}"
+        sequence:
+          - action: light.turn_on
+            target: { area_id: living_room }
+            data: { brightness_pct: 10, transition: 2 }
+      - conditions: "{{ trigger.id == 'paused' }}"
+        sequence:
+          - action: light.turn_on
+            target: { area_id: living_room }
+            data: { brightness_pct: 60, transition: 2 }
+```
+
+**Current app** (`sensor.<tv>_current_app`): the app in front by name, its
+package in the `package` attribute.
+
+**Diagnostics** (read every 10 minutes): Connection (Ethernet or Wi-Fi),
+Wi-Fi signal (on Wi-Fi), Storage used and Storage free, Last restart; IP
+address and Memory free are there disabled. The device's **Download
+diagnostics** gives the TV's latest reading with its address and identifiers
+redacted, for bug reports.
+
 **Remote keys** (`button.<tv>_home`, …): Home, Back, Up, Down, Left, Right,
 OK, Play/pause, Volume up, Volume down, Mute and Settings, a button each.
 
@@ -125,7 +174,11 @@ turn off **Look up app icons and artwork online** in the TV's options
 
 If the TV forgets the key (debugging turned off and on, a factory reset), Home
 Assistant asks you to reconnect it: open the repair, be at the TV, and accept
-the prompt again.
+the prompt again. Until then the integration doesn't connect, so the TV
+doesn't keep showing its prompt.
+
+A TV with a new address or port: the integration's **Reconfigure**. (A TV it
+found on the network follows a new address by itself.)
 
 Home Assistant keeps one key for every TV, in `.storage/googletv_adbkey`.
 
@@ -140,13 +193,14 @@ never offered again, and if it gets a new IP address its entry follows it.
 
 ## Notes
 
+* Requires Home Assistant 2025.2 or newer.
 * Only one ADB client can hold a TV's connection comfortably. Remove the TV
   from Home Assistant's own **Android Debug Bridge** integration (or anything
   else using ADB on it) before adding it here.
 * Inputs are read from Android's TV input service. Seen on TCL (Google TV) and
   Sony (Android TV) sets; a TV whose maker doesn't use it shows no inputs.
-* Apps are named from a table of well-known apps, else by their package.
-  Reading names and icons from the apps themselves is planned.
+* Apps are named from a table of well-known apps, else from their Google Play
+  listing (with online lookups on), else by their package.
 
 ## Development
 
