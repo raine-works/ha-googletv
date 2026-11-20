@@ -19,6 +19,12 @@ CONF_PROPS = "props"
 
 # The TV app's token, from pairing with it over ADB
 CONF_BRIDGE_TOKEN = "bridge_token"
+# How Home Assistant reaches the TV: over ADB (network debugging, the app
+# beside it), or through the TV app alone. Entries from before 2.3 are ADB.
+CONF_CONNECTION = "connection"
+CONNECTION_ADB = "adb"
+CONNECTION_APP = "app"
+
 # Install the app once the TV is set up (asked when it's added)
 CONF_INSTALL_BRIDGE = "install_tv_app"
 # The TV's own Home Assistant user, and its long-lived token, for dashboards

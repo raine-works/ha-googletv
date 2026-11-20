@@ -33,17 +33,23 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 import voluptuous as vol
 
 from . import async_get_client
 from .adb import GoogleTvAuthError, GoogleTvError
-from .bridge import BRIDGE_SERVICE_TYPE
+from .bridge import BRIDGE_SERVICE_TYPE, BridgeClient, BridgeError
 from .const import (
+    CONF_BRIDGE_TOKEN,
+    CONF_CONNECTION,
     CONF_DASHBOARD_CONTROLS,
     CONF_INSTALL_BRIDGE,
     CONF_ONLINE_LOOKUPS,
+    CONF_PROPS,
+    CONNECTION_ADB,
+    CONNECTION_APP,
     DEFAULT_PORT,
     DOMAIN,
 )
@@ -72,6 +78,19 @@ def _tv_id(props: dict[str, str]) -> str | None:
     if bluetooth := props.get("bluetooth"):
         return format_mac(bluetooth)
     return props.get("serial")
+
+
+# How long adding a TV through its app waits for Allow on the TV
+CONFIRM_WAIT_S = 120
+
+
+async def _app_info(hass: Any, host: str) -> dict[str, Any] | None:
+    """The TV app's info, if it answers and can pair by Allow on the TV."""
+    try:
+        info = await BridgeClient(async_get_clientsession(hass), host).async_info()
+    except BridgeError:
+        return None
+    return info if "confirm_pairing" in info.get("features", []) else None
 
 
 # The app's mDNS name before 2.0: "Raineworks TV Bridge <the TV's name>"
@@ -108,6 +127,8 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         self._name = ""
         # Found by the app's own announcement: it's installed
         self._has_app = False
+        # The TV app's info, adding the TV through it alone
+        self._app: dict[str, Any] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -117,6 +138,13 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
             port = user_input[CONF_PORT]
+            # The TV app answering: added through it, no ADB needed
+            if info := await _app_info(self.hass, host):
+                self._host, self._app = host, info
+                self._name = user_input.get(CONF_NAME, "").strip() or info.get(
+                    "name", ""
+                )
+                return await self.async_step_app_confirm()
             client = await async_get_client(self.hass, host, port)
             try:
                 props = await client.async_pair()
@@ -183,6 +211,13 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         self.context[CONF_HOST] = host
         self._host, self._name = host, name
         self.context["title_placeholders"] = {"name": name}
+        if self._has_app and (info := await _app_info(self.hass, host)):
+            # The app (2.3+) pairs by Allow on the TV: no ADB needed
+            if tv_id := info.get("id"):
+                await self.async_set_unique_id(tv_id)
+                self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+            self._app = info
+            return await self.async_step_app_confirm()
         if not await _adb_port_open(host, DEFAULT_PORT):
             if self._has_app:
                 return await self.async_step_enable_debugging()
@@ -239,9 +274,123 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_app_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Add the TV through its app: it asks on screen, and Allow pairs."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            token, error = await self._async_allow(self._host)
+            if token:
+                if tv_id := self._app.get("id"):
+                    await self.async_set_unique_id(tv_id, raise_on_progress=False)
+                    self._abort_if_unique_id_configured(
+                        updates={CONF_HOST: self._host, CONF_BRIDGE_TOKEN: token}
+                    )
+                props = {
+                    key: str(self._app[key])
+                    for key in ("manufacturer", "model", "android")
+                    if self._app.get(key)
+                }
+                return self.async_create_entry(
+                    title=self._name or self._app.get("name") or self._host,
+                    data={
+                        CONF_HOST: self._host,
+                        CONF_CONNECTION: CONNECTION_APP,
+                        CONF_BRIDGE_TOKEN: token,
+                        CONF_PROPS: props,
+                    },
+                )
+            errors["base"] = error or "unknown"
+        return self.async_show_form(
+            step_id="app_confirm",
+            description_placeholders={"name": self._name, "host": self._host},
+            errors=errors,
+        )
+
+    async def _async_allow(self, host: str) -> tuple[str | None, str | None]:
+        """Ask on the TV, and wait for Allow: (its token, None), or (None, why not)."""
+        bridge = BridgeClient(async_get_clientsession(self.hass), host)
+        try:
+            pairing_id = await bridge.async_confirm_start("Home Assistant")
+            for _ in range(CONFIRM_WAIT_S):
+                status = await bridge.async_confirm_status(pairing_id)
+                if status == "allowed":
+                    return bridge.token, None
+                if status == "denied":
+                    return None, "denied"
+                if status != "pending":
+                    break
+                await asyncio.sleep(1)
+        except BridgeError as err:
+            _LOGGER.debug("Can't pair with the TV app on %s: %s", host, err)
+            return None, "cannot_connect"
+        return None, "not_allowed_in_time"
+
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """The TV forgot Home Assistant's key: connect again, with its prompt."""
+        if entry_data.get(CONF_CONNECTION) == CONNECTION_APP:
+            return await self.async_step_reauth_app()
         return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_app(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The TV app forgot Home Assistant (reinstalled): Allow on the TV again."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            token, error = await self._async_allow(entry.data[CONF_HOST])
+            if token:
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_BRIDGE_TOKEN: token}
+                )
+            errors["base"] = error or "unknown"
+        return self.async_show_form(
+            step_id="reauth_app",
+            description_placeholders={"name": entry.title},
+            errors=errors,
+        )
+
+    async def async_step_connect_adb(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """A TV added through its app, given ADB: the D-pad, power, inputs."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            port = user_input[CONF_PORT]
+            client = await async_get_client(self.hass, entry.data[CONF_HOST], port)
+            try:
+                props = await client.async_pair()
+            except GoogleTvAuthError:
+                errors["base"] = "not_authorized"
+            except GoogleTvError:
+                errors["base"] = "cannot_connect"
+            else:
+                await client.async_close()
+                # The app's pairing stays: both, from now on
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_CONNECTION: CONNECTION_ADB,
+                        CONF_PORT: port,
+                        CONF_PROPS: {**entry.data.get(CONF_PROPS, {}), **props},
+                    },
+                )
+            await client.async_close()
+        return self.async_show_form(
+            step_id="connect_adb",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(
+                        int, vol.Range(1, 65535)
+                    )
+                }
+            ),
+            description_placeholders={"name": entry.title},
+            errors=errors,
+        )
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -274,8 +423,13 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Change the TV's address or port (a new IP, network debugging moved)."""
+        """Change the TV's address or port (a new IP, network debugging moved).
+
+        A TV added through its app alone is offered ADB instead.
+        """
         entry = self._get_reconfigure_entry()
+        if entry.data.get(CONF_CONNECTION) == CONNECTION_APP:
+            return await self.async_step_connect_adb()
         errors: dict[str, str] = {}
         if user_input is not None:
             host = user_input[CONF_HOST].strip()

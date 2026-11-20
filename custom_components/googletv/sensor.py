@@ -141,6 +141,16 @@ SENSORS: tuple[GoogleTvSensorDescription, ...] = (
         value=lambda data: data.diagnostics.memory_free_mb,
     ),
     GoogleTvSensorDescription(
+        key="tv_app",
+        translation_key="tv_app",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        available_offline=True,
+        value=lambda data: data.bridge_version,
+        attributes=lambda data: {"build": data.bridge_build},
+        # Once the TV app has said which it is
+        exists=lambda data: data.bridge_version is not None,
+    ),
+    GoogleTvSensorDescription(
         key="last_boot",
         translation_key="last_boot",
         device_class=SensorDeviceClass.TIMESTAMP,

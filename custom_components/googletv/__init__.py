@@ -11,14 +11,17 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import STORAGE_DIR, Store
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError, load_signer
+from .app_client import AppClient
 from .bridge import BridgeClient, BridgeError
 from .const import (
     ADB_KEY_FILE,
     CONF_BRIDGE_TOKEN,
+    CONF_CONNECTION,
     CONF_DASHBOARD_USER,
     CONF_INSTALL_BRIDGE,
     CONF_ONLINE_LOOKUPS,
     CONF_PROPS,
+    CONNECTION_APP,
     DOMAIN,
 )
 from .coordinator import LIVE_STORAGE_VERSION, GoogleTvConfigEntry, GoogleTvCoordinator
@@ -44,8 +47,20 @@ async def async_get_client(hass: HomeAssistant, host: str, port: int) -> GoogleT
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> bool:
-    """Set up a Google TV from a config entry."""
-    client = await async_get_client(hass, entry.data[CONF_HOST], entry.data[CONF_PORT])
+    """Set up a Google TV from a config entry: over ADB, or through its app alone."""
+    client: GoogleTvClient | AppClient
+    if entry.data.get(CONF_CONNECTION) == CONNECTION_APP:
+        client = AppClient(
+            BridgeClient(
+                async_get_clientsession(hass),
+                entry.data[CONF_HOST],
+                entry.data.get(CONF_BRIDGE_TOKEN),
+            )
+        )
+    else:
+        client = await async_get_client(
+            hass, entry.data[CONF_HOST], entry.data[CONF_PORT]
+        )
     stored: dict[str, str] | None = entry.data.get(CONF_PROPS)
     try:
         await client.async_connect()
@@ -75,6 +90,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
             await client.async_close()
             raise
     coordinator = GoogleTvCoordinator(hass, entry, client, props, lookups)
+    # Asked for when the TV was added: no repair about it meanwhile
+    coordinator.installing = bool(entry.data.get(CONF_INSTALL_BRIDGE))
     try:
         await coordinator.async_config_entry_first_refresh()
     except BaseException:
@@ -89,13 +106,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         raise
     entry.async_on_unload(coordinator.async_stop_live)
     coordinator.async_start_events()
+    coordinator.async_report_soon()
     if entry.data.get(CONF_INSTALL_BRIDGE):
         # Asked for when the TV was added: once
         hass.config_entries.async_update_entry(
             entry,
             data={k: v for k, v in entry.data.items() if k != CONF_INSTALL_BRIDGE},
         )
-        if not coordinator.bridge_installed:
+        if coordinator.bridge_installed:
+            coordinator.installing = False
+        else:
             entry.async_create_background_task(
                 hass, coordinator.async_install_bridge_quietly(), f"{DOMAIN} TV app"
             )

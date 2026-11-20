@@ -191,6 +191,11 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
     def __init__(self, coordinator: GoogleTvCoordinator) -> None:
         """Initialize the media player."""
         super().__init__(coordinator, "media_player")
+        if coordinator.app_only:
+            # An app can't turn the TV off, nor wake it from standby
+            self._attr_supported_features &= ~(
+                MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
+            )
         self._position: float | None = None
         self._position_updated_at: datetime | None = None
         self._position_playing = False

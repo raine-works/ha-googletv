@@ -98,6 +98,38 @@ class BridgeClient:
         except (aiohttp.ClientError, TimeoutError) as err:
             raise BridgeError(f"Event stream from {self.host} ended: {err}") from err
 
+    async def async_request(
+        self, method: str, path: str, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Any of the app's endpoints (see protocol/README.md)."""
+        return await self._request(method, path, body)
+
+    async def async_confirm_start(self, name: str) -> str:
+        """Ask on the TV whether Home Assistant may connect (Allow on the TV)."""
+        reply = await self._request(
+            "POST", "/api/pair/start", {"via": "confirm", "name": name}
+        )
+        return str(reply["pairing_id"])
+
+    async def async_confirm_status(self, pairing_id: str) -> str:
+        """How the request stands: ``pending``, ``denied``, ``expired``, ``unknown``,
+        or ``allowed`` (its token kept).
+        """
+        reply = await self._request(
+            "POST", "/api/pair/status", {"pairing_id": pairing_id}
+        )
+        if reply.get("status") == "allowed" and reply.get("token"):
+            self.token = str(reply["token"])
+        return str(reply.get("status", "unknown"))
+
+    async def async_report(self, integration_version: str, adb: bool) -> None:
+        """Tell the app who's connected, and how (for its screen)."""
+        await self._request(
+            "POST",
+            "/api/client",
+            {"integration_version": integration_version, "adb": adb},
+        )
+
     async def async_info(self) -> dict[str, Any]:
         """Who the app is (no token needed)."""
         return await self._request("GET", "/api/info")

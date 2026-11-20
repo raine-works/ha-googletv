@@ -31,14 +31,16 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
+from .app_client import AppClient, NeedsAdbError
 from .bridge import (
     BRIDGE_APK_URL,
     BRIDGE_DEV_APK_URL,
@@ -74,6 +76,8 @@ BRIDGE_PAIRING_BACKOFF = timedelta(minutes=5)
 BRIDGE_SETUP_COMMANDS = (
     f"appops set {BRIDGE_PACKAGE} SYSTEM_ALERT_WINDOW allow",
     f"appops set {BRIDGE_PACKAGE} GET_USAGE_STATS allow",
+    # Notification access: what other apps play, for the app on its own
+    f"cmd notification allow_listener {BRIDGE_PACKAGE}/{BRIDGE_PACKAGE}.MediaListener",
     f"cmd deviceidle whitelist +{BRIDGE_PACKAGE}",
     f"am broadcast -a {BRIDGE_PACKAGE}.START -n {BRIDGE_PACKAGE}/.StartReceiver",
 )
@@ -119,6 +123,9 @@ class GoogleTvData:
     # The TV app (notifications): installed, and paired with
     bridge_installed: bool = False
     bridge_paired: bool = False
+    # Its version and build (the commit), as it reports them
+    bridge_version: str | None = None
+    bridge_build: str | None = None
 
 
 @contextmanager
@@ -126,6 +133,12 @@ def translate_errors() -> Iterator[None]:
     """Re-raise client errors from user actions as HomeAssistantError."""
     try:
         yield
+    except NeedsAdbError as err:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="needs_adb",
+            translation_placeholders={"error": str(err)},
+        ) from err
     except GoogleTvError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
@@ -141,7 +154,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self,
         hass: HomeAssistant,
         entry: GoogleTvConfigEntry,
-        client: GoogleTvClient,
+        client: GoogleTvClient | AppClient,
         props: dict[str, str],
         lookups: Lookups | None,
     ) -> None:
@@ -158,11 +171,22 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self.lookups = lookups
         # The options it was set up with (a change to them reloads it)
         self.options = dict(entry.options)
-        self.bridge = BridgeClient(
-            async_get_clientsession(hass),
-            entry.data[CONF_HOST],
-            entry.data.get(CONF_BRIDGE_TOKEN),
+        # Through the TV app alone (no ADB): the app is the connection
+        self.app_only = isinstance(client, AppClient)
+        self.bridge = (
+            client.bridge
+            if isinstance(client, AppClient)
+            else BridgeClient(
+                async_get_clientsession(hass),
+                entry.data[CONF_HOST],
+                entry.data.get(CONF_BRIDGE_TOKEN),
+            )
         )
+        # The TV app's version and build, as it reports them
+        self.bridge_info: dict[str, Any] = {}
+        # Installing the app now (asked when the TV was added)
+        self.installing = False
+        self._granted = False
         self._bridge_pairing = False
         self._bridge_retry_at: datetime | None = None
         self._launcher_apps: list[App] = []
@@ -199,6 +223,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 self._launcher_apps = await self.client.async_get_apps()
                 self._diagnostics = await self.client.async_get_diagnostics()
                 self._apps_read_at = now
+                self._after_apps_read()
                 if first:
                     # Named before their buttons are made, which fixes their ids
                     await self._async_first_listings()
@@ -218,7 +243,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             if self._last_boot is None or abs(boot - self._last_boot) > BOOT_DRIFT:
                 self._last_boot = boot.replace(second=0, microsecond=0)
         installed = self.bridge_installed
-        if installed and not self.bridge.token:
+        if installed and not self.bridge.token and not self.app_only:
             self._pair_bridge_soon(now)
         if installed and self.bridge.token:
             self._check_live_soon(now)
@@ -230,14 +255,92 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             last_boot=self._last_boot,
             bridge_installed=installed,
             bridge_paired=installed and bool(self.bridge.token),
+            bridge_version=self.bridge_info.get("version"),
+            bridge_build=self.bridge_info.get("build"),
         )
 
     # The TV app: installing, pairing, notifications
 
     @property
     def bridge_installed(self) -> bool:
-        """The app is in the TV's launcher."""
-        return any(a.package == BRIDGE_PACKAGE for a in self._launcher_apps)
+        """The app is in the TV's launcher (through it alone: of course)."""
+        return self.app_only or any(
+            a.package == BRIDGE_PACKAGE for a in self._launcher_apps
+        )
+
+    @callback
+    def _after_apps_read(self) -> None:
+        """With the app list read: the app's version; over ADB, a missing app."""
+        if self.bridge.token and self.bridge_installed:
+            self.config_entry.async_create_background_task(
+                self.hass, self._async_read_bridge_info(), f"{DOMAIN} TV app info"
+            )
+        if self.app_only:
+            return
+        if self.bridge_installed and not self._granted:
+            # Its permissions, which TVs often hide (an app-only TV given ADB)
+            self._granted = True
+            self.config_entry.async_create_background_task(
+                self.hass, self._async_grant(), f"{DOMAIN} TV app permissions"
+            )
+        issue = f"install_tv_app_{self.config_entry.entry_id}"
+        if self.bridge_installed or self.installing:
+            ir.async_delete_issue(self.hass, DOMAIN, issue)
+        else:
+            # Over ADB without the app: a repair offers to install it
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="install_tv_app",
+                translation_placeholders={"name": self.config_entry.title},
+                data={"entry_id": self.config_entry.entry_id},
+            )
+
+    async def _async_grant(self) -> None:
+        for command in BRIDGE_SETUP_COMMANDS[:-1]:
+            try:
+                await self.client.async_shell(command)
+            except GoogleTvError as err:
+                _LOGGER.debug("Can't grant the TV app %s: %s", command, err)
+                return
+
+    async def _async_read_bridge_info(self) -> None:
+        try:
+            info = await self.bridge.async_info()
+        except BridgeError as err:
+            _LOGGER.debug("Can't read the TV app's version: %s", err)
+            return
+        self._set_bridge_info(info.get("app_version"), info.get("build"))
+
+    @callback
+    def _set_bridge_info(self, version: str | None, build: str | None) -> None:
+        info = {"version": version, "build": build}
+        if version and info != self.bridge_info:
+            self.bridge_info = info
+            if self.data is not None:
+                self.data = replace(
+                    self.data, bridge_version=version, bridge_build=build
+                )
+            self.async_update_listeners()
+
+    @callback
+    def async_report_soon(self) -> None:
+        """Tell the TV app this integration's version, and whether ADB's in use."""
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_report(), f"{DOMAIN} report to the TV app"
+        )
+
+    async def _async_report(self) -> None:
+        if not self.bridge.token:
+            return
+        version = str((await async_get_integration(self.hass, DOMAIN)).version or "")
+        try:
+            await self.bridge.async_report(version, adb=not self.app_only)
+        except BridgeError as err:
+            _LOGGER.debug("Can't report to the TV app: %s", err)
 
     def _pair_bridge_soon(self, now: datetime) -> None:
         if self._bridge_pairing or (
@@ -274,6 +377,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                     data={**self.config_entry.data, CONF_BRIDGE_TOKEN: token},
                 )
                 _LOGGER.info("Paired with the TV app on %s", self.client.host)
+                self.async_report_soon()
                 if self.data is not None:
                     self.data = replace(self.data, bridge_paired=True)
                     self.async_update_listeners()
@@ -323,6 +427,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 await self.client.async_shell(command)
         self._apps_read_at = None
         self._bridge_retry_at = None
+        self.installing = False
         if not self.bridge.token:
             await self._async_pair_bridge(attempts=BRIDGE_PAIRING_ATTEMPTS)
         await self.async_request_refresh()
@@ -403,6 +508,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if kind == "ping":
             return
         if kind == "hello":
+            self._set_bridge_info(event.get("app_version"), event.get("build"))
             # A new run of the app: its live notifications are checked at once
             instance = event.get("instance")
             if self._bridge_instance is None:
@@ -417,7 +523,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 self._save_live()
             for listener in list(self._event_listeners):
                 listener(event)
-        elif kind in ("player", "dashboard"):
+        elif kind in ("player", "dashboard", "state"):
             self.hass.async_create_task(self.async_request_refresh())
         data = {k: v for k, v in event.items() if k != "time"}
         if device := dr.async_get(self.hass).async_get_device(
@@ -433,6 +539,8 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         try:
             await self.async_install_bridge(BRIDGE_APK_URL)
         except HomeAssistantError as err:
+            self.installing = False
+            self._after_apps_read()
             _LOGGER.warning(
                 "Couldn't install the TV app on %s (install it with the "
                 "googletv.install_tv_bridge action): %s",
@@ -930,6 +1038,12 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
 
     async def async_turn_on(self) -> None:
         """Wake the TV: Wake-on-LAN if it's off its network, else its wake key."""
+        if self.app_only and self.data is not None and not self.data.reachable:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="needs_adb",
+                translation_placeholders={"error": "Turning the TV on"},
+            )
         if self.data is not None and not self.data.reachable:
             if not self.wake_macs:
                 raise HomeAssistantError(

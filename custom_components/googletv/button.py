@@ -12,6 +12,7 @@ from homeassistant.components.button import ButtonEntity, ButtonEntityDescriptio
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .app_client import APP_KEYS
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, translate_errors
 from .entity import GoogleTvEntity
 from .parsers import App
@@ -24,7 +25,12 @@ async def async_setup_entry(
 ) -> None:
     """The remote's keys, and a button for each app (and apps installed later)."""
     coordinator = entry.runtime_data
-    async_add_entities(GoogleTvKeyButton(coordinator, d) for d in KEYS)
+    # Through the TV app alone: only the keys an app can press
+    async_add_entities(
+        GoogleTvKeyButton(coordinator, d)
+        for d in KEYS
+        if not coordinator.app_only or d.keycode in APP_KEYS
+    )
     known: set[str] = set()
 
     @callback

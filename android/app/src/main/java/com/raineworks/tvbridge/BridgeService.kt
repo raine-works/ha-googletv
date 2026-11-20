@@ -41,13 +41,33 @@ class BridgeService : Service() {
         }
         // Announced only once it's listening
         announce()
+        // The screen and volume changing: Home Assistant reads the TV at once
+        registerReceiver(
+            changes,
+            android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction("android.media.VOLUME_CHANGED_ACTION")
+            },
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private val changes = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            Events.emit("state", org.json.JSONObject().put("change", if (intent.action?.contains("VOLUME") == true) "volume" else "screen"))
+        }
+    }
+
     override fun onDestroy() {
+        try {
+            unregisterReceiver(changes)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Receiver already gone: $e")
+        }
         server?.stop()
         registration?.let {
             try {

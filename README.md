@@ -34,8 +34,9 @@ Remote, Google Cast and ADB integrations together, and a few things none of them
   spoken *over* your show, which ducks, instead of stopping it.
 * **Dashboards on the TV**: any Home Assistant dashboard, full screen,
   signed in by itself.
-* **Simple setup**: Home Assistant finds the TV, installs the TV app and
-  pairs with it. Nothing to type but **Submit**.
+* **Simple setup, either way**: install the TV app and choose **Allow** on
+  the TV, with no developer mode; or turn on network debugging and Home
+  Assistant installs the app itself. Nothing to type.
 
 Everything stays on your network, except optional lookups of app icons and
 artwork ([Privacy](#privacy-and-security)).
@@ -44,33 +45,74 @@ artwork ([Privacy](#privacy-and-security)).
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=raine-works&repository=ha-googletv&category=integration)
 
-1. **Install the integration.** In HACS, open **Google TV by Raineworks**
-   with the button above (or add `https://github.com/raine-works/ha-googletv`
-   as a custom repository, category **Integration**), download it and
-   restart Home Assistant.
-2. **Turn on network debugging on the TV.**
+Install the integration first: in HACS, open **Google TV by Raineworks** with
+the button above (or add `https://github.com/raine-works/ha-googletv` as a
+custom repository, category **Integration**), download it and restart Home
+Assistant. Then connect the TV one of two ways; you can add ADB to a TV
+connected through its app at any time.
+
+### With the TV app (no developer mode)
+
+1. **Install the TV app** on the TV and open it. Its screen shows the way:
+   a QR code that opens the integration in HACS on your phone, then the
+   step below.
+2. **Add the TV.** It appears in Home Assistant under Settings → Devices &
+   services → **Discovered**. Choose **Add**, then **Submit**.
+3. **Choose Allow on the TV**, when it asks "Allow Home Assistant to
+   connect?". No code to type.
+4. **Allow its permissions**, on the TV app's screen, as the TV offers them:
+   **Pop-ups over other apps**, **Notification access** (what other apps
+   are playing) and **Usage access** (which app is in front). Each has a
+   button to its settings screen.
+
+### Over ADB (everything)
+
+1. **Turn on network debugging on the TV.**
    1. Settings → System → About: select **Android TV OS build** seven
       times ("You are now a developer").
    2. Settings → System → Developer options: turn on **USB debugging**, and
       **Network debugging** (or Wireless debugging) where it's a separate
       switch. Sony calls it **ADB debugging**; TCL offers it only while the
       TV is connected to a network.
-3. **Add the TV.** It appears under Settings → Devices & services →
+2. **Add the TV.** It appears under Settings → Devices & services →
    **Discovered**. Choose **Add**, leave **Install the TV app** ticked, and
    **Submit**. On the TV, "Allow USB debugging?" appears: tick **Always
    allow from this computer** and choose **Allow** (the setup waits a
    minute for it).
 
-That's it: Home Assistant installs the TV app, allows its pop-ups and pairs
-with it. Not discovered? **Add integration → Google TV by Raineworks**, with
-the TV's IP address and port 5555. A fixed address for the TV (a DHCP
-reservation in your router) is optional: a discovered TV is followed to a
-new one.
+Home Assistant installs the TV app over ADB, allows its permissions and
+pairs with it. A TV over ADB without the app gets a repair, **Install the
+TV app**, that does the same at a press. Not discovered? **Add integration
+→ Google TV by Raineworks**, with the TV's IP address and port 5555.
 
-**Starting from the TV?** If the TV app is already on the TV, its screen
-walks you through the same steps until Home Assistant is paired: a QR code
-that opens the integration in HACS on your phone, whether network debugging
-is on (with a button to its settings), and adding the TV.
+**A TV connected through its app, given ADB later**: turn on network
+debugging (the TV app's screen has the steps, with each one's state), then
+in Home Assistant open the TV (Settings → Devices & services → Google TV by
+Raineworks), choose **⋮ → Reconfigure**, then **Connect over ADB**. The
+app's pairing stays.
+
+### What each way gives
+
+| | TV app alone | Over ADB |
+| :--- | :---: | :---: |
+| Notifications, live ones, buttons; events | ✓¹ | ✓ |
+| Text-to-speech, media, dashboards on the TV | ✓¹ | ✓ |
+| Apps (buttons, opening), inputs (switching), volume | ✓¹ | ✓ |
+| Play, pause, next, previous | ✓ | ✓ |
+| Now playing in other apps (title, artwork, position) | ✓² | ✓ |
+| The app in front (Current app sensor, pop-up rules) | ✓³ | ✓ |
+| Screen on or off, Activity, diagnostics | ✓ | ✓ |
+| Remote keys: D-pad, OK, Back, Home, Settings | | ✓ |
+| Turn off; turn on from network standby | | ✓ |
+| Which HDMI input is on screen | | ✓ |
+
+¹ Pop-ups, and opening media, dashboards, apps and inputs over what's on,
+need **Pop-ups over other apps** allowed. ² Needs **Notification access**.
+³ Needs **Usage access**. Some TVs hide these settings screens: ADB allows
+all three.
+
+A fixed address for the TV (a DHCP reservation in your router) is optional:
+a discovered TV is followed to a new one.
 
 ## The TV in Home Assistant
 
@@ -149,6 +191,8 @@ from the name its device gives itself over HDMI-CEC:
   `MEDIA_PLAY_PAUSE`, `SETTINGS`…) or an Android key code; `num_repeats`
   and `delay_secs` work.
 * **Notifications** (`notify.<tv>_notifications`): see below.
+* **TV app** (`sensor.<tv>_tv_app`): the TV app's version, its build (the
+  commit it was built from) in the `build` attribute.
 * **Diagnostics**: Connection (Ethernet or Wi-Fi), Wi-Fi signal, Storage
   used and free, Last restart; IP address and Memory free are there,
   disabled. **Download diagnostics** on the device gives the TV's latest
@@ -482,6 +526,9 @@ otherwise use the integration's **Reconfigure**.
 **A live notification is stuck.** Home Assistant takes it down when its
 entity changes, or with `googletv.dismiss_notifications`; on the TV, the
 app's **Clear pop-ups** clears them all.
+
+**"Needs ADB".** The TV is connected through its app alone, and only ADB
+can do that (the D-pad, turning it off). Add ADB: see [Setup](#setup).
 
 **Notifications don't show.** Check the media player's `tv_bridge`
 attribute. `not_installed`: run **Install the TV app**. `installed` but not

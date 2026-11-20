@@ -751,6 +751,11 @@ def _bridge_web(web: AiohttpClientMocker, token: str = "T0KEN") -> None:
         f"{BRIDGE}/api/rules",
         json={"blocked_apps": [], "blocked_inputs": [], "when_blocked": "panel"},
     )
+    web.get(
+        f"{BRIDGE}/api/info",
+        json={"api": 1, "app_version": "2.3.0", "build": "abc1234", "paired": True},
+    )
+    web.post(f"{BRIDGE}/api/client", json={"ok": True})
     # The event stream: the app's hello, then it ends (connected again later)
     web.get(f"{BRIDGE}/api/events", text='{"type": "hello", "instance": "run-1"}\n')
 
@@ -1613,3 +1618,192 @@ async def test_a_forgotten_pairing_pairs_again(
             blocking=True,
         )
     assert entry.runtime_data.bridge.token is None
+
+
+# Through the TV app alone (no ADB)
+
+APP_STATE = {
+    "screen_on": True,
+    "foreground_app": "com.netflix.ninja",
+    "uptime_ms": 1294401030,
+    "volume": {"level": 6, "max": 15, "muted": False},
+    "sessions": [
+        {
+            "package": "com.netflix.ninja",
+            "state": 3,
+            "position_ms": 5000,
+            "updated_ms": 1294400000,
+            "speed": 1.0,
+            "title": "Rick and Morty",
+            "subtitle": "Adult Swim",
+            "description": None,
+        }
+    ],
+    "overlay_permission": True,
+    "usage_access": True,
+    "notification_access": True,
+    "network_debugging": False,
+    "instance": "run-1",
+    "popups": [],
+}
+
+
+async def _app_only(hass: HomeAssistant, web: AiohttpClientMocker) -> MockConfigEntry:
+    """A TV added through its app, ADB never turned on."""
+    _bridge_web(web)
+    web.get(f"{BRIDGE}/api/state", json=APP_STATE)
+    web.get(
+        f"{BRIDGE}/api/inputs",
+        json={"inputs": [{"id": "com.tcl.tvinput/.Hdmi/HW15", "name": "Xbox"}]},
+    )
+    web.get(
+        f"{BRIDGE}/api/apps",
+        json={
+            "apps": [
+                {
+                    "package": "com.netflix.ninja",
+                    "activity": "com.netflix.ninja.MainActivity",
+                    "name": "Netflix",
+                }
+            ]
+        },
+    )
+    web.get(
+        f"{BRIDGE}/api/diagnostics",
+        json={"connection": "wifi", "wifi_signal": -52, "storage_used": 40},
+    )
+    for path in ("/api/key", "/api/volume", "/api/launch", "/api/input"):
+        web.post(f"{BRIDGE}{path}", json={"ok": True})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="a1b2c3d4",
+        title="Lott's TV",
+        data={
+            CONF_HOST: "10.0.0.5",
+            "connection": "app",
+            "bridge_token": "T0KEN",
+            "props": {"manufacturer": "TCL", "model": "Smart TV Pro"},
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_a_tv_through_its_app_alone(
+    hass: HomeAssistant, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.components.media_player import MediaPlayerEntityFeature
+    from homeassistant.exceptions import HomeAssistantError
+
+    await _app_only(hass, web)
+    player = hass.states.get("media_player.lott_s_tv")
+    assert player.state == "playing"
+    assert player.attributes["media_title"] == "Rick and Morty"
+    assert player.attributes["volume_level"] == pytest.approx(0.4)
+    assert player.attributes["source_list"][-1] == "Xbox"
+    # An app can't turn the TV off, nor wake it from standby
+    features = player.attributes["supported_features"]
+    assert not features & MediaPlayerEntityFeature.TURN_OFF
+    assert hass.states.get("sensor.lott_s_tv_activity").state == "playing"
+    assert hass.states.get("sensor.lott_s_tv_wi_fi_signal").state == "-52"
+    # Only the keys an app can press
+    assert hass.states.get("button.lott_s_tv_play_pause") is not None
+    assert hass.states.get("button.lott_s_tv_home") is None
+
+    await hass.services.async_call(
+        "media_player",
+        "media_pause",
+        {"entity_id": "media_player.lott_s_tv"},
+        blocking=True,
+    )
+    assert _bridge_calls(web, "/api/key")[-1][2] == {"key": "MEDIA_PAUSE"}
+    await hass.services.async_call(
+        "media_player",
+        "volume_set",
+        {"entity_id": "media_player.lott_s_tv", "volume_level": 0.5},
+        blocking=True,
+    )
+    assert _bridge_calls(web, "/api/volume")[-1][2] == {"level": 0.5}
+    await hass.services.async_call(
+        "media_player",
+        "select_source",
+        {"entity_id": "media_player.lott_s_tv", "source": "Xbox"},
+        blocking=True,
+    )
+    assert _bridge_calls(web, "/api/input")[-1][2] == {
+        "id": "com.tcl.tvinput/.Hdmi/HW15"
+    }
+    # What only ADB does says so
+    with pytest.raises(HomeAssistantError, match="needs ADB"):
+        await hass.services.async_call(
+            "remote",
+            "send_command",
+            {"entity_id": "remote.lott_s_tv", "command": "DPAD_UP"},
+            blocking=True,
+        )
+    # Home Assistant told the app who it is, and that it's without ADB
+    report = _bridge_calls(web, "/api/client")[-1][2]
+    assert report["adb"] is False
+
+
+async def test_the_tv_apps_version(
+    hass: HomeAssistant, web: AiohttpClientMocker
+) -> None:
+    entry = await _app_only(hass, web)
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.lott_s_tv_tv_app")
+    assert state.state == "2.3.0"
+    assert state.attributes["build"] == "abc1234"
+    # A newer one says hello
+    entry.runtime_data._async_handle_event(
+        {
+            "type": "hello",
+            "instance": "run-2",
+            "app_version": "2.3.1",
+            "build": "def5678",
+        }
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.lott_s_tv_tv_app")
+    assert (state.state, state.attributes["build"]) == ("2.3.1", "def5678")
+
+
+async def test_a_tv_over_adb_without_the_app_offers_to_install_it(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.googletv.bridge import BRIDGE_APK_URL
+
+    entry = await _set_up(hass, client)
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, f"install_tv_app_{entry.entry_id}"
+    )
+    assert issue is not None and issue.is_fixable
+    # Fixed: installed over ADB
+    _bridge_web(web)
+    web.get(BRIDGE_APK_URL, content=b"PK\x03\x04 an apk")
+    web.get(
+        f"{BRIDGE_APK_URL}.sha256",
+        text=hashlib.sha256(b"PK\x03\x04 an apk").hexdigest(),
+    )
+    client.async_read_file.return_value = "p1 123456\n"
+    client.async_get_apps.return_value = [*APPS, BRIDGE_APP]
+    from custom_components.googletv.repairs import async_create_fix_flow
+
+    with patch("custom_components.googletv.coordinator.BRIDGE_PAIRING_ATTEMPTS", 1):
+        flow = await async_create_fix_flow(hass, issue.issue_id, issue.data)
+        flow.hass = hass
+        result = await flow.async_step_init()
+        assert result["step_id"] == "confirm"
+        result = await flow.async_step_confirm({})
+    assert result["type"] == "create_entry"
+    client.async_install_apk.assert_awaited_once()
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, f"install_tv_app_{entry.entry_id}")
+        is None
+    )

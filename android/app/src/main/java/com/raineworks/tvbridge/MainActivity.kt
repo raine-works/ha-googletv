@@ -47,25 +47,33 @@ class MainActivity : Activity() {
     private var debugging: Boolean? = null
     private var resumed = false
 
-    /** While it's not paired: watch for debugging and pairing, and move on as they happen. */
+    // What the screen shows that changes on its own: rebuilt when it does
+    private var shown: String? = null
+
+    /**
+     * While it's open: a request to connect, pairing, permissions given,
+     * debugging turned on. The screen moves on as they happen.
+     */
     private val watch = object : Runnable {
         override fun run() {
             if (!resumed) return
-            val wasPaired = prefs.tokens.isNotEmpty()
             Thread {
                 val on = TvInfo.networkDebugging()
                 main.post {
                     if (!resumed) return@post
-                    val paired = prefs.tokens.isNotEmpty()
-                    if (on != debugging || paired != wasPaired) {
-                        debugging = on
-                        build()
-                    }
-                    if (!paired) main.postDelayed(this, WATCH_MS)
+                    debugging = on
+                    if (signature() != shown) build()
+                    main.postDelayed(this, WATCH_MS)
                 }
             }.start()
         }
     }
+
+    private fun signature(): String = listOf(
+        prefs.tokens.size, debugging, Pairing.request?.takeIf { it.answer == null }?.id,
+        TvInfo.overlayAllowed(this), TvInfo.usageAccess(this), Device.notificationAccess(this),
+        TvInfo.developerOptions(this), prefs.clientAdb, prefs.clientVersion,
+    ).joinToString()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,7 +104,7 @@ class MainActivity : Activity() {
         super.onResume()
         resumed = true
         build()
-        if (prefs.tokens.isEmpty()) main.post(watch)
+        main.post(watch)
     }
 
     override fun onPause() {
@@ -109,8 +117,10 @@ class MainActivity : Activity() {
         // Where the remote was, by its place among the focusable controls
         val focusedIndex = content.getFocusables(View.FOCUS_DOWN).indexOf(currentFocus)
         content.removeAllViews()
+        shown = signature()
         header()
 
+        Pairing.request?.takeIf { it.answer == null }?.let { request -> requestCard(request) }
         val paired = prefs.tokens.size
         if (paired == 0) setupCard()
         card(getString(R.string.status_title)) {
@@ -118,24 +128,40 @@ class MainActivity : Activity() {
             row(
                 it,
                 getString(R.string.status_home_assistant),
-                if (paired > 0) getString(R.string.status_paired, paired) else getString(R.string.status_not_paired),
+                when {
+                    paired == 0 -> getString(R.string.status_not_paired)
+                    prefs.clientAdb -> getString(R.string.status_paired_adb)
+                    else -> getString(R.string.status_paired_app)
+                },
             )
+            if (prefs.clientVersion.isNotEmpty()) row(it, getString(R.string.status_integration), prefs.clientVersion)
         }
 
-        card(getString(R.string.permissions_title)) {
+        card(getString(R.string.permissions_title), getString(R.string.permissions_subtitle)) {
             permissionRow(
                 it,
                 getString(R.string.permission_overlay),
+                getString(R.string.permission_overlay_why),
                 TvInfo.overlayAllowed(this),
                 Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")),
             )
             permissionRow(
                 it,
+                getString(R.string.permission_notifications),
+                getString(R.string.permission_notifications_why),
+                Device.notificationAccess(this),
+                Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS),
+            )
+            permissionRow(
+                it,
                 getString(R.string.permission_usage),
+                getString(R.string.permission_usage_why),
                 TvInfo.usageAccess(this),
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS),
             )
         }
+
+        if (!prefs.clientAdb) adbCard()
 
         card(getString(R.string.popups_title), getString(R.string.popups_subtitle)) {
             label(it, getString(R.string.default_size))
@@ -241,40 +267,74 @@ class MainActivity : Activity() {
                 clipToPadding = false
             }
             step(steps, 1, getString(R.string.setup_hacs_title), getString(R.string.setup_hacs_text))
-            val developer = TvInfo.developerOptions(this)
+            step(steps, 2, getString(R.string.setup_add_title), getString(R.string.setup_add_text))
+            row.addView(steps, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            body.addView(row)
+        }
+    }
+
+    /** Home Assistant asks to connect: Allow, or not. */
+    private fun requestCard(request: Pairing.Request) {
+        card(getString(R.string.pair_ask_title), getString(R.string.pair_ask_text, request.name, request.address)) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                clipChildren = false
+                clipToPadding = false
+            }
+            it.addView(row)
+            button(row, getString(R.string.pair_allow), primary = true) { Pairing.answer(this, true); build() }
+            button(row, getString(R.string.pair_deny)) { Pairing.answer(this, false); build() }
+            (row.getChildAt(0) as? View)?.post { row.getChildAt(0)?.requestFocus() }
+        }
+    }
+
+    /**
+     * More with ADB: what it adds, and how to turn it on, each step's state
+     * shown as it changes. Gone once Home Assistant connects over ADB.
+     */
+    private fun adbCard() {
+        card(getString(R.string.adb_title), getString(R.string.adb_subtitle)) { body ->
+            listOf(R.string.adb_gain_remote, R.string.adb_gain_power, R.string.adb_gain_input, R.string.adb_gain_permissions)
+                .forEach { gain -> muted(body, "•  " + getString(gain)) }
             val on = debugging
+            // Debugging on means developer options are, whatever the flag says
+            val developer = TvInfo.developerOptions(this) || on == true
+            val steps = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(16), 0, 0)
+                clipChildren = false
+                clipToPadding = false
+            }
             step(
-                steps,
-                2,
-                getString(R.string.setup_debugging_title),
-                getString(
-                    when {
-                        on == true -> R.string.setup_debugging_done
-                        developer -> R.string.setup_debugging_text
-                        else -> R.string.setup_developer_text
-                    },
-                ),
+                steps, 1, getString(R.string.adb_step_developer), getString(R.string.adb_step_developer_text),
+                if (developer) getString(R.string.setup_on) to Theme.SUCCESS else getString(R.string.setup_off) to Theme.WARNING,
+            )
+            if (!developer) {
+                button(steps, getString(R.string.adb_open_about), primary = true) { open(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) }
+            }
+            step(
+                steps, 2, getString(R.string.setup_debugging_title), getString(R.string.setup_debugging_text),
                 when (on) {
                     null -> null
                     true -> getString(R.string.setup_on) to Theme.SUCCESS
                     false -> getString(R.string.setup_off) to Theme.WARNING
                 },
             )
-            if (on == false) {
+            if (developer && on == false) {
                 button(steps, getString(R.string.setup_open_settings), primary = true) {
-                    val settings = Intent(
-                        if (developer) Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS else Settings.ACTION_DEVICE_INFO_SETTINGS,
-                    )
-                    if (settings.resolveActivity(packageManager) != null) {
-                        startActivity(settings)
-                    } else {
-                        Toast.makeText(this, R.string.permission_unavailable, Toast.LENGTH_LONG).show()
-                    }
+                    open(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
                 }
             }
-            step(steps, 3, getString(R.string.setup_add_title), getString(R.string.setup_add_text))
-            row.addView(steps, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            body.addView(row)
+            step(steps, 3, getString(R.string.adb_step_connect), getString(R.string.adb_step_connect_text))
+            body.addView(steps)
+        }
+    }
+
+    private fun open(settings: Intent) {
+        if (settings.resolveActivity(packageManager) != null) {
+            startActivity(settings)
+        } else {
+            Toast.makeText(this, R.string.permission_unavailable, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -340,7 +400,7 @@ class MainActivity : Activity() {
             setPadding(dp(16), 0, 0, 0)
         }
         titles.addView(text(getString(R.string.header_title), 26f, Theme.semibold(this), Theme.FOREGROUND))
-        titles.addView(text(getString(R.string.app_maker, BuildConfig.VERSION_NAME), 13f, Theme.regular(this), Theme.MUTED_FOREGROUND))
+        titles.addView(text(getString(R.string.app_maker, BuildConfig.VERSION_NAME, BuildConfig.GIT_SHA), 13f, Theme.regular(this), Theme.MUTED_FOREGROUND))
         row.addView(titles, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val paired = prefs.tokens.isNotEmpty()
         row.addView(
@@ -393,15 +453,12 @@ class MainActivity : Activity() {
         parent.addView(row)
     }
 
-    private fun permissionRow(parent: LinearLayout, name: String, allowed: Boolean, settings: Intent) {
-        val row = focusRow(parent, enabled = !allowed) {
-            if (settings.resolveActivity(packageManager) != null) {
-                startActivity(settings)
-            } else {
-                Toast.makeText(this, R.string.permission_unavailable, Toast.LENGTH_LONG).show()
-            }
-        }
-        row.addView(text(name, 14f, Theme.medium(this), Theme.FOREGROUND), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    private fun permissionRow(parent: LinearLayout, name: String, why: String, allowed: Boolean, settings: Intent) {
+        val row = focusRow(parent, enabled = !allowed) { open(settings) }
+        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(text(name, 14f, Theme.medium(this), Theme.FOREGROUND))
+        texts.addView(text(why, 12f, Theme.regular(this), Theme.MUTED_FOREGROUND).apply { setPadding(0, dp(3), dp(12), 0) })
+        row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(
             pill(
                 getString(if (allowed) R.string.allowed else R.string.not_allowed),

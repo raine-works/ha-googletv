@@ -30,7 +30,7 @@ object TvInfo {
 
     private const val ADB_PORT = 5555
 
-    data class App(val packageName: String, val name: String)
+    data class App(val packageName: String, val name: String, val activity: String = "")
     data class Input(val id: String, val name: String)
 
     /** The launcher's apps, by name. */
@@ -38,7 +38,7 @@ object TvInfo {
         val pm = context.packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
         return pm.queryIntentActivities(intent, 0)
-            .map { App(it.activityInfo.packageName, it.loadLabel(pm).toString()) }
+            .map { App(it.activityInfo.packageName, it.loadLabel(pm).toString(), it.activityInfo.name) }
             .distinctBy { it.packageName }
             .sortedBy { it.name.lowercase() }
     }

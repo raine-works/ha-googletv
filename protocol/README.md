@@ -29,16 +29,31 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
    minutes: `/api/pair/start` answers `429` (tokens already given keep
    working). It also answers `429` to more than one start a second.
 
+3. Or `POST /api/pair/start` `{"via": "confirm", "name": "Home Assistant"}`:
+   the TV asks "Allow Home Assistant to connect?" (on the app's screen, as a
+   notification with Allow and Don't allow, and as a pop-up when allowed),
+   naming the caller's address. `POST /api/pair/status` `{"pairing_id"}` →
+   `{"status": "pending" | "allowed" | "denied" | "expired" | "unknown"}`,
+   with `token` (given once) when allowed. No ADB, no code; one request at a
+   time, for 2 minutes.
+
 `POST /api/unpair` forgets the calling token.
 
 ## Endpoints
 
 | Endpoint | Returns |
 | :--- | :--- |
-| `GET /api/info` | `{api, app_version, name, manufacturer, model, android, paired}` |
+| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`) |
 | `GET /api/events` | What happens on the TV, as it happens: see [Events](#events) |
-| `GET /api/state` | `{screen_on, foreground_app, overlay_permission, usage_access, instance, popups}`: `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
-| `GET /api/apps` | `{apps: [{package, name}]}`: the launcher's apps |
+| `GET /api/state` | `{screen_on, foreground_app, uptime_ms, volume: {level, max, muted}, sessions, overlay_permission, usage_access, notification_access, network_debugging, instance, popups}`: `sessions` the media sessions (`package, state, position_ms, updated_ms, speed, title, subtitle, description`), null without notification access; `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
+| `GET /api/apps` | `{apps: [{package, activity, name}]}`: the launcher's apps |
+| `GET /api/diagnostics` | `{connection, wifi_signal, storage_used, storage_free_mb, memory_free_mb, memory_total_mb}` |
+| `POST /api/key` | `{key}`: a media key (`MEDIA_PLAY_PAUSE`, `MEDIA_NEXT`…) or volume key (`VOLUME_UP`, `VOLUME_DOWN`, `VOLUME_MUTE`); any other is `409` (it needs ADB) |
+| `POST /api/volume` | `{level}`: the media volume, 0 to 1 |
+| `POST /api/launch` | `{package}`: opens an app (`409` without the overlay permission) |
+| `POST /api/open_url` | `{url}`: opens a link in the app that takes it (`409` without the overlay permission) |
+| `POST /api/input` | `{id}`: switches to an input, through the TV's own input app (`409` without the overlay permission) |
+| `POST /api/client` | `{integration_version, adb}`: Home Assistant says which integration it is and whether it also uses ADB, for the app's screen |
 | `GET /api/inputs` | `{inputs: [{id, name}]}`: HDMI and other external inputs, by their names on the TV |
 | `GET /api/rules` | `{blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}` |
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules |
@@ -115,7 +130,8 @@ a stream that stops reading loses its oldest events.
 
 | `type` | Fields | When |
 | :--- | :--- | :--- |
-| `hello` | `instance`, `app_version` | First, on connecting. A new `instance`: the app restarted |
+| `hello` | `instance`, `app_version`, `build` | First, on connecting. A new `instance`: the app restarted |
+| `state` | `change` (`screen`, `volume`) | The screen turned on or off, or the volume changed: worth reading the state again |
 | `ping` | | Every 15 seconds with nothing else: the connection's alive |
 | `notification_action` | `tag`, `action` | A notification's button was pressed (on a pop-up or in the panel); the notification comes down |
 | `notification_dismissed` | `tag`, `by` | A tagged notification came down on the TV: `by` is `remote` (Back on a card with buttons) or `timeout` |

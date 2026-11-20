@@ -36,7 +36,7 @@ object Events {
         return Stream().also {
             streams.add(it)
             it.offer(
-                (JSONObject().put("type", "hello").put("instance", Notifier.instance).put("app_version", BuildConfig.VERSION_NAME)
+                (JSONObject().put("type", "hello").put("instance", Notifier.instance).put("app_version", BuildConfig.VERSION_NAME).put("build", BuildConfig.GIT_SHA)
                     .put("time", System.currentTimeMillis()).toString() + "\n").toByteArray(Charsets.UTF_8),
             )
         }

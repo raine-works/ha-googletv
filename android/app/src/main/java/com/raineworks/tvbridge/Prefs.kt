@@ -39,6 +39,16 @@ class Prefs(context: Context) {
         prefs.edit().remove(KEY_TOKENS).apply()
     }
 
+    /** The integration's version, as Home Assistant last said. */
+    var clientVersion: String
+        get() = prefs.getString(KEY_CLIENT_VERSION, "")!!
+        set(value) = prefs.edit().putString(KEY_CLIENT_VERSION, value).apply()
+
+    /** Home Assistant also reaches the TV over ADB (its extra features). */
+    var clientAdb: Boolean
+        get() = prefs.getBoolean(KEY_CLIENT_ADB, false)
+        set(value) = prefs.edit().putBoolean(KEY_CLIENT_ADB, value).apply()
+
     /** Apps (packages) that pop-ups don't show over. */
     var blockedApps: Set<String>
         get() = prefs.getStringSet(KEY_BLOCKED_APPS, emptySet())!!.toSet()
@@ -67,6 +77,8 @@ class Prefs(context: Context) {
     companion object {
         // Pairing and unpairing change the token set one at a time
         private val LOCK = Any()
+        private const val KEY_CLIENT_VERSION = "client_version"
+        private const val KEY_CLIENT_ADB = "client_adb"
         const val WHEN_BLOCKED_PANEL = "panel"
         const val WHEN_BLOCKED_DROP = "drop"
         private const val KEY_TOKENS = "tokens"

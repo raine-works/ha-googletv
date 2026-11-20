@@ -332,10 +332,7 @@ class Overlay private constructor(private val context: Context) {
                         setPadding(dp(18), dp(10), dp(18), dp(10))
                         background = Theme.focusable(context, Theme.withAlpha(Theme.FOREGROUND, 20), 999, Theme.BORDER)
                         Theme.lift(this)
-                        setOnClickListener {
-                            Events.emit("notification_action", JSONObject().put("tag", tag).put("action", action.id))
-                            Notifier.dismiss(context, tag)
-                        }
+                        setOnClickListener { Actions.pressed(context, tag, action.id) }
                     },
                     LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT),
                 )
@@ -350,7 +347,10 @@ class Overlay private constructor(private val context: Context) {
             c.position == position && c.actionable && c.view.visibility == View.VISIBLE &&
                 (focused == null || isAncestor(c.view, focused))
         } ?: cards.entries.lastOrNull { (_, c) -> c.position == position && c.actionable } ?: return
-        Events.emit("notification_dismissed", JSONObject().put("tag", card.key).put("by", "remote"))
+        // The pairing question stays answerable on the app's screen
+        if (card.key != Actions.PAIR_TAG) {
+            Events.emit("notification_dismissed", JSONObject().put("tag", card.key).put("by", "remote"))
+        }
         Notifier.dismiss(context, card.key)
     }
 

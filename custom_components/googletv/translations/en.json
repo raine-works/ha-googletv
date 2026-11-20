@@ -46,13 +46,33 @@
           "host": "The TV's IP address or host name.",
           "port": "The TV's ADB port, 5555 unless you changed it."
         }
+      },
+      "app_confirm": {
+        "title": "Add {name}",
+        "description": "{name} ({host}) has the TV app. When you submit, the TV asks \"Allow Home Assistant to connect?\": choose **Allow** with the remote. This waits up to two minutes.\n\nNo developer options needed. For the remote's keys, turning the TV off and knowing its HDMI input, you can connect it over ADB later (Reconfigure)."
+      },
+      "reauth_app": {
+        "title": "Reconnect {name}",
+        "description": "The TV app on {name} no longer knows Home Assistant (it was reinstalled, or its data cleared). Submit, then choose **Allow** on the TV."
+      },
+      "connect_adb": {
+        "title": "Connect {name} over ADB",
+        "description": "ADB adds the remote's keys (D-pad, OK, Back, Home), turning the TV off and on, and which HDMI input is on screen; it also allows the TV app's permissions where the TV hides them.\n\n1. On the TV: Settings → System → About, select **Android TV OS build** seven times.\n2. Settings → System → Developer options: turn on **USB debugging**, and **Network debugging** where it's separate.\n3. Submit, then on the TV tick **Always allow** and choose **Allow** when it asks \"Allow USB debugging?\".\n\nThe TV app's screen shows these steps too, with each one's state.",
+        "data": {
+          "port": "Port"
+        },
+        "data_description": {
+          "port": "The TV's ADB port, 5555 unless you changed it."
+        }
       }
     },
     "error": {
       "cannot_connect": "Can't reach the TV. Check its address and that network debugging is on.",
       "not_authorized": "The TV didn't allow the connection. Submit again and accept the prompt on the TV within a minute.",
       "unknown": "Unexpected error.",
-      "adb_off": "Network debugging is still off on the TV."
+      "adb_off": "Network debugging is still off on the TV.",
+      "denied": "The TV said Don't allow.",
+      "not_allowed_in_time": "Nobody chose Allow on the TV in time. Submit to ask again."
     },
     "abort": {
       "already_configured": "This TV is already set up.",
@@ -167,6 +187,14 @@
       },
       "last_boot": {
         "name": "Last restart"
+      },
+      "tv_app": {
+        "name": "TV app",
+        "state_attributes": {
+          "build": {
+            "name": "Build"
+          }
+        }
       }
     },
     "notify": {
@@ -218,6 +246,9 @@
     },
     "no_owner": {
       "message": "Finish setting up Home Assistant (its owner's account) before showing a dashboard on the TV."
+    },
+    "needs_adb": {
+      "message": "{error}. This TV is connected through its app alone: turn on network debugging on the TV (the TV app's screen shows how), then Reconfigure the TV in Home Assistant and choose Connect over ADB."
     }
   },
   "services": {
@@ -401,6 +432,25 @@
       "options": {
         "panel": "Notification panel",
         "drop": "Don't show it"
+      }
+    }
+  },
+  "issues": {
+    "install_tv_app": {
+      "title": "Install the TV app on {name}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Install the TV app on {name}",
+            "description": "Home Assistant reaches {name} over ADB, but the TV app (Google TV by Raineworks) isn't on it. The app shows Home Assistant's notifications on the TV, plays its media and dashboards, and tells it what happens there. Submit to install it over ADB now (a minute or so); it's paired by itself."
+          }
+        },
+        "error": {
+          "install_failed": "Couldn't install it: {error}"
+        },
+        "abort": {
+          "tv_removed": "The TV isn't set up anymore."
+        }
       }
     }
   }

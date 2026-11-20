@@ -82,6 +82,17 @@
                 android:value="Local network API that shows Home Assistant notifications on the TV" />
         </service>
 
+        <!-- Notification access: other apps' media sessions (what's playing) -->
+        <service
+            android:name=".MediaListener"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Buttons pressed on notifications in the panel -->
         <receiver
             android:name=".ActionReceiver"

@@ -10,6 +10,14 @@ val integrationVersion: String = run {
 }
 val versionParts = integrationVersion.split(".").map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0)
 
+// The commit it's built from, shown on the app's screen and reported to Home Assistant
+val gitSha: String = try {
+    providers.exec { commandLine("git", "rev-parse", "--short=7", "HEAD") }
+        .standardOutput.asText.get().trim().ifEmpty { "dev" }
+} catch (e: Exception) {
+    "dev"
+}
+
 android {
     namespace = "com.raineworks.tvbridge"
     compileSdk = 35
@@ -20,6 +28,7 @@ android {
         targetSdk = 35
         versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
         versionName = integrationVersion
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
 
     signingConfigs {

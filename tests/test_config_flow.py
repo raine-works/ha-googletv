@@ -38,6 +38,46 @@ def _custom_integrations(enable_custom_integrations: None) -> None:
     """Let Home Assistant load custom_components/googletv."""
 
 
+@pytest.fixture(autouse=True)
+def _no_tv_app():
+    """No TV app answering, unless a test says so."""
+    with patch(
+        "custom_components.googletv.config_flow._app_info", AsyncMock(return_value=None)
+    ) as info:
+        yield info
+
+
+APP_INFO = {
+    "api": 1,
+    "app_version": "2.3.0",
+    "build": "abc1234",
+    "name": "Lott's TV",
+    "manufacturer": "TCL",
+    "model": "Smart TV Pro",
+    "android": "14",
+    "id": "a1b2c3d4",
+    "features": ["events", "confirm_pairing", "device"],
+}
+
+
+def _patch_allow(*statuses: str):
+    """The TV app asked to pair: these answers to "Allow?" in turn."""
+    from custom_components.googletv.bridge import BridgeClient
+
+    async def status(self, pairing_id):
+        answer = answers.pop(0)
+        if answer == "allowed":
+            self.token = "T0KEN"
+        return answer
+
+    answers = list(statuses)
+    return (
+        patch.object(BridgeClient, "async_confirm_start", AsyncMock(return_value="p1")),
+        patch.object(BridgeClient, "async_confirm_status", status),
+        patch("custom_components.googletv.config_flow.asyncio.sleep", AsyncMock()),
+    )
+
+
 def _client(pair: AsyncMock) -> AsyncMock:
     client = AsyncMock()
     client.async_pair = pair
@@ -385,3 +425,118 @@ async def test_discovery_skips_a_tv_known_by_its_address(hass: HomeAssistant) ->
             data=_discovery(),
         )
     assert result["reason"] == "already_configured"
+
+
+# Through the TV app alone
+
+
+async def test_the_tv_app_found_adds_the_tv_by_allow(
+    hass: HomeAssistant, _no_tv_app: AsyncMock
+) -> None:
+    _no_tv_app.return_value = APP_INFO
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_app_discovery(),
+    )
+    assert result["step_id"] == "app_confirm"
+    start, status, sleep = _patch_allow("pending", "pending", "allowed")
+    with start as asked, status, sleep, _patch_setup():
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    asked.assert_awaited_once()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Lott's TV"
+    assert result["data"] == {
+        CONF_HOST: "10.0.0.5",
+        "connection": "app",
+        "bridge_token": "T0KEN",
+        "props": {"manufacturer": "TCL", "model": "Smart TV Pro", "android": "14"},
+    }
+    assert result["result"].unique_id == "a1b2c3d4"
+
+
+async def test_dont_allow_says_so(hass: HomeAssistant, _no_tv_app: AsyncMock) -> None:
+    _no_tv_app.return_value = APP_INFO
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_app_discovery(),
+    )
+    start, status, sleep = _patch_allow("denied")
+    with start, status, sleep:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["errors"] == {"base": "denied"}
+    start, status, sleep = _patch_allow("expired")
+    with start, status, sleep:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["errors"] == {"base": "not_allowed_in_time"}
+
+
+async def test_an_address_with_the_app_is_added_through_it(
+    hass: HomeAssistant, _no_tv_app: AsyncMock
+) -> None:
+    _no_tv_app.return_value = APP_INFO
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "10.0.0.5", CONF_PORT: 5555, CONF_NAME: "Den TV"}
+    )
+    assert result["step_id"] == "app_confirm"
+    start, status, sleep = _patch_allow("allowed")
+    with start, status, sleep, _patch_setup():
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["title"] == "Den TV"
+    assert result["data"]["connection"] == "app"
+
+
+async def test_the_app_forgetting_home_assistant_pairs_again(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="a1b2c3d4",
+        title="Lott's TV",
+        data={CONF_HOST: "10.0.0.5", "connection": "app", "bridge_token": "OLD"},
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+    assert result["step_id"] == "reauth_app"
+    start, status, sleep = _patch_allow("allowed")
+    with start, status, sleep, _patch_setup():
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["bridge_token"] == "T0KEN"
+
+
+async def test_an_app_tv_given_adb(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="a1b2c3d4",
+        title="Lott's TV",
+        data={
+            CONF_HOST: "10.0.0.5",
+            "connection": "app",
+            "bridge_token": "T0KEN",
+            "props": {"model": "Smart TV Pro"},
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+    assert result["step_id"] == "connect_adb"
+    with _patch_client(_client(AsyncMock(side_effect=GoogleTvError("off")))):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_PORT: 5555}
+        )
+    assert result["errors"] == {"base": "cannot_connect"}
+    with _patch_client(_client(AsyncMock(return_value=PROPS))), _patch_setup():
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_PORT: 5555}
+        )
+    assert result["reason"] == "reconfigure_successful"
+    # ADB from now on, the app's pairing kept, the TV's identity merged in
+    assert entry.data["connection"] == "adb"
+    assert entry.data[CONF_PORT] == 5555
+    assert entry.data["bridge_token"] == "T0KEN"
+    assert entry.data["props"]["bluetooth"] == PROPS["bluetooth"]
+    assert entry.unique_id == "a1b2c3d4"

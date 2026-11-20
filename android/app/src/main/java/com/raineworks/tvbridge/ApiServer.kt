@@ -42,9 +42,18 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 if (!Pairing.mayStart()) return error(Response.Status.TOO_MANY_REQUESTS, "One pairing a second")
                 val body = body(session)
                 val via = body.optString("via", Pairing.VIA_SCREEN)
-                require(via == Pairing.VIA_SCREEN || via == Pairing.VIA_ADB) { "via must be screen or adb" }
+                require(via in setOf(Pairing.VIA_SCREEN, Pairing.VIA_ADB, Pairing.VIA_CONFIRM)) {
+                    "via must be screen, adb or confirm"
+                }
+                if (via == Pairing.VIA_CONFIRM) {
+                    val name = body.optString("name", "Home Assistant").ifBlank { "Home Assistant" }
+                    val address = session.remoteIpAddress ?: "?"
+                    return json(JSONObject().put("pairing_id", Pairing.startConfirm(context, name, address)))
+                }
                 return json(JSONObject().put("pairing_id", Pairing.start(context, via)))
             }
+            method == Method.POST && path == "/api/pair/status" ->
+                return json(Pairing.status(context, body(session).getString("pairing_id")))
             method == Method.POST && path == "/api/pair/finish" -> {
                 val body = body(session)
                 val token = Pairing.finish(
@@ -57,6 +66,39 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         if (!prefs.isPaired(token)) return error(Response.Status.UNAUTHORIZED, "Not paired")
         return when {
             method == Method.GET && path == "/api/state" -> json(state())
+            method == Method.GET && path == "/api/diagnostics" -> json(Device.diagnostics(context))
+            method == Method.POST && path == "/api/key" -> {
+                val key = body(session).getString("key").uppercase().removePrefix("KEYCODE_")
+                if (Device.key(context, key)) ok() else error(Response.Status.CONFLICT, "$key needs ADB (network debugging)")
+            }
+            method == Method.POST && path == "/api/volume" -> {
+                Device.setVolume(context, body(session).getDouble("level"))
+                ok()
+            }
+            method == Method.POST && path == "/api/launch" -> {
+                if (!TvInfo.overlayAllowed(context)) return overlayNeeded()
+                val pkg = body(session).getString("package")
+                require(Regex("^[A-Za-z0-9_.]+$").matches(pkg)) { "Not a package: $pkg" }
+                if (Device.launch(context, pkg)) ok() else error(Response.Status.NOT_FOUND, "No app $pkg")
+            }
+            method == Method.POST && path == "/api/open_url" -> {
+                if (!TvInfo.overlayAllowed(context)) return overlayNeeded()
+                val url = body(session).getString("url")
+                require(Regex("^[A-Za-z][A-Za-z0-9+.-]*://\\S+$").matches(url)) { "Not a link: $url" }
+                if (Device.openUrl(context, url)) ok() else error(Response.Status.NOT_FOUND, "No app opens $url")
+            }
+            method == Method.POST && path == "/api/input" -> {
+                if (!TvInfo.overlayAllowed(context)) return overlayNeeded()
+                if (Device.selectInput(context, body(session).getString("id"))) ok()
+                else error(Response.Status.NOT_FOUND, "The TV has no input app")
+            }
+            method == Method.POST && path == "/api/client" -> {
+                // Home Assistant says who it is and how it's connected, for the app's screen
+                val body = body(session)
+                prefs.clientVersion = body.optString("integration_version", "").take(20)
+                prefs.clientAdb = body.optBoolean("adb", false)
+                ok()
+            }
             method == Method.GET && path == "/api/events" ->
                 newChunkedResponse(Response.Status.OK, "application/x-ndjson", Events.open())
             method == Method.GET && path == "/api/apps" -> json(JSONObject().put("apps", apps()))
@@ -133,18 +175,19 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         .put("model", Build.MODEL)
         .put("android", Build.VERSION.RELEASE)
         .put("paired", prefs.tokens.isNotEmpty())
+        .put("build", BuildConfig.GIT_SHA)
+        // The TV's id (Android ID, as its mDNS announcement says): Home Assistant's unique id for it
+        .put("id", android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID))
+        // What this app can do, for an integration that knows older ones
+        .put("features", org.json.JSONArray(listOf("events", "confirm_pairing", "device")))
 
-    private fun state(): JSONObject = JSONObject()
-        .put("screen_on", TvInfo.screenOn(context))
-        .put("foreground_app", TvInfo.foregroundApp(context) ?: JSONObject.NULL)
-        .put("overlay_permission", TvInfo.overlayAllowed(context))
-        .put("usage_access", TvInfo.usageAccess(context))
+    private fun state(): JSONObject = Device.state(context)
         .put("instance", Notifier.instance)
         .put("popups", JSONArray(Overlay.get(context).tags))
 
     private fun apps(): JSONArray = JSONArray().apply {
         TvInfo.apps(context).forEach {
-            put(JSONObject().put("package", it.packageName).put("name", it.name))
+            put(JSONObject().put("package", it.packageName).put("activity", it.activity).put("name", it.name))
         }
     }
 
@@ -182,6 +225,8 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     private fun json(body: JSONObject, status: Response.Status = Response.Status.OK): Response =
         newFixedLengthResponse(status, "application/json; charset=utf-8", body.toString())
+
+    private fun ok(): Response = json(JSONObject().put("ok", true))
 
     private fun overlayNeeded(): Response =
         error(Response.Status.CONFLICT, "The TV app needs Pop-ups over other apps allowed to open media and dashboards")
