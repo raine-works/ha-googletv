@@ -144,6 +144,12 @@ def client() -> AsyncMock:
     tv.async_get_state.return_value = parse_state(LOTTS_TCL_POLL)
     tv.async_get_apps.return_value = APPS
     tv.async_get_diagnostics.return_value = parse_diagnostics(SONY_DIAGNOSTICS)
+
+    async def quick(previous):
+        # The quick read, here a fresh full one (with what a test set it to)
+        return await tv.async_get_state()
+
+    tv.async_get_quick_state.side_effect = quick
     return tv
 
 
@@ -613,3 +619,33 @@ async def test_a_wifi_signal_once_the_tv_is_on_wifi(
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get("sensor.lott_s_tv_wi_fi_signal").state == "-61"
+
+
+async def test_a_pause_shows_from_the_quick_read(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.parsers import parse_quick
+
+    playing = _playing(YOUTUBE_TV, "Rick and Morty", "Adult Swim")
+    client.async_get_state.return_value = playing
+    entry = await _set_up(hass, client)
+    assert hass.states.get("sensor.lott_s_tv_activity").state == "playing"
+    # Within the full read's interval: only the quick read runs, and the
+    # pause it sees shows at once
+    full_reads = client.async_get_state.await_count
+    paused = (
+        "@@power\n  mWakefulness=Awake\n@@uptime\n1294401.03 4698049.80\n"
+        "@@sessions\n"
+        f"      package={YOUTUBE_TV}\n      active=true\n"
+        "      state=PlaybackState {state=2, position=5000, speed=0.0,"
+        " updated=1294400000, actions=0}\n"
+        "      metadata: size=5, description=Rick and Morty, Adult Swim, null\n"
+    )
+    client.async_get_quick_state.side_effect = lambda previous: parse_quick(
+        paused, previous
+    )
+    await entry.runtime_data._async_refresh()
+    await hass.async_block_till_done()
+    assert client.async_get_state.await_count == full_reads
+    assert hass.states.get("sensor.lott_s_tv_activity").state == "paused"
+    assert hass.states.get("media_player.lott_s_tv").state == "paused"

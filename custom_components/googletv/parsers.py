@@ -64,6 +64,20 @@ APPS_COMMAND = (
 # The Bluetooth address is the TV's id: Google TVs announce it on the network
 # (``bt`` in their ``_androidtvremote2._tcp`` record), so a TV found there is
 # matched to its entry before anyone accepts a prompt.
+# Read every second between full polls: what shows playing, paused or the
+# screen going off (about 100 ms on a TV; the full poll is about 500)
+QUICK_COMMAND = "; ".join(
+    [
+        "echo @@power",
+        "dumpsys power | grep -m1 'mWakefulness='",
+        "echo @@uptime",
+        "cat /proc/uptime",
+        "echo @@sessions",
+        "dumpsys media_session"
+        " | grep -E 'package=|active=|state=PlaybackState|metadata:'",
+    ]
+)
+
 # Read with the app list (every 10 minutes): the TV's network, storage and
 # memory, for its diagnostic sensors
 DIAGNOSTICS_COMMAND = "; ".join(
@@ -570,6 +584,19 @@ def input_on_screen(inputs: list[TvInput], current: str | None) -> TvInput | Non
         port = int(match.group(1), 16)
         return next((i for i in inputs if i.port == port), None)
     return None
+
+
+def parse_quick(raw: str, previous: TvState) -> TvState:
+    """``QUICK_COMMAND``'s screen and media sessions over the last full poll."""
+    sections = split_sections(raw)
+    power = sections.get("power", "")
+    return replace(
+        previous,
+        awake=parse_awake(power),
+        screensaver=parse_wakefulness(power) == "Dreaming",
+        uptime_ms=parse_uptime_ms(sections.get("uptime", "")),
+        sessions=parse_sessions(sections.get("sessions", "")),
+    )
 
 
 def parse_cec(text: str) -> dict[int, str]:

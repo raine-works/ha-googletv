@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -26,7 +26,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.util import dt as dt_util
 
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, GoogleTvData
 from .entity import GoogleTvEntity
@@ -48,11 +47,8 @@ def _app(data: GoogleTvData) -> str | None:
 
 
 def _last_boot(data: GoogleTvData) -> datetime | None:
-    """When the TV started, to the minute (so it doesn't drift with each poll)."""
-    if not data.state.uptime_ms:
-        return None
-    boot = dt_util.utcnow() - timedelta(milliseconds=data.state.uptime_ms)
-    return boot.replace(second=0, microsecond=0)
+    """When the TV started, to the minute."""
+    return data.last_boot
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -131,8 +131,11 @@ Apps open by their launch screen (`am start`), not by a Play Store link, so
 apps that Android TV Remote can no longer launch (YouTube TV, Apple TV, HBO Max,
 Hulu since the Play Store's 2026 update) open here.
 
-The TV is read every 5 seconds with a single shell command; its app list every
-10 minutes.
+The TV is read every second: its screen and what's playing (about 100 ms
+of work on the TV), so playing, paused and the screen turning off show within
+a second; every 5 seconds the full read adds the app, volume and inputs (and
+at once when the screen turns on or off, or after a command). Its app list and
+diagnostics every 10 minutes.
 
 ### Online lookups
 

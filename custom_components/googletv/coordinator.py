@@ -17,12 +17,14 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
-from .const import APPS_INTERVAL, DOMAIN, SCAN_INTERVAL
+from .const import APPS_INTERVAL, DOMAIN, FULL_INTERVAL, SCAN_INTERVAL
 from .online import Lookups
 from .parsers import HOME_APPS, INPUT_APPS, MUSIC_APPS, App, Diagnostics, TvState
 
 _LOGGER = logging.getLogger(__name__)
 
+# How far the TV's start time may wander between reads before it's a restart
+BOOT_DRIFT = timedelta(minutes=2)
 # How soon a failed artwork lookup is tried again while the title plays
 ARTWORK_RETRY = timedelta(minutes=1)
 # How long the first update waits for apps' listings (later ones don't wait)
@@ -41,6 +43,8 @@ class GoogleTvData:
     artwork: str | None = None
     # Network, storage and memory, read with the apps
     diagnostics: Diagnostics = field(default_factory=Diagnostics)
+    # When the TV started (kept steady between reads)
+    last_boot: datetime | None = None
 
 
 @contextmanager
@@ -80,15 +84,17 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self.lookups = lookups
         self._launcher_apps: list[App] = []
         self._apps_read_at: datetime | None = None
+        self._full_read_at: datetime | None = None
+        self._last_boot: datetime | None = None
         self._diagnostics = Diagnostics()
         self._artwork_for: tuple[str, str, str | None] | None = None
         self._artwork_tried_at: datetime | None = None
 
     async def _async_update_data(self) -> GoogleTvData:
-        """Read the TV, and its apps when they're due."""
+        """Read the TV (fully every few seconds, quickly between), and its apps."""
         try:
-            state = await self.client.async_get_state()
             now = dt_util.utcnow()
+            state = await self._async_read_state(now)
             if self._apps_read_at is None or now - self._apps_read_at >= APPS_INTERVAL:
                 first = self._apps_read_at is None
                 self._launcher_apps = await self.client.async_get_apps()
@@ -105,12 +111,43 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         except GoogleTvError as err:
             raise UpdateFailed(f"Can't read the TV: {err}") from err
         state = self._without_stale_input(state)
+        if state.uptime_ms:
+            boot = now - timedelta(milliseconds=state.uptime_ms)
+            # Read every second, it wobbles by a little; a restart moves it
+            if self._last_boot is None or abs(boot - self._last_boot) > BOOT_DRIFT:
+                self._last_boot = boot.replace(second=0, microsecond=0)
         return GoogleTvData(
             state=state,
             apps=self._named_apps(),
             artwork=self._artwork(state),
             diagnostics=self._diagnostics,
+            last_boot=self._last_boot,
         )
+
+    async def _async_read_state(self, now: datetime) -> TvState:
+        """A full read when it's due, else a quick one over the last.
+
+        The quick read (the screen and media sessions) shows a pause within a
+        second; a screen turning on or off brings the full read forward, so
+        the app and input catch up at once.
+        """
+        if (
+            self.data is not None
+            and self._full_read_at is not None
+            and now - self._full_read_at < FULL_INTERVAL
+        ):
+            previous = self.data.state
+            state = await self.client.async_get_quick_state(previous)
+            if state.awake == previous.awake:
+                return state
+        state = await self.client.async_get_state()
+        self._full_read_at = now
+        return state
+
+    async def async_request_refresh(self) -> None:
+        """Read the TV fully soon (after a command: a new app, an input)."""
+        self._full_read_at = None
+        await super().async_request_refresh()
 
     def _without_stale_input(self, state: TvState) -> TvState:
         """No input on screen while a launcher app or the home screen is.

@@ -33,12 +33,14 @@ from .parsers import (
     DIAGNOSTICS_COMMAND,
     POLL_COMMAND,
     PROPS_COMMAND,
+    QUICK_COMMAND,
     App,
     Diagnostics,
     TvState,
     parse_apps,
     parse_diagnostics,
     parse_props,
+    parse_quick,
     parse_state,
 )
 
@@ -181,6 +183,10 @@ class GoogleTvClient:
     async def async_get_state(self) -> TvState:
         """Read the TV: power, app, volume, what's playing, inputs."""
         return parse_state(await self.async_shell(POLL_COMMAND))
+
+    async def async_get_quick_state(self, previous: TvState) -> TvState:
+        """Read only the screen and what's playing, over the last full read."""
+        return parse_quick(await self.async_shell(QUICK_COMMAND), previous)
 
     async def async_get_apps(self) -> list[App]:
         """The launcher's apps."""

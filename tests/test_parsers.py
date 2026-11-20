@@ -447,3 +447,16 @@ def test_screensaver_and_diagnostics() -> None:
     )
     assert (both.connection, both.wifi_signal) == ("ethernet", None)
     assert parse_diagnostics("").connection is None
+
+
+def test_the_quick_read() -> None:
+    from googletv_parsers import parse_quick
+
+    full = parse_state(LOTTS_TCL_POLL)
+    quick = parse_quick(
+        "@@power\n  mWakefulness=Dreaming\n@@uptime\n10.5 0\n@@sessions\n", full
+    )
+    # The screen and sessions are new; the app, volume and inputs carry over
+    assert quick.screensaver and quick.awake and quick.sessions == []
+    assert quick.uptime_ms == 10500
+    assert (quick.app, quick.volume, quick.input) == (full.app, full.volume, full.input)

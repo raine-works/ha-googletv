@@ -17,7 +17,10 @@ CONF_ONLINE_LOOKUPS = "online_lookups"
 ADB_KEY_FILE = "googletv_adbkey"
 
 # How often a TV is read: one shell command, a few hundred bytes back
-SCAN_INTERVAL = timedelta(seconds=5)
+SCAN_INTERVAL = timedelta(seconds=1)
+# Of those, how often the full read (the app, volume, inputs) is; the others
+# read only the screen and what's playing, so a pause shows within a second
+FULL_INTERVAL = timedelta(seconds=5)
 # How often the launcher's app list is read again (it changes on installs)
 APPS_INTERVAL = timedelta(minutes=10)
 
