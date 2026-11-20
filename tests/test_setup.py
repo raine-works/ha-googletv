@@ -7,6 +7,7 @@ from Google Play, iTunes and TVmaze (``tests/fixtures``).
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 import pathlib
 from unittest.mock import AsyncMock, patch
 
@@ -29,6 +30,7 @@ from custom_components.googletv.const import (  # noqa: E402
 from custom_components.googletv.lookups import (  # noqa: E402
     WIKIPEDIA_API,
     film_search_params,
+    movie_search_url,
     show_search_url,
     song_search_url,
     store_url,
@@ -95,6 +97,33 @@ def web(aioclient_mock: AiohttpClientMocker) -> AiohttpClientMocker:
     aioclient_mock.get(
         show_search_url("Rick and Morty"),
         text=(FIXTURES / "tvmaze_rick_and_morty.json").read_text(),
+    )
+    aioclient_mock.get(
+        movie_search_url("Cars"),
+        text=(FIXTURES / "play_movies_cars.html").read_text(),
+    )
+    aioclient_mock.get(
+        movie_search_url("Moana"), text="<html>Not on Google Play</html>"
+    )
+    aioclient_mock.get(
+        WIKIPEDIA_API,
+        params=film_search_params("Moana"),
+        text=json.dumps(
+            {
+                "query": {
+                    "pages": [
+                        {
+                            "index": 1,
+                            "title": "Moana (2016 film)",
+                            "original": {
+                                "source": "https://upload.wikimedia.org/wikipedia"
+                                "/en/2/26/Moana_Teaser_Poster.jpg?utm_source=x"
+                            },
+                        }
+                    ]
+                }
+            }
+        ),
     )
     aioclient_mock.get(
         WIKIPEDIA_API,
@@ -280,10 +309,29 @@ async def test_a_films_poster(
     entry = await _set_up(hass, client)
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
+    # Google Play's full-size poster; no show lookup, no Wikipedia
     assert entry.runtime_data.data.artwork == (
-        "https://upload.wikimedia.org/wikipedia/en/3/34/Cars_2006.jpg"
+        "https://play-lh.googleusercontent.com/PF7TOtRoTfdxv-srjfHbhrsUMUCLr0kKFJNv5"
+        "KH3WmUUruvMEpemIj5DT_Xs5vHckr1H4zjzbuvc_i5PAzc=s900"
     )
-    assert not any("tvmaze" in str(call[1]) for call in web.mock_calls)
+    assert not any(
+        "tvmaze" in str(call[1]) or "wikipedia" in str(call[1])
+        for call in web.mock_calls
+    )
+
+
+async def test_a_film_not_on_google_play(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    client.async_get_state.return_value = _playing(
+        "com.disney.disneyplus", "Moana", None
+    )
+    entry = await _set_up(hass, client)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert entry.runtime_data.data.artwork == (
+        "https://upload.wikimedia.org/wikipedia/en/2/26/Moana_Teaser_Poster.jpg"
+    )
 
 
 async def test_a_songs_cover(

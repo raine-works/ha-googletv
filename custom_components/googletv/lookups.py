@@ -3,9 +3,10 @@
 * An app's name and icon: its Google Play listing (``og:title`` and
   ``og:image``), since the TV itself only gives a package and a resource id.
 * Artwork for what's playing: a song's cover from the iTunes Search API, a
-  show's poster from TVmaze, a film's poster from Wikipedia (its articles
-  with a film infobox). None needs a key. A match must have the same name
-  (and, for a song, the same artist), so a stray result never shows.
+  show's poster from TVmaze, a film's poster from Google Play's movie search
+  (full size), else from Wikipedia (its articles with a film infobox; small,
+  fair-use copies). None needs a key. A match must have the same name (and,
+  for a song, the same artist), so a stray result never shows.
 
 Imports nothing from Home Assistant, so the tests load it on its own.
 """
@@ -20,6 +21,8 @@ from urllib.parse import quote
 
 ICON_SIZE = 256
 ARTWORK_SIZE = 600
+# A poster's longest side (Google Play's are 1000x1440 at full size)
+POSTER_SIZE = 900
 
 # Apps whose titles aren't shows or songs (YouTube's are video titles)
 NO_ARTWORK_APPS = frozenset({"com.google.android.youtube.tv"})
@@ -140,4 +143,35 @@ def pick_film_poster(reply: dict[str, Any], title: str) -> str | None:
         source = ((page.get("original") or {}).get("source") or "").split("?")[0]
         if _IMAGE.search(source):
             return source
+    return None
+
+
+def movie_search_url(title: str, country: str | None = None) -> str:
+    """Google Play's movie search, in English, in a country's store.
+
+    Without one, Google picks the store by the requester's address, and where
+    Google Play sells no movies the search finds none.
+    """
+    url = f"https://play.google.com/store/search?q={quote(title)}&c=movies&hl=en"
+    return f"{url}&gl={quote(country)}" if country else url
+
+
+def pick_movie_poster(page: str, title: str) -> str | None:
+    """The poster of the movie with exactly this title in Google Play's search.
+
+    Each result's poster is an ``<img>`` whose alt is "Icon image <title>"
+    ("Cars", "Cars 2", "Cars 3-Movie Collection": only the first is Cars).
+    """
+    want = _norm(title)
+    for tag in re.findall(r"<img\b[^>]*>", page):
+        alt = re.search(r'\balt="Icon image ([^"]*)"', tag)
+        src = re.search(r'\bsrc="(https://play-lh\.googleusercontent\.com/[^"=]+)', tag)
+        # "/proxy/" images don't load outside the page: the next one might
+        if (
+            alt
+            and src
+            and "/proxy/" not in src.group(1)
+            and _norm(html.unescape(alt.group(1))) == want
+        ):
+            return f"{src.group(1)}=s{POSTER_SIZE}"
     return None

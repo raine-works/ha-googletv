@@ -27,8 +27,10 @@ from .lookups import (
     WIKIPEDIA_API,
     StoreListing,
     film_search_params,
+    movie_search_url,
     parse_store_page,
     pick_film_poster,
+    pick_movie_poster,
     pick_show_image,
     pick_song_artwork,
     show_search_url,
@@ -189,6 +191,17 @@ class Lookups:
         return pick_show_image(reply, title) if reply else None
 
     async def _film_poster(self, title: str) -> str | None:
+        """Google Play's poster, full size; else Wikipedia's small one."""
+        session = async_get_clientsession(self._hass)
+        async with session.get(
+            # Home Assistant's own country picks the store (Settings → System)
+            movie_search_url(title, self._hass.config.country),
+            headers=HEADERS,
+            timeout=TIMEOUT,
+        ) as response:
+            response.raise_for_status()
+            if poster := pick_movie_poster(await response.text(), title):
+                return poster
         reply = await self._get_json(WIKIPEDIA_API, film_search_params(title))
         return pick_film_poster(reply, title) if reply else None
 

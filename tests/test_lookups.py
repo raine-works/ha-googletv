@@ -108,3 +108,37 @@ def test_a_films_poster() -> None:
     assert film_search_params("Cars")["gsrsearch"] == (
         'intitle:"Cars" hastemplate:"Infobox film"'
     )
+
+
+def test_a_movies_poster_from_google_play() -> None:
+    from googletv_lookups import movie_search_url, pick_movie_poster
+
+    page = (FIXTURES / "play_movies_cars.html").read_text()
+    # Cars, full size, not Cars 2 or the Cars 3-Movie Collection
+    assert pick_movie_poster(page, "Cars") == (
+        "https://play-lh.googleusercontent.com/PF7TOtRoTfdxv-srjfHbhrsUMUCLr0kKFJNv5"
+        "KH3WmUUruvMEpemIj5DT_Xs5vHckr1H4zjzbuvc_i5PAzc=s900"
+    )
+    assert pick_movie_poster(page, "Cars 2") is not None
+    assert pick_movie_poster(page, "Cars 4") is None
+    assert movie_search_url("Cars") == (
+        "https://play.google.com/store/search?q=Cars&c=movies&hl=en"
+    )
+
+
+def test_a_movie_search_in_a_countrys_store() -> None:
+    from googletv_lookups import movie_search_url, pick_movie_poster
+
+    assert movie_search_url("Cars", "US") == (
+        "https://play.google.com/store/search?q=Cars&c=movies&hl=en&gl=US"
+    )
+    # A "/proxy/" image doesn't load outside the page; the next Moana does
+    page = (
+        '<img src="https://play-lh.googleusercontent.com/proxy/abc=s256"'
+        ' alt="Icon image Moana">'
+        '<img src="https://play-lh.googleusercontent.com/fWs8Mch=s256"'
+        ' alt="Icon image Moana">'
+    )
+    assert pick_movie_poster(page, "Moana") == (
+        "https://play-lh.googleusercontent.com/fWs8Mch=s900"
+    )
