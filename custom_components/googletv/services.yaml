@@ -1,0 +1,141 @@
+notify:
+  target:
+    entity:
+      integration: googletv
+      domain: media_player
+  fields:
+    message:
+      example: "Someone's at the front door"
+      selector:
+        text:
+          multiline: true
+    title:
+      example: "Doorbell"
+      selector:
+        text:
+    image:
+      example: "/local/doorbell.jpg"
+      selector:
+        text:
+    video:
+      selector:
+        text:
+    camera_entity:
+      selector:
+        entity:
+          domain: camera
+    camera_view:
+      default: live
+      selector:
+        select:
+          options:
+            - live
+            - snapshot
+          translation_key: camera_view
+    mode:
+      default: popup
+      selector:
+        select:
+          options:
+            - popup
+            - panel
+            - both
+          translation_key: mode
+    position:
+      default: top_right
+      selector:
+        select:
+          options:
+            - top_left
+            - top
+            - top_right
+            - center
+            - bottom_left
+            - bottom
+            - bottom_right
+          translation_key: position
+    duration:
+      selector:
+        number:
+          min: 1
+          max: 600
+          unit_of_measurement: s
+    size:
+      default: medium
+      selector:
+        select:
+          options:
+            - small
+            - medium
+            - large
+          translation_key: size
+    color:
+      example: "#03A9F4"
+      selector:
+        text:
+    mute:
+      default: true
+      selector:
+        boolean:
+    tag:
+      selector:
+        text:
+    ignore_rules:
+      default: false
+      selector:
+        boolean:
+    when_blocked:
+      selector:
+        select:
+          options:
+            - panel
+            - drop
+          translation_key: when_blocked
+
+dismiss_notifications:
+  target:
+    entity:
+      integration: googletv
+      domain: media_player
+  fields:
+    tag:
+      selector:
+        text:
+
+set_notification_rules:
+  target:
+    entity:
+      integration: googletv
+      domain: media_player
+  fields:
+    blocked_apps:
+      example: "Netflix"
+      selector:
+        text:
+          multiple: true
+    blocked_inputs:
+      example: "Xbox"
+      selector:
+        text:
+          multiple: true
+    when_blocked:
+      selector:
+        select:
+          options:
+            - panel
+            - drop
+          translation_key: when_blocked
+
+install_tv_bridge:
+  target:
+    entity:
+      integration: googletv
+      domain: media_player
+  fields:
+    development:
+      default: false
+      selector:
+        boolean:
+    url:
+      selector:
+        text:

@@ -89,6 +89,25 @@
       "last_boot": {
         "default": "mdi:restart"
       }
+    },
+    "notify": {
+      "notifications": {
+        "default": "mdi:message-badge"
+      }
+    }
+  },
+  "services": {
+    "notify": {
+      "service": "mdi:message-badge"
+    },
+    "dismiss_notifications": {
+      "service": "mdi:message-off"
+    },
+    "set_notification_rules": {
+      "service": "mdi:message-cog"
+    },
+    "install_tv_bridge": {
+      "service": "mdi:download"
     }
   }
 }

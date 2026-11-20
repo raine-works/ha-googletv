@@ -721,3 +721,225 @@ async def test_a_pause_shows_from_the_quick_read(
     assert client.async_get_state.await_count == full_reads
     assert hass.states.get("sensor.lott_s_tv_activity").state == "paused"
     assert hass.states.get("media_player.lott_s_tv").state == "paused"
+
+
+# Raineworks TV Bridge
+
+BRIDGE = "http://10.0.0.5:8721"
+BRIDGE_APP = App(
+    "com.raineworks.tvbridge", "com.raineworks.tvbridge.MainActivity", "TV Bridge"
+)
+
+
+def _bridge_web(web: AiohttpClientMocker, token: str = "T0KEN") -> None:
+    web.get(store_url("com.raineworks.tvbridge"), status=404)
+    web.post(f"{BRIDGE}/api/pair/start", json={"pairing_id": "p1"})
+    web.post(f"{BRIDGE}/api/pair/finish", json={"token": token})
+    web.post(
+        f"{BRIDGE}/api/notify",
+        json={"popup": True, "panel": False, "blocked_by": None, "reason": None},
+    )
+    web.post(
+        f"{BRIDGE}/api/rules",
+        json={"blocked_apps": [], "blocked_inputs": [], "when_blocked": "panel"},
+    )
+
+
+def _bridge_calls(web: AiohttpClientMocker, path: str) -> list:
+    return [call for call in web.mock_calls if str(call[1]).endswith(path)]
+
+
+async def test_tv_bridge_pairs_over_adb(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.const import CONF_BRIDGE_TOKEN
+
+    client.async_get_apps.return_value = [*APPS, BRIDGE_APP]
+    # The app writes the code where only ADB reads it
+    client.async_read_file.return_value = "p1 123456\n"
+    _bridge_web(web)
+    entry = await _set_up(hass, client)
+    await hass.async_block_till_done()
+    client.async_read_file.assert_awaited_with(
+        "/sdcard/Android/data/com.raineworks.tvbridge/files/pairing_code"
+    )
+    finish = _bridge_calls(web, "/api/pair/finish")[0]
+    assert finish[2] == {"pairing_id": "p1", "code": "123456"}
+    assert entry.data[CONF_BRIDGE_TOKEN] == "T0KEN"
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("notify.lott_s_tv_notifications").state != "unavailable"
+    assert hass.states.get("media_player.lott_s_tv").attributes["tv_bridge"] == "paired"
+
+
+async def _paired(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> MockConfigEntry:
+    from custom_components.googletv.const import CONF_BRIDGE_TOKEN
+
+    client.async_get_apps.return_value = [*APPS, BRIDGE_APP]
+    _bridge_web(web)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="X1",
+        title="Lott's TV",
+        data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555, CONF_BRIDGE_TOKEN: "T0KEN"},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    return entry
+
+
+async def test_a_notification_from_the_notify_entity(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    await _paired(hass, client, web)
+    await hass.services.async_call(
+        "notify",
+        "send_message",
+        {
+            "entity_id": "notify.lott_s_tv_notifications",
+            "title": "Laundry",
+            "message": "The washer is done",
+        },
+        blocking=True,
+    )
+    call = _bridge_calls(web, "/api/notify")[-1]
+    assert call[2]["title"] == "Laundry"
+    assert call[2]["message"] == "The washer is done"
+    # What's on screen, for the app's rules: the Xbox input
+    assert call[2]["context"] == {
+        "app": "com.tcl.tv",
+        "input": "com.tcl.tvinput/.TvPassThroughService/HW15",
+    }
+    assert call[3]["Authorization"] == "Bearer T0KEN"
+
+
+async def test_the_notify_action(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    await _paired(hass, client, web)
+    reply = await hass.services.async_call(
+        DOMAIN,
+        "notify",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "title": "Doorbell",
+            "image": "/local/doorbell.jpg",
+            "position": "bottom_right",
+            "duration": 12,
+            "size": "large",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    call = _bridge_calls(web, "/api/notify")[-1]
+    assert call[2]["image_url"] == "http://192.168.1.2:8123/local/doorbell.jpg"
+    assert (call[2]["position"], call[2]["duration"], call[2]["size"]) == (
+        "bottom_right",
+        12,
+        "large",
+    )
+    assert reply["media_player.lott_s_tv"]["popup"] is True
+
+
+async def test_notify_needs_something_to_show(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.exceptions import ServiceValidationError
+
+    await _paired(hass, client, web)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {"entity_id": "media_player.lott_s_tv", "position": "top"},
+            blocking=True,
+        )
+
+
+async def test_rules_by_name(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    await _paired(hass, client, web)
+    await hass.services.async_call(
+        DOMAIN,
+        "set_notification_rules",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "blocked_apps": ["Netflix", "com.example.other"],
+            "blocked_inputs": ["xbox"],
+            "when_blocked": "drop",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    call = _bridge_calls(web, "/api/rules")[-1]
+    assert call[2] == {
+        "blocked_apps": ["com.netflix.ninja", "com.example.other"],
+        "blocked_inputs": ["com.tcl.tvinput/.TvPassThroughService/HW15"],
+        "when_blocked": "drop",
+    }
+
+
+async def test_not_paired_says_so(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    await _set_up(hass, client)
+    with pytest.raises(HomeAssistantError, match="isn't installed and paired"):
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {"entity_id": "media_player.lott_s_tv", "message": "Hi"},
+            blocking=True,
+        )
+
+
+async def test_install_tv_bridge(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.bridge import BRIDGE_DEV_APK_URL
+    from custom_components.googletv.const import CONF_BRIDGE_TOKEN
+
+    entry = await _set_up(hass, client)
+    _bridge_web(web)
+    web.get(BRIDGE_DEV_APK_URL, content=b"PK\x03\x04 an apk")
+    client.async_read_file.return_value = "p1 123456\n"
+    client.async_get_apps.return_value = [*APPS, BRIDGE_APP]
+    with patch("custom_components.googletv.coordinator.BRIDGE_PAIRING_RETRY_S", 0):
+        await hass.services.async_call(
+            DOMAIN,
+            "install_tv_bridge",
+            {"entity_id": "media_player.lott_s_tv", "development": True},
+            blocking=True,
+        )
+    client.async_install_apk.assert_awaited_once_with(b"PK\x03\x04 an apk")
+    commands = [c.args[0] for c in client.async_shell.await_args_list]
+    assert "appops set com.raineworks.tvbridge SYSTEM_ALERT_WINDOW allow" in commands
+    assert any("com.raineworks.tvbridge.START" in c for c in commands)
+    assert entry.data[CONF_BRIDGE_TOKEN] == "T0KEN"
+
+
+async def test_a_forgotten_pairing_pairs_again(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    entry = await _paired(hass, client, web)
+    web.clear_requests()
+    web.post(f"{BRIDGE}/api/notify", status=401, json={"error": "Not paired"})
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {"entity_id": "media_player.lott_s_tv", "message": "Hi"},
+            blocking=True,
+        )
+    assert entry.runtime_data.bridge.token is None

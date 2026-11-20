@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from io import BytesIO
 import logging
 import os
 import re
@@ -46,6 +47,10 @@ from .parsers import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Where an APK is copied to install it, and how long that may take
+APK_DEVICE_PATH = "/data/local/tmp/googletv-install.apk"
+INSTALL_TIMEOUT_S = 120.0
+
 _CONNECTION_ERRORS = (
     AdbConnectionError,
     AdbTimeoutError,
@@ -64,6 +69,7 @@ _CONNECTION_ERRORS = (
 _PACKAGE = re.compile(r"[A-Za-z][\w]*(\.[A-Za-z_][\w]*)+")
 _ACTIVITY = re.compile(r"[A-Za-z_][\w.$]*")
 _INPUT_ID = re.compile(r"[\w.]+/[\w.$]+/\w+")
+_DEVICE_PATH = re.compile(r"/[\w./-]+")
 # Any link without spaces or control characters (it's quoted when sent)
 _URL = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\x00-\x1f\x7f]+", re.I)
 
@@ -179,6 +185,36 @@ class GoogleTvClient:
                 else:
                     break
         return result if isinstance(result, str) else ""
+
+    async def async_install_apk(self, apk: bytes) -> None:
+        """Install (or update) an app from its APK, its permissions granted."""
+        async with self._lock:
+            if not self._device.available:
+                await self.async_connect()
+            try:
+                await self._device.push(
+                    BytesIO(apk),
+                    APK_DEVICE_PATH,
+                    transport_timeout_s=INSTALL_TIMEOUT_S,
+                    read_timeout_s=INSTALL_TIMEOUT_S,
+                )
+            except _CONNECTION_ERRORS as err:
+                await self.async_close()
+                raise GoogleTvError(f"Couldn't copy the app to the TV: {err}") from err
+        output = await self.async_shell(
+            f"pm install -r -g {APK_DEVICE_PATH}; rm -f {APK_DEVICE_PATH}",
+            timeout_s=INSTALL_TIMEOUT_S,
+        )
+        if "Success" not in output:
+            raise GoogleTvError(
+                f"The TV didn't install the app: {output.strip()[-300:]}"
+            )
+
+    async def async_read_file(self, path: str) -> str:
+        """A text file on the TV (empty if it isn't there)."""
+        if not _DEVICE_PATH.fullmatch(path):
+            raise GoogleTvError(f"Not a path: {path}")
+        return await self.async_shell(f"cat {shlex.quote(path)} 2>/dev/null")
 
     async def async_get_state(self) -> TvState:
         """Read the TV: power, app, volume, what's playing, inputs."""

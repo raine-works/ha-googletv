@@ -152,6 +152,11 @@
       "last_boot": {
         "name": "Last restart"
       }
+    },
+    "notify": {
+      "notifications": {
+        "name": "Notifications"
+      }
     }
   },
   "exceptions": {
@@ -166,6 +171,167 @@
     },
     "unreachable": {
       "message": "The TV is off its network and Home Assistant doesn't know its network address (MAC) to wake it. Turn on its network standby (Sony: Remote start) so it stays reachable."
+    },
+    "bridge_not_paired": {
+      "message": "Raineworks TV Bridge isn't installed and paired on this TV. Install it with the Install TV Bridge action (googletv.install_tv_bridge)."
+    },
+    "bridge_download_failed": {
+      "message": "Couldn't download Raineworks TV Bridge: {error}"
+    },
+    "unknown_camera": {
+      "message": "There's no camera {entity_id}."
+    },
+    "nothing_to_show": {
+      "message": "Give a message, title, image, video or camera to show."
+    }
+  },
+  "services": {
+    "notify": {
+      "name": "Show a notification",
+      "description": "Shows a notification on the TV through Raineworks TV Bridge: a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "The text."
+        },
+        "title": {
+          "name": "Title",
+          "description": "The heading over it."
+        },
+        "image": {
+          "name": "Image",
+          "description": "An image URL, or a Home Assistant path (/local/…, /api/…)."
+        },
+        "video": {
+          "name": "Video",
+          "description": "A video or live stream URL (HLS, RTSP, MP4), or a Home Assistant path."
+        },
+        "camera_entity": {
+          "name": "Camera",
+          "description": "A camera to show: its live stream, or a snapshot."
+        },
+        "camera_view": {
+          "name": "Camera view",
+          "description": "The camera's live stream or a snapshot."
+        },
+        "mode": {
+          "name": "Where",
+          "description": "A pop-up over what's on screen, the notification panel, or both."
+        },
+        "position": {
+          "name": "Position",
+          "description": "Where on screen the pop-up goes."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "How long the pop-up stays (8 seconds, 20 with a video, if not set)."
+        },
+        "size": {
+          "name": "Size",
+          "description": "The pop-up's size."
+        },
+        "color": {
+          "name": "Color",
+          "description": "The pop-up's border, a hex color."
+        },
+        "mute": {
+          "name": "Mute",
+          "description": "A video's sound off."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "A pop-up with the same tag replaces this one; dismiss it by its tag."
+        },
+        "ignore_rules": {
+          "name": "Ignore rules",
+          "description": "Pop up even over apps and inputs the rules exclude."
+        },
+        "when_blocked": {
+          "name": "When blocked",
+          "description": "A pop-up the rules keep off the screen goes to the panel, or nowhere."
+        }
+      }
+    },
+    "dismiss_notifications": {
+      "name": "Dismiss notifications",
+      "description": "Takes pop-ups down: the one with a tag, else all.",
+      "fields": {
+        "tag": {
+          "name": "Tag",
+          "description": "The pop-up's tag."
+        }
+      }
+    },
+    "set_notification_rules": {
+      "name": "Set notification rules",
+      "description": "The apps and inputs pop-ups don't show over (by name or id), and what happens to those notifications.",
+      "fields": {
+        "blocked_apps": {
+          "name": "Blocked apps",
+          "description": "Apps by name (Netflix) or package (com.netflix.ninja). Replaces the list."
+        },
+        "blocked_inputs": {
+          "name": "Blocked inputs",
+          "description": "Inputs by name (Xbox, HDMI 2) or id. Replaces the list."
+        },
+        "when_blocked": {
+          "name": "When blocked",
+          "description": "A blocked pop-up goes to the panel, or nowhere."
+        }
+      }
+    },
+    "install_tv_bridge": {
+      "name": "Install TV Bridge",
+      "description": "Installs or updates Raineworks TV Bridge on the TV over ADB, allows its pop-ups, and pairs with it.",
+      "fields": {
+        "development": {
+          "name": "Development build",
+          "description": "Master's latest build instead of the latest release."
+        },
+        "url": {
+          "name": "APK URL",
+          "description": "Install this APK instead."
+        }
+      }
+    }
+  },
+  "selector": {
+    "camera_view": {
+      "options": {
+        "live": "Live",
+        "snapshot": "Snapshot"
+      }
+    },
+    "mode": {
+      "options": {
+        "popup": "Pop-up",
+        "panel": "Notification panel",
+        "both": "Both"
+      }
+    },
+    "position": {
+      "options": {
+        "top_left": "Top left",
+        "top": "Top",
+        "top_right": "Top right",
+        "center": "Center",
+        "bottom_left": "Bottom left",
+        "bottom": "Bottom",
+        "bottom_right": "Bottom right"
+      }
+    },
+    "size": {
+      "options": {
+        "small": "Small",
+        "medium": "Medium",
+        "large": "Large"
+      }
+    },
+    "when_blocked": {
+      "options": {
+        "panel": "Notification panel",
+        "drop": "Don't show it"
+      }
     }
   }
 }

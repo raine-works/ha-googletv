@@ -9,20 +9,51 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import logging
+from typing import Any
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
-from .const import APPS_INTERVAL, DOMAIN, FULL_INTERVAL, SCAN_INTERVAL
+from .bridge import (
+    BRIDGE_PACKAGE,
+    BRIDGE_PAIRING_FILE,
+    BridgeAuthError,
+    BridgeClient,
+    BridgeError,
+    parse_pairing_file,
+)
+from .const import (
+    APPS_INTERVAL,
+    CONF_BRIDGE_TOKEN,
+    DOMAIN,
+    FULL_INTERVAL,
+    SCAN_INTERVAL,
+)
 from .online import Lookups
 from .parsers import HOME_APPS, INPUT_APPS, MUSIC_APPS, App, Diagnostics, TvState
 from .wol import async_wake
 
 _LOGGER = logging.getLogger(__name__)
+
+# TV Bridge: the APK's download, and pairing with it once it's installed
+BRIDGE_APK_MAX_BYTES = 100 * 1024 * 1024
+BRIDGE_DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=180)
+BRIDGE_PAIRING_ATTEMPTS = 6
+BRIDGE_PAIRING_RETRY_S = 2
+BRIDGE_PAIRING_BACKOFF = timedelta(minutes=5)
+BRIDGE_SETUP_COMMANDS = (
+    f"appops set {BRIDGE_PACKAGE} SYSTEM_ALERT_WINDOW allow",
+    f"appops set {BRIDGE_PACKAGE} GET_USAGE_STATS allow",
+    f"cmd deviceidle whitelist +{BRIDGE_PACKAGE}",
+    f"am broadcast -a {BRIDGE_PACKAGE}.START -n {BRIDGE_PACKAGE}/.StartReceiver",
+)
 
 # How far the TV's start time may wander between reads before it's a restart
 BOOT_DRIFT = timedelta(minutes=2)
@@ -48,6 +79,9 @@ class GoogleTvData:
     last_boot: datetime | None = None
     # The TV answered: off its network (in standby, unplugged) it's shown off
     reachable: bool = True
+    # Raineworks TV Bridge (notifications): installed, and paired with
+    bridge_installed: bool = False
+    bridge_paired: bool = False
 
 
 @contextmanager
@@ -87,6 +121,13 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self.lookups = lookups
         # The options it was set up with (a change to them reloads it)
         self.options = dict(entry.options)
+        self.bridge = BridgeClient(
+            async_get_clientsession(hass),
+            entry.data[CONF_HOST],
+            entry.data.get(CONF_BRIDGE_TOKEN),
+        )
+        self._bridge_pairing = False
+        self._bridge_retry_at: datetime | None = None
         self._launcher_apps: list[App] = []
         self._apps_read_at: datetime | None = None
         self._full_read_at: datetime | None = None
@@ -123,13 +164,141 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             # Read every second, it wobbles by a little; a restart moves it
             if self._last_boot is None or abs(boot - self._last_boot) > BOOT_DRIFT:
                 self._last_boot = boot.replace(second=0, microsecond=0)
+        installed = self.bridge_installed
+        if installed and not self.bridge.token:
+            self._pair_bridge_soon(now)
         return GoogleTvData(
             state=state,
             apps=self._named_apps(),
             artwork=self._artwork(state),
             diagnostics=self._diagnostics,
             last_boot=self._last_boot,
+            bridge_installed=installed,
+            bridge_paired=installed and bool(self.bridge.token),
         )
+
+    # Raineworks TV Bridge: installing, pairing, notifications
+
+    @property
+    def bridge_installed(self) -> bool:
+        """The app is in the TV's launcher."""
+        return any(a.package == BRIDGE_PACKAGE for a in self._launcher_apps)
+
+    def _pair_bridge_soon(self, now: datetime) -> None:
+        if self._bridge_pairing or (
+            self._bridge_retry_at is not None and now < self._bridge_retry_at
+        ):
+            return
+        self._bridge_pairing = True
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_pair_bridge(), f"{DOMAIN} TV Bridge pairing"
+        )
+
+    async def _async_pair_bridge(self, attempts: int = 1) -> bool:
+        """Pair with the app over ADB: it writes a code only ADB can read."""
+        self._bridge_pairing = True
+        try:
+            for attempt in range(attempts):
+                if attempt:
+                    await asyncio.sleep(BRIDGE_PAIRING_RETRY_S)
+                try:
+                    pairing_id = await self.bridge.async_pair_start("adb")
+                    parsed = parse_pairing_file(
+                        await self.client.async_read_file(BRIDGE_PAIRING_FILE)
+                    )
+                    if parsed is None or parsed[0] != pairing_id:
+                        raise BridgeError("The app wrote no pairing code")
+                    token = await self.bridge.async_pair_finish(*parsed)
+                except (BridgeError, GoogleTvError) as err:
+                    _LOGGER.debug("Can't pair with TV Bridge yet: %s", err)
+                    continue
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={**self.config_entry.data, CONF_BRIDGE_TOKEN: token},
+                )
+                _LOGGER.info("Paired with TV Bridge on %s", self.client.host)
+                if self.data is not None:
+                    self.data = replace(self.data, bridge_paired=True)
+                    self.async_update_listeners()
+                return True
+            self._bridge_retry_at = dt_util.utcnow() + BRIDGE_PAIRING_BACKOFF
+            return False
+        finally:
+            self._bridge_pairing = False
+
+    async def async_install_bridge(self, url: str) -> None:
+        """Install (or update) TV Bridge from its APK, allow it, and pair."""
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(url, timeout=BRIDGE_DOWNLOAD_TIMEOUT) as response:
+                response.raise_for_status()
+                apk = await response.content.read(BRIDGE_APK_MAX_BYTES + 1)
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="bridge_download_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        if len(apk) > BRIDGE_APK_MAX_BYTES or not apk.startswith(b"PK"):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="bridge_download_failed",
+                translation_placeholders={"error": "not an APK"},
+            )
+        with translate_errors():
+            await self.client.async_install_apk(apk)
+            # Pop-ups over other apps and its rules' app detection, which TVs
+            # often have no settings screen for; kept running; started
+            for command in BRIDGE_SETUP_COMMANDS:
+                await self.client.async_shell(command)
+        self._apps_read_at = None
+        self._bridge_retry_at = None
+        if not self.bridge.token:
+            await self._async_pair_bridge(attempts=BRIDGE_PAIRING_ATTEMPTS)
+        await self.async_request_refresh()
+
+    async def async_notify(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Show a notification on the TV, telling the app what's on screen."""
+        if not self.bridge.token:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_not_paired"
+            )
+        state = self.data.state if self.data else None
+        if state and state.awake:
+            context = {"app": state.app}
+            if state.input:
+                context["input"] = state.input.id
+            payload = {"context": context, **payload}
+        try:
+            return await self.bridge.async_notify(payload)
+        except BridgeAuthError as err:
+            # The app forgot the pairing (reinstalled, data cleared): pair again
+            self.bridge.token = None
+            self._bridge_retry_at = None
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_not_paired"
+            ) from err
+        except BridgeError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
+    async def async_bridge_rules(self, changes: dict[str, Any]) -> dict[str, Any]:
+        """Change the app's notification rules."""
+        if not self.bridge.token:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_not_paired"
+            )
+        try:
+            return await self.bridge.async_rules(changes)
+        except BridgeError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
     def _offline(self, err: Exception) -> GoogleTvData:
         """The TV off its network: shown off, its inputs and apps kept.

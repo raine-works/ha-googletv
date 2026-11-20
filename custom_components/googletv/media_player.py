@@ -13,11 +13,20 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
     MediaType,
 )
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import dt as dt_util
+import voluptuous as vol
 
+from .bridge import BRIDGE_APK_URL, BRIDGE_DEV_APK_URL
 from .const import DOMAIN
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, translate_errors
 from .entity import GoogleTvEntity
@@ -33,8 +42,66 @@ async def async_setup_entry(
     entry: GoogleTvConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the TV's media player."""
+    """Set up the TV's media player, and the TV's actions on it."""
     async_add_entities([GoogleTvMediaPlayer(entry.runtime_data)])
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "notify",
+        NOTIFY_SCHEMA,
+        "async_tv_notify",
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    platform.async_register_entity_service(
+        "dismiss_notifications",
+        {vol.Optional("tag"): cv.string},
+        "async_dismiss_notifications",
+    )
+    platform.async_register_entity_service(
+        "set_notification_rules",
+        {
+            vol.Optional("blocked_apps"): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional("blocked_inputs"): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional("when_blocked"): vol.In(["panel", "drop"]),
+        },
+        "async_set_notification_rules",
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    platform.async_register_entity_service(
+        "install_tv_bridge",
+        {
+            vol.Optional("development", default=False): cv.boolean,
+            vol.Optional("url"): vol.Url(),
+        },
+        "async_install_tv_bridge",
+    )
+
+
+POSITIONS = [
+    "top_left",
+    "top",
+    "top_right",
+    "center",
+    "bottom_left",
+    "bottom",
+    "bottom_right",
+]
+NOTIFY_SCHEMA = {
+    vol.Optional("message"): cv.string,
+    vol.Optional("title"): cv.string,
+    vol.Optional("image"): cv.string,
+    vol.Optional("video"): cv.string,
+    vol.Optional("camera_entity"): cv.entity_domain("camera"),
+    vol.Optional("camera_view", default="live"): vol.In(["live", "snapshot"]),
+    vol.Optional("mode"): vol.In(["popup", "panel", "both"]),
+    vol.Optional("position"): vol.In(POSITIONS),
+    vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=1, max=600)),
+    vol.Optional("size"): vol.In(["small", "medium", "large"]),
+    vol.Optional("color"): cv.string,
+    vol.Optional("mute"): cv.boolean,
+    vol.Optional("tag"): cv.string,
+    vol.Optional("ignore_rules"): cv.boolean,
+    vol.Optional("when_blocked"): vol.In(["panel", "drop"]),
+}
 
 
 class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
@@ -229,10 +296,124 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
                 for i in state.inputs
             ],
             "input": state.input.id if state.awake and state.input else None,
+            "tv_bridge": "paired"
+            if self.coordinator.data.bridge_paired
+            else "installed"
+            if self.coordinator.data.bridge_installed
+            else "not_installed",
             "media_app": state.now_playing.package
             if state.awake and state.now_playing
             else None,
         }
+
+    # Notifications (Raineworks TV Bridge)
+
+    def _home_assistant_url(self, path: str) -> str:
+        """A Home Assistant path as a URL the TV can load."""
+        if not path.startswith("/"):
+            return path
+        try:
+            base = get_url(self.hass, allow_external=False, prefer_external=False)
+        except NoURLAvailableError:
+            base = get_url(self.hass)
+        return base.rstrip("/") + path
+
+    async def _camera_urls(self, entity_id: str, view: str) -> dict[str, str]:
+        """A camera as a live stream (HLS) or a snapshot the TV can load."""
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_camera",
+                translation_placeholders={"entity_id": entity_id},
+            )
+        token = state.attributes.get("access_token", "")
+        snapshot = self._home_assistant_url(
+            f"/api/camera_proxy/{entity_id}?token={token}"
+        )
+        if view == "live":
+            from homeassistant.components.camera import async_request_stream
+
+            try:
+                stream = await async_request_stream(self.hass, entity_id, fmt="hls")
+            except HomeAssistantError:
+                # No stream (a still-only camera): its snapshot
+                return {"image_url": snapshot}
+            return {"video_url": self._home_assistant_url(stream)}
+        return {"image_url": snapshot}
+
+    async def async_tv_notify(self, **kwargs: Any) -> ServiceResponse:
+        """Show a notification on the TV (googletv.notify)."""
+        payload: dict[str, Any] = {
+            key: kwargs[key]
+            for key in (
+                "message",
+                "title",
+                "mode",
+                "position",
+                "duration",
+                "size",
+                "color",
+                "mute",
+                "tag",
+                "ignore_rules",
+                "when_blocked",
+            )
+            if key in kwargs
+        }
+        if image := kwargs.get("image"):
+            payload["image_url"] = self._home_assistant_url(image)
+        if video := kwargs.get("video"):
+            payload["video_url"] = self._home_assistant_url(video)
+        if camera := kwargs.get("camera_entity"):
+            payload.update(await self._camera_urls(camera, kwargs["camera_view"]))
+        if not any(
+            k in payload for k in ("message", "title", "image_url", "video_url")
+        ):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="nothing_to_show"
+            )
+        return await self.coordinator.async_notify(payload)
+
+    async def async_dismiss_notifications(self, tag: str | None = None) -> None:
+        """Take pop-ups down (googletv.dismiss_notifications)."""
+        if not self.coordinator.bridge.token:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_not_paired"
+            )
+        try:
+            await self.coordinator.bridge.async_dismiss(tag)
+        except Exception as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
+    async def async_set_notification_rules(self, **kwargs: Any) -> ServiceResponse:
+        """Pop-ups' rules: apps and inputs (by name or id) they don't show over."""
+        changes: dict[str, Any] = {}
+        if "blocked_apps" in kwargs:
+            by_name = {a.name.casefold(): a.package for a in self.coordinator.data.apps}
+            changes["blocked_apps"] = [
+                by_name.get(app.casefold(), app) for app in kwargs["blocked_apps"]
+            ]
+        if "blocked_inputs" in kwargs:
+            by_name = {i.label.casefold(): i.id for i in self._state.inputs}
+            changes["blocked_inputs"] = [
+                by_name.get(name.casefold(), name) for name in kwargs["blocked_inputs"]
+            ]
+        if "when_blocked" in kwargs:
+            changes["when_blocked"] = kwargs["when_blocked"]
+        return await self.coordinator.async_bridge_rules(changes)
+
+    async def async_install_tv_bridge(
+        self, development: bool = False, url: str | None = None
+    ) -> None:
+        """Install or update Raineworks TV Bridge over ADB (install_tv_bridge)."""
+        await self.coordinator.async_install_bridge(
+            url or (BRIDGE_DEV_APK_URL if development else BRIDGE_APK_URL)
+        )
 
     # What it does
 

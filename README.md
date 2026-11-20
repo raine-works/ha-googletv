@@ -137,6 +137,58 @@ a second; every 5 seconds the full read adds the app, volume and inputs (and
 at once when the screen turns on or off, or after a command). Its app list and
 diagnostics every 10 minutes.
 
+### Notifications: Raineworks TV Bridge
+
+**Raineworks TV Bridge** is this project's TV app (`android/`): Home
+Assistant's notifications on the TV, as pop-ups over whatever's on screen,
+apps and HDMI inputs alike, or in the TV's notification panel.
+
+* **Install it from Home Assistant**: the **Install TV Bridge** action
+  (`googletv.install_tv_bridge`) on the TV's media player downloads the app
+  from the latest release, installs it over ADB, allows its pop-ups (which
+  many TVs have no settings screen for) and pairs with it, no code to type.
+* **A notify entity** (`notify.<tv>_notifications`): a message pops up in the
+  top right.
+* **The `googletv.notify` action** for the rest:
+
+| Field | |
+| :--- | :--- |
+| `message`, `title` | The text |
+| `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`) |
+| `camera_entity` | A camera's live stream (`camera_view: live`, the default) or snapshot: who's at the door |
+| `video` | A video or live stream URL (HLS, RTSP, MP4) |
+| `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
+| `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
+| `duration` | Seconds on screen (8, or 20 with a video) |
+| `size` | `small`, `medium`, `large` |
+| `color` | The pop-up's border (`#03A9F4`) |
+| `mute` | A video's sound (off by default) |
+| `tag` | A pop-up with the same tag replaces it; `googletv.dismiss_notifications` takes it down |
+| `ignore_rules` | Pop up even where the rules say not to |
+
+```yaml
+action: googletv.notify
+target:
+  entity_id: media_player.living_room_tv
+data:
+  title: Front door
+  message: Someone's at the door
+  camera_entity: camera.front_door
+  position: bottom_right
+  duration: 30
+```
+
+**Rules**: pop-ups don't show over the apps and inputs you pick, on the TV
+(the app's screen) or with `googletv.set_notification_rules` (apps and
+inputs by name: `Netflix`, `Xbox`). Those notifications go to the panel
+instead, or nowhere (`when_blocked: drop`). Over ADB the integration tells
+the app which input is on screen, so input rules work; pop-ups show over
+HDMI inputs otherwise.
+
+The app's API is in `protocol/README.md`. On the Play Store later; until
+then it's installed from Home Assistant as above (sideloaded builds are
+signed with a development key kept in the repo).
+
 ### Online lookups
 
 The TV gives only an app's package, and only the title and artist of what's

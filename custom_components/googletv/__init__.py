@@ -15,6 +15,7 @@ from .online import get_lookups
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.MEDIA_PLAYER,
+    Platform.NOTIFY,
     Platform.REMOTE,
     Platform.SELECT,
     Platform.SENSOR,
