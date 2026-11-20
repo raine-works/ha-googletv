@@ -12,7 +12,6 @@ import json
 import pathlib
 from unittest.mock import AsyncMock, patch
 
-import aiohttp
 import pytest
 
 pytest.importorskip("pytest_homeassistant_custom_component")
@@ -1045,6 +1044,7 @@ async def test_a_notification_after_the_app_restarts_doesnt_skip_the_replay(
 async def test_a_dismissal_that_fails_is_tried_again(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:
+    import aiohttp
     from homeassistant.exceptions import HomeAssistantError
 
     entry = await _live_door(hass, client, web)
