@@ -47,7 +47,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         if: steps.release.outputs.created == 'true'
 
       - name: Build and attach the TV app
