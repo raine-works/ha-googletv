@@ -95,7 +95,7 @@ NOTIFY_SCHEMA = {
     vol.Optional("mode"): vol.In(["popup", "panel", "both"]),
     vol.Optional("position"): vol.In(POSITIONS),
     vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=1, max=600)),
-    vol.Optional("size"): vol.In(["small", "medium", "large"]),
+    vol.Optional("size"): vol.In(["compact", "small", "medium", "large"]),
     vol.Optional("color"): cv.string,
     vol.Optional("mute"): cv.boolean,
     vol.Optional("tag"): cv.string,
@@ -306,7 +306,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             else None,
         }
 
-    # Notifications (Raineworks TV Bridge)
+    # Notifications (Home Assistant Bridge)
 
     def _home_assistant_url(self, path: str) -> str:
         """A Home Assistant path as a URL the TV can load."""
@@ -410,7 +410,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
     async def async_install_tv_bridge(
         self, development: bool = False, url: str | None = None
     ) -> None:
-        """Install or update Raineworks TV Bridge over ADB (install_tv_bridge)."""
+        """Install or update Home Assistant Bridge over ADB (install_tv_bridge)."""
         await self.coordinator.async_install_bridge(
             url or (BRIDGE_DEV_APK_URL if development else BRIDGE_APK_URL)
         )

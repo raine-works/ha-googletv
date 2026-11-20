@@ -44,7 +44,7 @@ object Notifications {
         val show = { image: android.graphics.Bitmap? ->
             if (allowed(app)) {
                 val builder = Notification.Builder(app, CHANNEL_HOME_ASSISTANT)
-                    .setSmallIcon(R.drawable.icon)
+                    .setSmallIcon(R.drawable.ic_stat_logo)
                     .setContentTitle(request.title ?: app.getString(R.string.app_name))
                     .setContentText(request.message ?: "")
                     .setAutoCancel(true)
@@ -69,7 +69,7 @@ object Notifications {
     /** The service's own, always there while it runs. */
     fun serviceNotification(context: Context, port: Int): Notification =
         Notification.Builder(context, CHANNEL_SERVICE)
-            .setSmallIcon(R.drawable.icon)
+            .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText(context.getString(R.string.service_text, port))
             .setOngoing(true)

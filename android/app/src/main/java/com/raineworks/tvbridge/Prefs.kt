@@ -49,6 +49,16 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(KEY_BLOCKED_INPUTS, emptySet())!!.toSet()
         set(value) = prefs.edit().putStringSet(KEY_BLOCKED_INPUTS, value).apply()
 
+    /** Pop-ups' size when a notification doesn't say: compact, small, medium, large. */
+    var defaultSize: String
+        get() = prefs.getString(KEY_DEFAULT_SIZE, "small")!!
+        set(value) = prefs.edit().putString(KEY_DEFAULT_SIZE, value).apply()
+
+    /** Pop-ups' place on screen when a notification doesn't say. */
+    var defaultPosition: String
+        get() = prefs.getString(KEY_DEFAULT_POSITION, "top_right")!!
+        set(value) = prefs.edit().putString(KEY_DEFAULT_POSITION, value).apply()
+
     /** A blocked pop-up goes to the notification panel ("panel") or nowhere ("drop"). */
     var whenBlocked: String
         get() = prefs.getString(KEY_WHEN_BLOCKED, WHEN_BLOCKED_PANEL)!!
@@ -61,6 +71,8 @@ class Prefs(context: Context) {
         private const val KEY_BLOCKED_APPS = "blocked_apps"
         private const val KEY_BLOCKED_INPUTS = "blocked_inputs"
         private const val KEY_WHEN_BLOCKED = "when_blocked"
+        private const val KEY_DEFAULT_SIZE = "default_size"
+        private const val KEY_DEFAULT_POSITION = "default_position"
         private val random = SecureRandom()
     }
 }

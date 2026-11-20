@@ -173,10 +173,10 @@
       "message": "The TV is off its network and Home Assistant doesn't know its network address (MAC) to wake it. Turn on its network standby (Sony: Remote start) so it stays reachable."
     },
     "bridge_not_paired": {
-      "message": "Raineworks TV Bridge isn't installed and paired on this TV. Install it with the Install TV Bridge action (googletv.install_tv_bridge)."
+      "message": "Home Assistant Bridge isn't installed and paired on this TV. Install it with the Install Home Assistant Bridge action (googletv.install_tv_bridge)."
     },
     "bridge_download_failed": {
-      "message": "Couldn't download Raineworks TV Bridge: {error}"
+      "message": "Couldn't download Home Assistant Bridge: {error}"
     },
     "unknown_camera": {
       "message": "There's no camera {entity_id}."
@@ -188,7 +188,7 @@
   "services": {
     "notify": {
       "name": "Show a notification",
-      "description": "Shows a notification on the TV through Raineworks TV Bridge: a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
+      "description": "Shows a notification on the TV through Home Assistant Bridge: a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
       "fields": {
         "message": {
           "name": "Message",
@@ -220,7 +220,7 @@
         },
         "position": {
           "name": "Position",
-          "description": "Where on screen the pop-up goes."
+          "description": "Where on screen the pop-up goes; the TV's own setting if not set."
         },
         "duration": {
           "name": "Duration",
@@ -228,7 +228,7 @@
         },
         "size": {
           "name": "Size",
-          "description": "The pop-up's size."
+          "description": "The pop-up's size; the TV's own setting if not set."
         },
         "color": {
           "name": "Color",
@@ -281,8 +281,8 @@
       }
     },
     "install_tv_bridge": {
-      "name": "Install TV Bridge",
-      "description": "Installs or updates Raineworks TV Bridge on the TV over ADB, allows its pop-ups, and pairs with it.",
+      "name": "Install Home Assistant Bridge",
+      "description": "Installs or updates Home Assistant Bridge on the TV over ADB, allows its pop-ups, and pairs with it.",
       "fields": {
         "development": {
           "name": "Development build",
@@ -322,6 +322,7 @@
     },
     "size": {
       "options": {
+        "compact": "Compact (one line)",
         "small": "Small",
         "medium": "Medium",
         "large": "Large"

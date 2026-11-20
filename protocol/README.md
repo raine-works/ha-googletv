@@ -1,4 +1,4 @@
-# Raineworks TV Bridge API (v1)
+# Home Assistant Bridge API (v1)
 
 The TV app (`android/`) serves a small JSON API on the local network, which
 the Home Assistant integration (`custom_components/googletv/`) calls.
@@ -33,7 +33,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `GET /api/state` | `{screen_on, foreground_app, overlay_permission, usage_access}` |
 | `GET /api/apps` | `{apps: [{package, name}]}`: the launcher's apps |
 | `GET /api/inputs` | `{inputs: [{id, name}]}`: HDMI and other external inputs, by their names on the TV |
-| `GET /api/rules` | `{blocked_apps: [package], blocked_inputs: [input id], when_blocked}` |
+| `GET /api/rules` | `{blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}` |
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules |
 | `POST /api/notify` | shows a notification; see below |
 | `POST /api/dismiss` | `{tag}` takes that pop-up down; no tag takes them all down |
@@ -48,9 +48,9 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `image_url` | | An image (http/https), shown on the pop-up and in the panel |
 | `video_url` | | A video or live stream (http/https, HLS `.m3u8`, rtsp), played on the pop-up: a doorbell camera |
 | `mode` | `popup` | `popup` over what's on screen, `panel` (the notification panel only), or `both` |
-| `position` | `top_right` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
+| `position` | the TV's setting (`top_right`) | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
 | `duration` | 8 (20 with a video) | Seconds on screen, 1 to 600 |
-| `size` | `medium` | `small`, `medium`, `large` |
+| `size` | the TV's setting (`small`) | `compact` (a one-line pill), `small`, `medium`, `large` |
 | `color` | | The pop-up's border, a hex color (`#03A9F4`) |
 | `mute` | `true` | A video's sound off |
 | `tag` | | A pop-up with the same tag replaces it (and `/api/dismiss` takes it down) |

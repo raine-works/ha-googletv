@@ -42,7 +42,6 @@ notify:
             - both
           translation_key: mode
     position:
-      default: top_right
       selector:
         select:
           options:
@@ -61,10 +60,10 @@ notify:
           max: 600
           unit_of_measurement: s
     size:
-      default: medium
       selector:
         select:
           options:
+            - compact
             - small
             - medium
             - large

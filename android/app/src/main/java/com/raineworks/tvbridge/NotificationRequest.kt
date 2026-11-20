@@ -32,10 +32,17 @@ data class NotificationRequest(
             "top_left", "top", "top_right", "center",
             "bottom_left", "bottom", "bottom_right",
         )
-        val SIZES = setOf("small", "medium", "large")
+        val SIZES = listOf("compact", "small", "medium", "large")
 
-        /** A request from JSON; a bad field is an [IllegalArgumentException]. */
-        fun parse(json: JSONObject): NotificationRequest {
+        /**
+         * A request from JSON (a bad field is an [IllegalArgumentException]);
+         * no position or size: the TV's defaults.
+         */
+        fun parse(
+            json: JSONObject,
+            defaultPosition: String = "top_right",
+            defaultSize: String = "small",
+        ): NotificationRequest {
             fun text(name: String): String? =
                 json.optString(name, "").trim().takeIf { it.isNotEmpty() && !json.isNull(name) }
 
@@ -48,9 +55,9 @@ data class NotificationRequest(
             }
             val mode = text("mode") ?: MODE_POPUP
             require(mode in MODES) { "mode must be one of $MODES" }
-            val position = text("position") ?: "top_right"
+            val position = text("position") ?: defaultPosition
             require(position in POSITIONS) { "position must be one of $POSITIONS" }
-            val size = text("size") ?: "medium"
+            val size = text("size") ?: defaultSize
             require(size in SIZES) { "size must be one of $SIZES" }
             val duration = if (json.has("duration")) json.getDouble("duration").toInt()
             else if (videoUrl != null) 20 else 8

@@ -17,7 +17,7 @@ CONF_ONLINE_LOOKUPS = "online_lookups"
 # needs its MACs then
 CONF_PROPS = "props"
 
-# The Raineworks TV Bridge app's token, from pairing with it over ADB
+# The Home Assistant Bridge app's token, from pairing with it over ADB
 CONF_BRIDGE_TOKEN = "bridge_token"
 
 # The RSA key Home Assistant signs in to every TV with, kept in its storage

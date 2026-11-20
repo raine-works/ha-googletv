@@ -137,13 +137,13 @@ a second; every 5 seconds the full read adds the app, volume and inputs (and
 at once when the screen turns on or off, or after a command). Its app list and
 diagnostics every 10 minutes.
 
-### Notifications: Raineworks TV Bridge
+### Notifications: Home Assistant Bridge
 
-**Raineworks TV Bridge** is this project's TV app (`android/`): Home
+**Home Assistant Bridge** is this project's TV app (`android/`): Home
 Assistant's notifications on the TV, as pop-ups over whatever's on screen,
 apps and HDMI inputs alike, or in the TV's notification panel.
 
-* **Install it from Home Assistant**: the **Install TV Bridge** action
+* **Install it from Home Assistant**: the **Install Home Assistant Bridge** action
   (`googletv.install_tv_bridge`) on the TV's media player downloads the app
   from the latest release, installs it over ADB, allows its pop-ups (which
   many TVs have no settings screen for) and pairs with it, no code to type.
@@ -158,9 +158,9 @@ apps and HDMI inputs alike, or in the TV's notification panel.
 | `camera_entity` | A camera's live stream (`camera_view: live`, the default) or snapshot: who's at the door |
 | `video` | A video or live stream URL (HLS, RTSP, MP4) |
 | `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
-| `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
+| `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's own setting when not given |
 | `duration` | Seconds on screen (8, or 20 with a video) |
-| `size` | `small`, `medium`, `large` |
+| `size` | `compact` (a one-line pill), `small`, `medium`, `large`; the TV's own setting when not given |
 | `color` | The pop-up's border (`#03A9F4`) |
 | `mute` | A video's sound (off by default) |
 | `tag` | A pop-up with the same tag replaces it; `googletv.dismiss_notifications` takes it down |

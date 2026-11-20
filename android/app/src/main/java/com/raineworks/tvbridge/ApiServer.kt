@@ -58,6 +58,16 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 val body = body(session)
                 body.optJSONArray("blocked_apps")?.let { prefs.blockedApps = strings(it) }
                 body.optJSONArray("blocked_inputs")?.let { prefs.blockedInputs = strings(it) }
+                if (body.has("default_size")) {
+                    val value = body.getString("default_size")
+                    require(value in NotificationRequest.SIZES) { "default_size must be one of ${NotificationRequest.SIZES}" }
+                    prefs.defaultSize = value
+                }
+                if (body.has("default_position")) {
+                    val value = body.getString("default_position")
+                    require(value in NotificationRequest.POSITIONS) { "default_position must be one of ${NotificationRequest.POSITIONS}" }
+                    prefs.defaultPosition = value
+                }
                 if (body.has("when_blocked")) {
                     val value = body.getString("when_blocked")
                     require(value == Prefs.WHEN_BLOCKED_PANEL || value == Prefs.WHEN_BLOCKED_DROP) {
@@ -68,7 +78,9 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 json(rules())
             }
             method == Method.POST && path == "/api/notify" -> {
-                val request = NotificationRequest.parse(body(session))
+                val request = NotificationRequest.parse(
+                    body(session), prefs.defaultPosition, prefs.defaultSize,
+                )
                 json(Notifier.handle(context, request).toJson())
             }
             method == Method.POST && path == "/api/dismiss" -> {
@@ -113,6 +125,8 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         .put("blocked_apps", JSONArray(prefs.blockedApps.sorted()))
         .put("blocked_inputs", JSONArray(prefs.blockedInputs.sorted()))
         .put("when_blocked", prefs.whenBlocked)
+        .put("default_size", prefs.defaultSize)
+        .put("default_position", prefs.defaultPosition)
 
     /** The request's JSON body (UTF-8, at most 64 KB). */
     private fun body(session: IHTTPSession): JSONObject {

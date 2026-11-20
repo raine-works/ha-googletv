@@ -2,7 +2,6 @@ package com.raineworks.tvbridge
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -58,17 +57,26 @@ class Overlay private constructor(private val context: Context) {
     fun showPairingCode(code: String) {
         main.post {
             if (!Settings.canDrawOverlays(context)) return@post
-            val width = dp(420)
-            val card = cardLayout(width, null)
-            card.addView(text(context.getString(R.string.pairing_title), 22f, true, Color.WHITE))
+            val width = dp(380)
+            val card = cardLayout(width, null, pill = false).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(dp(28), dp(24), dp(28), dp(24))
+            }
             card.addView(
-                text(code.chunked(3).joinToString(" "), 56f, true, ACCENT).apply {
-                    letterSpacing = 0.08f
-                    setPadding(0, dp(8), 0, dp(8))
+                ImageView(context).apply { setImageResource(R.drawable.logo_white) },
+                LinearLayout.LayoutParams(dp(44), dp(44)).apply { bottomMargin = dp(14) },
+            )
+            card.addView(text(context.getString(R.string.pairing_title), 18f, Theme.semibold(context), Theme.FOREGROUND, 2))
+            card.addView(
+                text(code.chunked(3).joinToString(" "), 44f, Theme.semibold(context), Theme.FOREGROUND, 1).apply {
+                    letterSpacing = 0.12f
+                    setPadding(0, dp(10), 0, dp(6))
                 },
             )
             card.addView(
-                text(context.getString(R.string.pairing_text, code), 16f, false, MUTED),
+                text(context.getString(R.string.pairing_hint), 13f, Theme.regular(context), Theme.MUTED_FOREGROUND, 3).apply {
+                    gravity = Gravity.CENTER
+                },
             )
             attach(PAIRING_TAG, "center", card, null, PAIRING_SECONDS)
         }
@@ -84,19 +92,44 @@ class Overlay private constructor(private val context: Context) {
 
     private fun add(request: NotificationRequest, image: Bitmap?) {
         if (!Settings.canDrawOverlays(context)) return
+        val card = if (request.size == "compact") compactCard(request, image) else fullCard(request, image)
+        val tag = request.tag ?: "notification-${nextTag++}"
+        attach(tag, request.position, card.first, card.second, request.durationS)
+    }
+
+    /** A one-line pill: the logo (or the image, small), the title and message. */
+    private fun compactCard(request: NotificationRequest, image: Bitmap?): Pair<View, ExoPlayer?> {
+        val pill = cardLayout(LinearLayout.LayoutParams.WRAP_CONTENT, request.color, pill = true).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(16), dp(8))
+        }
+        pill.addView(badge(request.color, image, 24), LinearLayout.LayoutParams(dp(24), dp(24)))
+        val line = listOfNotNull(request.title, request.message).joinToString("  ·  ")
+        pill.addView(
+            text(line.ifEmpty { context.getString(R.string.app_name) }, 13f, Theme.medium(context), Theme.FOREGROUND, 1).apply {
+                maxWidth = dp(420)
+                setPadding(dp(10), 0, 0, 0)
+            },
+        )
+        return pill to null
+    }
+
+    /** A card: the image or video on top, then the logo, title and message, then time left. */
+    private fun fullCard(request: NotificationRequest, image: Bitmap?): Pair<View, ExoPlayer?> {
         val width = dp(
             when (request.size) {
-                "small" -> 280
-                "large" -> 520
-                else -> 380
+                "medium" -> 340
+                "large" -> 440
+                else -> 280
             },
         )
         val scale = when (request.size) {
-            "small" -> 0.85f
-            "large" -> 1.2f
+            "medium" -> 1.08f
+            "large" -> 1.22f
             else -> 1f
         }
-        val card = cardLayout(width, request.color)
+        val card = cardLayout(width, request.color, pill = false)
         var player: ExoPlayer? = null
         val videoUrl = request.videoUrl
         if (videoUrl != null) {
@@ -104,31 +137,81 @@ class Overlay private constructor(private val context: Context) {
             card.addView(texture, LinearLayout.LayoutParams(width, width * 9 / 16))
             player = startVideo(videoUrl, texture, request.mute)
         } else if (image != null) {
-            val view = ImageView(context).apply {
-                setImageBitmap(image)
-                scaleType = ImageView.ScaleType.CENTER_CROP
-            }
-            val height = (width * image.height / image.width.coerceAtLeast(1))
-                .coerceAtMost(width * 3 / 4)
-            card.addView(view, LinearLayout.LayoutParams(width, height))
+            val height = (width * image.height / image.width.coerceAtLeast(1)).coerceAtMost(width * 3 / 4)
+            card.addView(
+                ImageView(context).apply {
+                    setImageBitmap(image)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                },
+                LinearLayout.LayoutParams(width, height),
+            )
         }
         if (request.title != null || request.message != null) {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+                setPadding(dp(14 * scale), dp(12 * scale), dp(16 * scale), dp(13 * scale))
+            }
+            val badgeSize = (22 * scale).toInt()
+            row.addView(
+                badge(request.color, null, badgeSize),
+                LinearLayout.LayoutParams(dp(badgeSize), dp(badgeSize)).apply { topMargin = dp(1) },
+            )
             val texts = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(18), dp(14), dp(18), dp(16))
+                setPadding(dp(11 * scale), 0, 0, 0)
             }
-            request.title?.let { texts.addView(text(it, 20f * scale, true, Color.WHITE, maxLines = 2)) }
+            request.title?.let {
+                texts.addView(text(it, 14f * scale, Theme.semibold(context), Theme.FOREGROUND, 2))
+            }
             request.message?.let {
                 texts.addView(
-                    text(it, 16f * scale, false, MUTED, maxLines = 6).apply {
-                        if (request.title != null) setPadding(0, dp(4), 0, 0)
+                    text(it, 13f * scale, Theme.regular(context), Theme.MUTED_FOREGROUND, 3).apply {
+                        if (request.title != null) setPadding(0, dp(2), 0, 0)
+                        setLineSpacing(0f, 1.1f)
                     },
                 )
             }
-            card.addView(texts)
+            row.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            card.addView(row, LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        val tag = request.tag ?: "notification-${nextTag++}"
-        attach(tag, request.position, card, player, request.durationS)
+        // Time left: a hairline that runs out with the pop-up
+        card.addView(
+            View(context).apply {
+                setBackgroundColor(Theme.withAlpha(request.color ?: Theme.FOREGROUND, 90))
+                pivotX = 0f
+                animate().scaleX(0f).setDuration(request.durationS * 1000L)
+                    .setInterpolator(android.view.animation.LinearInterpolator()).start()
+            },
+            LinearLayout.LayoutParams(width, dp(2)),
+        )
+        return card to player
+    }
+
+    /** The logo in a soft circle (tinted with the notification's color), or a small image. */
+    private fun badge(color: Int?, image: Bitmap?, sizeDp: Int): View {
+        if (image != null) {
+            return ImageView(context).apply {
+                setImageBitmap(image)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Theme.MUTED)
+                }
+                clipToOutline = true
+            }
+        }
+        val tint = color ?: Theme.FOREGROUND
+        return ImageView(context).apply {
+            setImageResource(R.drawable.logo_white)
+            imageTintList = android.content.res.ColorStateList.valueOf(tint)
+            val pad = dp(sizeDp) / 8
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Theme.withAlpha(tint, 28))
+            }
+        }
     }
 
     private fun startVideo(url: String, view: TextureView, mute: Boolean): ExoPlayer {
@@ -166,13 +249,14 @@ class Overlay private constructor(private val context: Context) {
         }
         val params = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { setMargins(0, dp(8), 0, dp(8)) }
+        ).apply { setMargins(0, dp(5), 0, dp(5)) }
         container.addView(view, params)
         val card = Card(view, position, player)
         cards[tag] = card
         view.alpha = 0f
-        view.translationY = dp(if (position.startsWith("bottom")) 24 else -24).toFloat()
-        view.animate().alpha(1f).translationY(0f).setDuration(ANIMATION_MS).start()
+        view.translationY = dp(if (position.startsWith("bottom")) 12 else -12).toFloat()
+        view.animate().alpha(1f).translationY(0f).setDuration(ANIMATION_MS)
+            .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f)).start()
         card.hide = Runnable { remove(tag, card, animate = true) }.also {
             main.postDelayed(it, seconds * 1000L)
         }
@@ -226,7 +310,7 @@ class Overlay private constructor(private val context: Context) {
             // TVs crop their edges (overscan): keep clear of them
             x = if (position == "center" || position == "top" || position == "bottom") 0 else dp(EDGE_DP)
             y = if (position == "center") 0 else dp(EDGE_DP)
-            title = "Raineworks TV Bridge"
+            title = "Home Assistant Bridge"
         }
         container.gravity = if (position.endsWith("right")) Gravity.END else Gravity.START
         return try {
@@ -240,45 +324,39 @@ class Overlay private constructor(private val context: Context) {
         }
     }
 
-    private fun cardLayout(width: Int, accent: Int?): LinearLayout =
+    private fun cardLayout(width: Int, accent: Int?, pill: Boolean): LinearLayout =
         LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            minimumWidth = width
             layoutParams = LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT)
             background = GradientDrawable().apply {
-                setColor(CARD)
-                cornerRadius = dp(18).toFloat()
-                setStroke(dp(2), accent ?: BORDER)
+                setColor(Theme.withAlpha(Theme.CARD, 246))
+                cornerRadius = if (pill) dp(999).toFloat() else dp(Theme.RADIUS_DP).toFloat()
+                setStroke(dp(1), accent?.let { Theme.withAlpha(it, 110) } ?: Theme.BORDER)
             }
             clipToOutline = true
-            elevation = dp(8).toFloat()
+            elevation = dp(6).toFloat()
         }
 
-    private fun text(value: String, sp: Float, bold: Boolean, color: Int, maxLines: Int = 4): TextView =
+    private fun text(value: String, sp: Float, typeface: Typeface, color: Int, maxLines: Int): TextView =
         TextView(context).apply {
             text = value
             setTextColor(color)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
-            if (bold) typeface = Typeface.DEFAULT_BOLD
+            this.typeface = typeface
             this.maxLines = maxLines
             ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
         }
 
-    private fun dp(value: Int): Int = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), context.resources.displayMetrics,
-    ).toInt()
+    private fun dp(value: Number): Int = Theme.dp(context, value)
 
     companion object {
         const val PAIRING_TAG = "__pairing__"
         private const val TAG = "TvBridge"
         private const val MAX_PER_POSITION = 3
         private const val PAIRING_SECONDS = 300
-        private const val EDGE_DP = 40
-        private const val ANIMATION_MS = 250L
-        private val CARD = Color.argb(240, 21, 27, 43)
-        private val BORDER = Color.argb(255, 48, 58, 82)
-        private val ACCENT = Color.rgb(66, 165, 245)
-        private val MUTED = Color.rgb(200, 208, 222)
+        private const val EDGE_DP = 28
+        private const val ANIMATION_MS = 220L
 
         @Volatile
         private var instance: Overlay? = null
