@@ -30,7 +30,7 @@ Each TV is a device with:
 | State | `off` (asleep), `playing` / `paused` (what the front app reports), else `on` |
 | Sources | Every app in the TV's launcher, then its HDMI inputs, by the names given to them on the TV ("Xbox"; "HDMI 2" when unnamed). `source` is the input on screen, else the app in front. A device on HDMI-CEC's own input counts as its port's input. |
 | Now playing | Title, artist or show, position, from the TV's media sessions (Netflix, YouTube TV, Spotify, Plex…), with no Cast needed |
-| Artwork | A song's cover (iTunes) or a show's poster (TVmaze), else the app's icon |
+| Artwork | A song's cover (iTunes), a show's poster (TVmaze) or a film's poster (Wikipedia), else the app's icon |
 | Volume | The TV's media volume as a level (set, step, mute) |
 | Controls | Turn on / off, play, pause, stop, next, previous, select source |
 | `play_media` | `media_content_type: app` with a package (`com.netflix.ninja`), `input` with an input id, or `url` with a link the TV opens |
@@ -94,8 +94,11 @@ playing, so the integration looks the rest up:
   `.storage/googletv.apps` and read again monthly. An app that isn't on Google
   Play (a TV maker's own) keeps its package as its name.
 * **Artwork**: a song's cover from the iTunes Search API, matched by title and
-  artist; a show's poster from TVmaze, matched by its exact name (YouTube TV
-  reports the show). Movies and YouTube videos show the app's icon.
+  artist; a show's poster from TVmaze and a film's poster from Wikipedia (its
+  articles with a film infobox), each matched by its exact name. A title an
+  app reports alone (Disney+'s "Cars") is tried as a film first; one with a
+  subtitle (YouTube TV's show and channel) as a show first. YouTube videos
+  show the app's icon. A lookup that fails is tried again a minute later.
 
 None of them needs an account or a key. To keep everything on your network,
 turn off **Look up app icons and artwork online** in the TV's options

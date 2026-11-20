@@ -7,7 +7,7 @@ from collections.abc import Iterator
 import contextlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -23,6 +23,8 @@ from .parsers import MUSIC_APPS, App, TvState
 
 _LOGGER = logging.getLogger(__name__)
 
+# How soon a failed artwork lookup is tried again while the title plays
+ARTWORK_RETRY = timedelta(minutes=1)
 # How long the first update waits for apps' listings (later ones don't wait)
 FIRST_LISTINGS_TIMEOUT_S = 20
 
@@ -77,6 +79,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self._launcher_apps: list[App] = []
         self._apps_read_at: datetime | None = None
         self._artwork_for: tuple[str, str, str | None] | None = None
+        self._artwork_tried_at: datetime | None = None
 
     async def _async_update_data(self) -> GoogleTvData:
         """Read the TV, and its apps when they're due."""
@@ -150,8 +153,17 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             return None
         key = (playing.package, playing.title, playing.subtitle)
         found = self.lookups.artwork(*key)
-        if found is None and key != self._artwork_for:
+        # A new title, or one whose lookup failed (a refusal, no network)
+        # a while ago: look it up
+        retry = (
+            key == self._artwork_for
+            and not self.lookups.has_artwork(*key)
+            and self._artwork_tried_at is not None
+            and dt_util.utcnow() - self._artwork_tried_at >= ARTWORK_RETRY
+        )
+        if found is None and (key != self._artwork_for or retry):
             self._artwork_for = key
+            self._artwork_tried_at = dt_util.utcnow()
             self.config_entry.async_create_background_task(
                 self.hass,
                 self._async_find_artwork(key, playing.package in MUSIC_APPS),

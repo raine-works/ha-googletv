@@ -27,6 +27,8 @@ from custom_components.googletv.const import (  # noqa: E402
     DOMAIN,
 )
 from custom_components.googletv.lookups import (  # noqa: E402
+    WIKIPEDIA_API,
+    film_search_params,
     show_search_url,
     song_search_url,
     store_url,
@@ -82,6 +84,11 @@ def web(aioclient_mock: AiohttpClientMocker) -> AiohttpClientMocker:
         text=(FIXTURES / "tvmaze_rick_and_morty.json").read_text(),
     )
     aioclient_mock.get(
+        WIKIPEDIA_API,
+        params=film_search_params("Cars"),
+        text=(FIXTURES / "wikipedia_cars.json").read_text(),
+    )
+    aioclient_mock.get(
         song_search_url("Everybody Grab a Broom", "J Scott Rakozy"),
         text=(FIXTURES / "itunes_broom.json").read_text(),
     )
@@ -97,7 +104,7 @@ def client() -> AsyncMock:
     return tv
 
 
-def _playing(package: str, title: str, subtitle: str):
+def _playing(package: str, title: str, subtitle: str | None):
     """Lott's TV, off the Xbox and playing something in an app."""
     state = parse_state(LOTTS_TCL_POLL)
     session = MediaSession(package, True, 3, 0, 0, 1.0, title, subtitle, None)
@@ -247,6 +254,22 @@ async def test_a_shows_poster(
     tv = hass.states.get("media_player.lott_s_tv")
     assert tv.state == "playing"
     assert tv.attributes["entity_picture"].startswith("/api/media_player_proxy/")
+
+
+async def test_a_films_poster(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    # Disney+ reports a film by its title alone: films are tried first
+    client.async_get_state.return_value = _playing(
+        "com.disney.disneyplus", "Cars", None
+    )
+    entry = await _set_up(hass, client)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert entry.runtime_data.data.artwork == (
+        "https://upload.wikimedia.org/wikipedia/en/3/34/Cars_2006.jpg"
+    )
+    assert not any("tvmaze" in str(call[1]) for call in web.mock_calls)
 
 
 async def test_a_songs_cover(

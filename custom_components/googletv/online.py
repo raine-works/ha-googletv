@@ -24,8 +24,11 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .lookups import (
     NO_ARTWORK_APPS,
+    WIKIPEDIA_API,
     StoreListing,
+    film_search_params,
     parse_store_page,
+    pick_film_poster,
     pick_show_image,
     pick_song_artwork,
     show_search_url,
@@ -40,7 +43,13 @@ LISTING_MAX_AGE = timedelta(days=30)
 LISTING_RETRY = timedelta(hours=6)
 ARTWORK_CACHE_SIZE = 256
 TIMEOUT = aiohttp.ClientTimeout(total=10)
-HEADERS = {"User-Agent": "Mozilla/5.0 (Home Assistant; googletv)"}
+# Wikipedia asks API clients to name themselves and a way to reach them
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; HomeAssistant-googletv;"
+        " +https://github.com/raine-works/ha-googletv)"
+    )
+}
 _LOOKUPS_KEY = "lookups"
 
 
@@ -138,7 +147,12 @@ class Lookups:
     async def async_artwork(
         self, package: str, title: str, subtitle: str | None, music: bool
     ) -> str | None:
-        """A song's cover or a show's poster, looked up once per title."""
+        """A song's cover, or a show's or film's poster, once per title.
+
+        A title without a subtitle is likely a film (Disney+ reports "Cars"
+        alone), so films are tried first; with one (YouTube TV's channel, an
+        episode), shows are.
+        """
         key = (package, title, subtitle or "")
         if key in self._artwork:
             self._artwork.move_to_end(key)
@@ -150,8 +164,13 @@ class Lookups:
                 reply = await self._get_json(song_search_url(title, subtitle))
                 art = pick_song_artwork(reply, title, subtitle) if reply else None
             else:
-                reply = await self._get_json(show_search_url(title))
-                art = pick_show_image(reply, title) if reply else None
+                lookups = [self._show_poster, self._film_poster]
+                if not subtitle:
+                    lookups.reverse()
+                art = None
+                for lookup in lookups:
+                    if art := await lookup(title):
+                        break
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             # Not kept: tried again when this plays next
             _LOGGER.debug("Can't look up artwork for %s: %s", title, err)
@@ -161,9 +180,23 @@ class Lookups:
             self._artwork.popitem(last=False)
         return art
 
-    async def _get_json(self, url: str) -> Any:
+    def has_artwork(self, package: str, title: str, subtitle: str | None) -> bool:
+        """Whether this was looked up (found or not), so a failure shows."""
+        return (package, title, subtitle or "") in self._artwork
+
+    async def _show_poster(self, title: str) -> str | None:
+        reply = await self._get_json(show_search_url(title))
+        return pick_show_image(reply, title) if reply else None
+
+    async def _film_poster(self, title: str) -> str | None:
+        reply = await self._get_json(WIKIPEDIA_API, film_search_params(title))
+        return pick_film_poster(reply, title) if reply else None
+
+    async def _get_json(self, url: str, params: dict[str, str] | None = None) -> Any:
         session = async_get_clientsession(self._hass)
-        async with session.get(url, headers=HEADERS, timeout=TIMEOUT) as response:
+        async with session.get(
+            url, params=params, headers=HEADERS, timeout=TIMEOUT
+        ) as response:
             response.raise_for_status()
             # iTunes answers text/javascript
             return await response.json(content_type=None)

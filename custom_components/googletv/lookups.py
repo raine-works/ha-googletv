@@ -3,8 +3,9 @@
 * An app's name and icon: its Google Play listing (``og:title`` and
   ``og:image``), since the TV itself only gives a package and a resource id.
 * Artwork for what's playing: a song's cover from the iTunes Search API, a
-  show's poster from TVmaze. Neither needs a key. A match must have the same
-  name (and, for a song, the same artist), so a stray result never shows.
+  show's poster from TVmaze, a film's poster from Wikipedia (its articles
+  with a film infobox). None needs a key. A match must have the same name
+  (and, for a song, the same artist), so a stray result never shows.
 
 Imports nothing from Home Assistant, so the tests load it on its own.
 """
@@ -102,4 +103,41 @@ def pick_show_image(reply: list[dict[str, Any]], name: str) -> str | None:
         art = image.get("original") or image.get("medium")
         if isinstance(art, str) and art:
             return art
+    return None
+
+
+WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
+_IMAGE = re.compile(r"\.(jpe?g|png|webp|gif)$", re.IGNORECASE)
+
+
+def film_search_params(title: str) -> dict[str, str]:
+    """Wikipedia's search for films with this title, with their posters."""
+    return {
+        "action": "query",
+        "format": "json",
+        "formatversion": "2",
+        "generator": "search",
+        "gsrsearch": f'intitle:"{title}" hastemplate:"Infobox film"',
+        "gsrlimit": "10",
+        "prop": "pageimages",
+        "piprop": "original",
+        # Posters are non-free images; the default leaves them out
+        "pilicense": "any",
+    }
+
+
+def pick_film_poster(reply: dict[str, Any], title: str) -> str | None:
+    """The poster of the most relevant film with exactly this title.
+
+    "Cars (film)" is Cars, "Moana (2016 film)" Moana; "Cars 2" isn't Cars.
+    """
+    want = _norm(title)
+    pages = (reply.get("query") or {}).get("pages") or []
+    for page in sorted(pages, key=lambda p: p.get("index", 0)):
+        name = re.sub(r"\s*\([^)]*\)$", "", page.get("title") or "")
+        if _norm(name) != want:
+            continue
+        source = ((page.get("original") or {}).get("source") or "").split("?")[0]
+        if _IMAGE.search(source):
+            return source
     return None

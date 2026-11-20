@@ -75,3 +75,36 @@ def test_urls() -> None:
         "https://itunes.apple.com/search?term=Dominic%20Fike%203%20Nights"
         "&entity=song&limit=10"
     )
+
+
+def test_a_films_poster() -> None:
+    from googletv_lookups import film_search_params, pick_film_poster
+
+    cars = json.loads((FIXTURES / "wikipedia_cars.json").read_text())
+    # "Cars (film)", not "Cars 2" or "Used Cars"; the query string dropped
+    assert pick_film_poster(cars, "Cars") == (
+        "https://upload.wikimedia.org/wikipedia/en/3/34/Cars_2006.jpg"
+    )
+    assert pick_film_poster(cars, "Cars 2") == (
+        "https://upload.wikimedia.org/wikipedia/en/7/7f/Cars_2_Poster.jpg"
+    )
+    assert pick_film_poster(cars, "Cars 4") is None
+    # The search finds "A Wednesday!" and "Big Wednesday", neither of them it
+    wednesday = json.loads((FIXTURES / "wikipedia_wednesday.json").read_text())
+    assert pick_film_poster(wednesday, "Wednesday") is None
+    # A film's "poster" that's a video clip isn't one
+    clip = {
+        "query": {
+            "pages": [
+                {
+                    "index": 1,
+                    "title": "Moana (1926 film)",
+                    "original": {"source": "https://upload.wikimedia.org/x.webm"},
+                }
+            ]
+        }
+    }
+    assert pick_film_poster(clip, "Moana") is None
+    assert film_search_params("Cars")["gsrsearch"] == (
+        'intitle:"Cars" hastemplate:"Infobox film"'
+    )
