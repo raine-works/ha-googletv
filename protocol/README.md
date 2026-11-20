@@ -132,6 +132,7 @@ a stream that stops reading loses its oldest events.
 | :--- | :--- | :--- |
 | `hello` | `instance`, `app_version`, `build`, `features` | First, on connecting. A new `instance`: the app restarted |
 | `rules` | the rules, as `GET /api/rules` | They changed, on the TV's screen or through the API |
+| `apps` | `change` (`installed`, `uninstalled`, `changed`), `package` | An app was installed, uninstalled or changed: worth reading `/api/apps` again |
 | `state` | `change` (`screen`, `volume`) | The screen turned on or off, or the volume changed: worth reading the state again |
 | `ping` | | Every 15 seconds with nothing else: the connection's alive |
 | `notification_action` | `tag`, `action` | A notification's button was pressed (on a pop-up or in the panel); the notification comes down |

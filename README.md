@@ -189,19 +189,23 @@ from the name its device gives itself over HDMI-CEC:
 
 * **Current app** (`sensor.<tv>_current_app`): the app in front by name,
   its package in the `package` attribute.
-* **Apps**: a button per app on the TV's device (`button.<tv>_netflix`,
-  …), named and pictured from its Google Play listing. Press to open it (the
-  TV wakes first). Apps installed later get their buttons on their own. Apps
+* **Apps**: a button per app on the TV's device ("App · Netflix",
+  `button.<tv>_app_netflix`, …), named and pictured from its Google Play
+  listing. Press to open it (the
+  TV wakes first). Apps installed later get their buttons on their own, and
+  an uninstalled app's button goes: at once with the TV app (it says so),
+  else within 10 minutes. Apps
   open by their launch screen, so the ones Android TV Remote can no longer
   launch (YouTube TV, Apple TV, HBO Max, Hulu) open here. (Before 2.4 they
   were a device of their own, "<TV> Apps"; it's folded into the TV, and
-  the buttons keep their entity ids.)
+  the buttons keep their entity ids. The "App ·" and "Remote ·" names
+  from 2.4.1 keep each kind together on the device's page.)
 * **Choosing apps**: leave an app out of Home Assistant (the Source list,
   the `apps` attribute, its button) with its **Home Assistant** switch in
   the TV app's Apps screen, on the integration's **Configure → Apps**, or
   by disabling its button. All three stay in step: disabling a button flips
   the switch on the TV, and the other way round.
-* **Remote keys** (`button.<tv>_home`, …): Home, Back, Up, Down, Left,
+* **Remote keys** ("Remote · Home", `button.<tv>_remote_home`, …): Home, Back, Up, Down, Left,
   Right, OK, Play/pause, Volume up, Volume down, Mute and Settings.
 * **Remote** (`remote.<tv>`): `remote.send_command` with any key (`HOME`,
   `BACK`, `DPAD_UP` / `DOWN` / `LEFT` / `RIGHT` / `CENTER`, `VOLUME_UP`,

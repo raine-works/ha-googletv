@@ -768,6 +768,10 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 listener(event)
         elif kind in ("player", "dashboard", "state"):
             self.hass.async_create_task(self.async_request_refresh())
+        elif kind == "apps":
+            # Installed or uninstalled: the app list is read again now
+            self._apps_read_at = None
+            self.hass.async_create_task(self.async_request_refresh())
         data = {k: v for k, v in event.items() if k != "time"}
         if device := dr.async_get(self.hass).async_get_device(
             identifiers={

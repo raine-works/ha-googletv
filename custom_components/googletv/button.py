@@ -12,9 +12,11 @@ from dataclasses import dataclass
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .app_client import APP_KEYS
+from .const import DOMAIN
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, translate_errors
 from .entity import GoogleTvEntity
 from .parsers import App
@@ -25,7 +27,8 @@ async def async_setup_entry(
     entry: GoogleTvConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """The remote's keys, and a button for each app (and apps installed later)."""
+    """The remote's keys, and a button for each app (installed later: added;
+    uninstalled: removed)."""
     coordinator = entry.runtime_data
     # Through the TV app alone: only the keys an app can press
     async_add_entities(
@@ -37,10 +40,20 @@ async def async_setup_entry(
 
     @callback
     def add_new_apps() -> None:
-        new = [a.package for a in coordinator.data.apps if a.package not in known]
+        installed = {a.package for a in coordinator.data.apps}
+        new = [p for p in installed if p not in known]
         if new:
             known.update(new)
             async_add_entities(GoogleTvAppButton(coordinator, p) for p in new)
+        # An empty list is a failed read, not every app uninstalled
+        if gone := known - installed if installed else set():
+            known.difference_update(gone)
+            registry = er.async_get(hass)
+            for package in gone:
+                if entity_id := registry.async_get_entity_id(
+                    "button", DOMAIN, coordinator.app_button_prefix + package
+                ):
+                    registry.async_remove(entity_id)
 
     add_new_apps()
     entry.async_on_unload(coordinator.async_add_listener(add_new_apps))
@@ -119,9 +132,9 @@ class GoogleTvAppButton(GoogleTvEntity, ButtonEntity):
 
     @property
     def name(self) -> str:
-        """The app's name."""
+        """The app's name, after "App · ": the apps sort together on the device."""
         app = self._app
-        return app.name if app else self._package
+        return f"App · {app.name if app else self._package}"
 
     @property
     def entity_picture(self) -> str | None:

@@ -50,6 +50,16 @@ class BridgeService : Service() {
                 addAction("android.media.VOLUME_CHANGED_ACTION")
             },
         )
+        // An app installed, uninstalled or updated: Home Assistant reads the app list at once
+        registerReceiver(
+            packages,
+            android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                addAction(Intent.ACTION_PACKAGE_CHANGED)
+                addDataScheme("package")
+            },
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -62,11 +72,29 @@ class BridgeService : Service() {
         }
     }
 
+    private val packages = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            // An update is removed, then added again: only its added counts
+            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false) && intent.action == Intent.ACTION_PACKAGE_REMOVED) return
+            val change = when (intent.action) {
+                Intent.ACTION_PACKAGE_ADDED -> "installed"
+                Intent.ACTION_PACKAGE_REMOVED -> "uninstalled"
+                else -> "changed"
+            }
+            Events.emit(
+                "apps",
+                org.json.JSONObject().put("change", change).put("package", intent.data?.schemeSpecificPart ?: org.json.JSONObject.NULL),
+            )
+        }
+    }
+
     override fun onDestroy() {
-        try {
-            unregisterReceiver(changes)
-        } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Receiver already gone: $e")
+        for (receiver in listOf(changes, packages)) {
+            try {
+                unregisterReceiver(receiver)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "Receiver already gone: $e")
+            }
         }
         server?.stop()
         registration?.let {

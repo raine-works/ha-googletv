@@ -133,40 +133,40 @@
         "name": "App"
       },
       "home": {
-        "name": "Home"
+        "name": "Remote · Home"
       },
       "back": {
-        "name": "Back"
+        "name": "Remote · Back"
       },
       "up": {
-        "name": "Up"
+        "name": "Remote · Up"
       },
       "down": {
-        "name": "Down"
+        "name": "Remote · Down"
       },
       "left": {
-        "name": "Left"
+        "name": "Remote · Left"
       },
       "right": {
-        "name": "Right"
+        "name": "Remote · Right"
       },
       "select": {
-        "name": "OK"
+        "name": "Remote · OK"
       },
       "play_pause": {
-        "name": "Play/pause"
+        "name": "Remote · Play/pause"
       },
       "volume_up": {
-        "name": "Volume up"
+        "name": "Remote · Volume up"
       },
       "volume_down": {
-        "name": "Volume down"
+        "name": "Remote · Volume down"
       },
       "mute": {
-        "name": "Mute"
+        "name": "Remote · Mute"
       },
       "settings": {
-        "name": "Settings"
+        "name": "Remote · Settings"
       }
     },
     "select": {
