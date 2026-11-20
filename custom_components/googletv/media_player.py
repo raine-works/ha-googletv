@@ -42,6 +42,8 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
 
     _attr_name = None
     _attr_device_class = MediaPlayerDeviceClass.TV
+    # Off, not unavailable, while the TV is off its network
+    _available_offline = True
     _attr_supported_features = (
         MediaPlayerEntityFeature.TURN_ON
         | MediaPlayerEntityFeature.TURN_OFF
@@ -241,7 +243,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
 
     async def async_turn_on(self) -> None:
         """Wake the TV."""
-        await self._run(self.coordinator.client.async_key("WAKEUP"))
+        await self.coordinator.async_turn_on()
 
     async def async_turn_off(self) -> None:
         """Put the TV to sleep."""

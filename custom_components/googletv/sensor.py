@@ -59,12 +59,15 @@ class GoogleTvSensorDescription(SensorEntityDescription):
     attributes: Callable[[GoogleTvData], dict[str, Any]] | None = None
     # Made only when this says the TV has it (a Wi-Fi signal on a wired TV…)
     exists: Callable[[GoogleTvData], bool] | None = None
+    # Stays available, off, while the TV is off its network
+    available_offline: bool = False
 
 
 SENSORS: tuple[GoogleTvSensorDescription, ...] = (
     GoogleTvSensorDescription(
         key="activity",
         translation_key="activity",
+        available_offline=True,
         device_class=SensorDeviceClass.ENUM,
         options=list(ACTIVITIES),
         value=lambda data: data.state.activity_state,
@@ -185,6 +188,7 @@ class GoogleTvSensor(GoogleTvEntity, SensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator, description.key)
         self.entity_description = description
+        self._available_offline = description.available_offline
 
     @property
     def native_value(self) -> Any:

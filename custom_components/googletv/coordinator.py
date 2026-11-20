@@ -13,13 +13,14 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
 from .const import APPS_INTERVAL, DOMAIN, FULL_INTERVAL, SCAN_INTERVAL
 from .online import Lookups
 from .parsers import HOME_APPS, INPUT_APPS, MUSIC_APPS, App, Diagnostics, TvState
+from .wol import async_wake
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,8 @@ class GoogleTvData:
     diagnostics: Diagnostics = field(default_factory=Diagnostics)
     # When the TV started (kept steady between reads)
     last_boot: datetime | None = None
+    # The TV answered: off its network (in standby, unplugged) it's shown off
+    reachable: bool = True
 
 
 @contextmanager
@@ -82,6 +85,8 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self.client = client
         self.props = props
         self.lookups = lookups
+        # The options it was set up with (a change to them reloads it)
+        self.options = dict(entry.options)
         self._launcher_apps: list[App] = []
         self._apps_read_at: datetime | None = None
         self._full_read_at: datetime | None = None
@@ -109,7 +114,9 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             # The TV forgot Home Assistant's key: ask for it again (reauth)
             raise ConfigEntryAuthFailed(str(err)) from err
         except GoogleTvError as err:
-            raise UpdateFailed(f"Can't read the TV: {err}") from err
+            return self._offline(err)
+        if self.data is not None and not self.data.reachable:
+            _LOGGER.info("%s is back on the network", self.client.host)
         state = self._without_stale_input(state)
         if state.uptime_ms:
             boot = now - timedelta(milliseconds=state.uptime_ms)
@@ -122,6 +129,26 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             artwork=self._artwork(state),
             diagnostics=self._diagnostics,
             last_boot=self._last_boot,
+        )
+
+    def _offline(self, err: Exception) -> GoogleTvData:
+        """The TV off its network: shown off, its inputs and apps kept.
+
+        Many TVs drop their network in standby (a Sony without Remote start),
+        so an unreachable TV is an off one: the media player and Activity say
+        off (and Turn on sends Wake-on-LAN), the rest go unavailable.
+        """
+        previous = self.data
+        if previous is None or previous.reachable:
+            _LOGGER.info("%s is off its network: %s", self.client.host, err)
+        # Read fully when it's back
+        self._full_read_at = None
+        return GoogleTvData(
+            state=TvState(inputs=previous.state.inputs if previous else []),
+            apps=self._named_apps(),
+            diagnostics=self._diagnostics,
+            last_boot=self._last_boot,
+            reachable=False,
         )
 
     async def _async_read_state(self, now: datetime) -> TvState:
@@ -245,6 +272,26 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             self.async_update_listeners()
 
     # Commands the entities share
+
+    @property
+    def wake_macs(self) -> list[str]:
+        """The TV's MACs, for Wake-on-LAN."""
+        return [
+            mac for key in ("mac_ethernet", "mac_wifi") if (mac := self.props.get(key))
+        ]
+
+    async def async_turn_on(self) -> None:
+        """Wake the TV: Wake-on-LAN if it's off its network, else its wake key."""
+        if self.data is not None and not self.data.reachable:
+            if not self.wake_macs:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN, translation_key="unreachable"
+                )
+            await async_wake(self.hass, self.wake_macs)
+        else:
+            with translate_errors():
+                await self.client.async_key("WAKEUP")
+        await self.async_request_refresh()
 
     async def async_open_app(self, app: App) -> None:
         """Wake the TV if it's asleep, then open the app."""

@@ -11,7 +11,15 @@ from homeassistant.core import HomeAssistant
 
 from .coordinator import GoogleTvConfigEntry
 
-TO_REDACT = {CONF_HOST, "serial", "bluetooth", "ip_address", "unique_id"}
+TO_REDACT = {
+    CONF_HOST,
+    "serial",
+    "bluetooth",
+    "ip_address",
+    "unique_id",
+    "mac_ethernet",
+    "mac_wifi",
+}
 
 
 async def async_get_config_entry_diagnostics(

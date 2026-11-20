@@ -18,6 +18,8 @@ class GoogleTvEntity(CoordinatorEntity[GoogleTvCoordinator]):
     """An entity of one TV."""
 
     _attr_has_entity_name = True
+    # Whether it stays available while the TV is off its network (shown off)
+    _available_offline = False
 
     def __init__(
         self, coordinator: GoogleTvCoordinator, key: str, *, apps: bool = False
@@ -50,6 +52,13 @@ class GoogleTvEntity(CoordinatorEntity[GoogleTvCoordinator]):
             model=props.get("model"),
             sw_version=f"Android {props['android']}" if props.get("android") else None,
             serial_number=props.get("serial"),
+        )
+
+    @property
+    def available(self) -> bool:
+        """Available while the TV answers; some stay so while it's off."""
+        return super().available and (
+            self._available_offline or self.coordinator.data.reachable
         )
 
     @property

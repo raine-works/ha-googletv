@@ -12,6 +12,11 @@ DEFAULT_PORT = 5555
 # playing (iTunes, TVmaze). On by default; off keeps everything on the LAN.
 CONF_ONLINE_LOOKUPS = "online_lookups"
 
+# The TV's maker, model, serial and MACs, kept in its entry: it's set up from
+# them when Home Assistant starts with the TV off its network, and Wake-on-LAN
+# needs its MACs then
+CONF_PROPS = "props"
+
 # The RSA key Home Assistant signs in to every TV with, kept in its storage
 # folder. Each TV trusts it once ("Allow USB debugging?", Always allow).
 ADB_KEY_FILE = "googletv_adbkey"

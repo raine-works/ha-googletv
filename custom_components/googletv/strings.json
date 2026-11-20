@@ -163,6 +163,9 @@
     },
     "unsupported_media_type": {
       "message": "Google TV plays an app, an input or a url, not {media_type}."
+    },
+    "unreachable": {
+      "message": "The TV is off its network and Home Assistant doesn't know its network address (MAC) to wake it. Turn on its network standby (Sony: Remote start) so it stays reachable."
     }
   }
 }

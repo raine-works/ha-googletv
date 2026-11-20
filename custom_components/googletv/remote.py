@@ -33,6 +33,7 @@ class GoogleTvRemote(GoogleTvEntity, RemoteEntity):
 
     _attr_name = None
     _attr_translation_key = "remote"
+    _available_offline = True
 
     def __init__(self, coordinator: GoogleTvCoordinator) -> None:
         """Initialize the remote."""
@@ -44,10 +45,8 @@ class GoogleTvRemote(GoogleTvEntity, RemoteEntity):
         return self._state.awake
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Wake the TV."""
-        with translate_errors():
-            await self.coordinator.client.async_key("WAKEUP")
-        await self.coordinator.async_request_refresh()
+        """Wake the TV (Wake-on-LAN if it's off its network)."""
+        await self.coordinator.async_turn_on()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Put the TV to sleep."""

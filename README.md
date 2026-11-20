@@ -196,6 +196,22 @@ network debugging is what makes it appear. Each TV is known by its Bluetooth
 address (read over ADB too, else its serial number), so a TV already added is
 never offered again, and if it gets a new IP address its entry follows it.
 
+### When the TV is off
+
+Keep the TV reachable in standby, so it can be woken and its state read:
+
+* **Sony**: Settings → Network & Internet → **Remote start** on (some models:
+  Settings → System → Power and energy → **Network standby**).
+* **TCL, Hisense and others**: often reachable in standby already; if not,
+  look for **Network standby**, **Wake on LAN** or **Quick start**.
+
+A TV that drops off its network anyway is shown **off**, not unavailable: the
+media player, Activity and remote stay available (the rest wait until it's
+back), and **Turn on** sends Wake-on-LAN to its MACs (Ethernet and Wi-Fi,
+read when it was added). Whether that wakes it is up to the TV; with Remote
+start or network standby on, the integration wakes it with its own key.
+Home Assistant starting while a known TV is off sets it up as off too.
+
 ## Notes
 
 * Requires Home Assistant 2025.2 or newer.

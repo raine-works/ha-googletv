@@ -460,3 +460,24 @@ def test_the_quick_read() -> None:
     assert quick.screensaver and quick.awake and quick.sessions == []
     assert quick.uptime_ms == 10500
     assert (quick.app, quick.volume, quick.input) == (full.app, full.volume, full.input)
+
+
+def test_the_props_and_macs() -> None:
+    # The Home Theater TCL's MACs, as `ip -o link` printed them
+    props = parse_props(
+        "TCL\nSmart TV Pro\n12\nX1\nnull\n"
+        "3: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP"
+        " mode DEFAULT group default qlen 1000\\    link/ether d0:65:b3:e2:d2:a7"
+        " brd ff:ff:ff:ff:ff:ff\n"
+        "5: wlan0: <BROADCAST,MULTICAST> mtu 1500 qdisc mq state DOWN mode"
+        " DORMANT group default qlen 1000\\    link/ether BC:09:B9:6F:8E:8C"
+        " brd ff:ff:ff:ff:ff:ff\n"
+    )
+    assert props == {
+        "manufacturer": "TCL",
+        "model": "Smart TV Pro",
+        "android": "12",
+        "serial": "X1",
+        "mac_ethernet": "d0:65:b3:e2:d2:a7",
+        "mac_wifi": "bc:09:b9:6f:8e:8c",
+    }

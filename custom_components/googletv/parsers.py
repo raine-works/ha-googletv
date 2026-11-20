@@ -105,6 +105,8 @@ PROPS_COMMAND = "; ".join(
             )
         ),
         "settings get secure bluetooth_address",
+        # Its network adapters' MACs, for Wake-on-LAN
+        "ip -o link | grep -E ': (eth0|wlan0):'",
     ]
 )
 
@@ -678,12 +680,17 @@ def parse_apps(text: str) -> list[App]:
 
 
 def parse_props(text: str) -> dict[str, str]:
-    """Maker, model, Android version, serial and Bluetooth address."""
+    """Maker, model, Android version, serial, Bluetooth address and MACs."""
     keys = ("manufacturer", "model", "android", "serial", "bluetooth")
-    values = [line.strip() for line in text.splitlines()]
+    lines = text.splitlines()
+    values = [line.strip() for line in lines[: len(keys)]]
     props = {k: v for k, v in zip(keys, values, strict=False) if v and v != "null"}
     if "bluetooth" in props:
         props["bluetooth"] = props["bluetooth"].lower()
+    for adapter, mac in re.findall(
+        r": (eth0|wlan0):.*?link/ether ([0-9a-fA-F:]{17})", text
+    ):
+        props["mac_ethernet" if adapter == "eth0" else "mac_wifi"] = mac.lower()
     return props
 
 

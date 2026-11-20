@@ -60,6 +60,8 @@ PROPS = {
     "model": "Smart TV Pro",
     "android": "12",
     "serial": "X1",
+    "mac_ethernet": "d0:65:b3:e2:d2:a7",
+    "mac_wifi": "bc:09:b9:6f:8e:8c",
 }
 # Netflix is known by name; the other two are named by their listings
 OTHER_APP = "com.example.livetv"
@@ -586,14 +588,73 @@ async def test_an_untrusted_key_asks_to_reconnect(
     assert [f["context"]["source"] for f in flows] == ["reauth"]
 
 
-async def test_a_failed_first_update_closes_its_connection(
+async def test_a_tv_off_its_network_is_off(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.adb import GoogleTvError
+
+    entry = await _set_up(hass, client)
+    # It drops off its network in standby (a Sony without Remote start)
+    client.async_get_state.side_effect = GoogleTvError("No route to host")
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("media_player.lott_s_tv").state == "off"
+    assert hass.states.get("sensor.lott_s_tv_activity").state == "off"
+    assert hass.states.get("remote.lott_s_tv").state == "off"
+    # What needs the TV is unavailable until it's back
+    assert hass.states.get("button.lott_s_tv_home").state == "unavailable"
+    assert hass.states.get("select.lott_s_tv_input").state == "unavailable"
+    # Turn on sends Wake-on-LAN to its MACs
+    with patch("custom_components.googletv.coordinator.async_wake") as wake:
+        await hass.services.async_call(
+            "media_player",
+            "turn_on",
+            {"entity_id": "media_player.lott_s_tv"},
+            blocking=True,
+        )
+    wake.assert_awaited_once_with(hass, ["d0:65:b3:e2:d2:a7", "bc:09:b9:6f:8e:8c"])
+    # Back on its network
+    client.async_get_state.side_effect = None
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.lott_s_tv_activity").state == "input"
+
+
+async def test_set_up_with_the_tv_off_its_network(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.config_entries import ConfigEntryState
+
+    from custom_components.googletv.adb import GoogleTvError
+    from custom_components.googletv.const import CONF_PROPS
+
+    # Home Assistant starting with the TV off: what's stored of it suffices
+    client.async_connect.side_effect = GoogleTvError("No route to host")
+    client.async_get_state.side_effect = GoogleTvError("No route to host")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="X1",
+        title="Lott's TV",
+        data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555, CONF_PROPS: PROPS},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("media_player.lott_s_tv").state == "off"
+
+
+async def test_never_reached_and_nothing_stored_retries(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:
     from homeassistant.config_entries import ConfigEntryState
 
     from custom_components.googletv.adb import GoogleTvError
 
-    client.async_get_state.side_effect = GoogleTvError("timed out")
+    client.async_connect.side_effect = GoogleTvError("No route to host")
     entry = MockConfigEntry(
         domain=DOMAIN, unique_id="X1", data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
     )
@@ -605,6 +666,17 @@ async def test_a_failed_first_update_closes_its_connection(
         await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.SETUP_RETRY
     client.async_close.assert_awaited()
+
+
+async def test_the_props_are_stored(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.const import CONF_PROPS
+
+    entry = await _set_up(hass, client)
+    assert entry.data[CONF_PROPS] == PROPS
+    # Storing them didn't reload it
+    assert client.async_connect.await_count == 1
 
 
 async def test_a_wifi_signal_once_the_tv_is_on_wifi(

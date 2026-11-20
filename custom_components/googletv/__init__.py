@@ -8,7 +8,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.storage import STORAGE_DIR
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError, load_signer
-from .const import ADB_KEY_FILE, CONF_ONLINE_LOOKUPS
+from .const import ADB_KEY_FILE, CONF_ONLINE_LOOKUPS, CONF_PROPS
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator
 from .online import get_lookups
 
@@ -32,6 +32,7 @@ async def async_get_client(hass: HomeAssistant, host: str, port: int) -> GoogleT
 async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> bool:
     """Set up a Google TV from a config entry."""
     client = await async_get_client(hass, entry.data[CONF_HOST], entry.data[CONF_PORT])
+    stored: dict[str, str] | None = entry.data.get(CONF_PROPS)
     try:
         await client.async_connect()
         props = await client.async_get_props()
@@ -41,7 +42,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         raise ConfigEntryAuthFailed(str(err)) from err
     except GoogleTvError as err:
         await client.async_close()
-        raise ConfigEntryNotReady(str(err)) from err
+        if not stored:
+            raise ConfigEntryNotReady(str(err)) from err
+        # Off its network (a TV that drops it in standby): set up as off, from
+        # what's known of it, and connect once it's back
+        props = dict(stored)
+    if props != stored:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_PROPS: props}
+        )
 
     lookups = None
     if entry.options.get(CONF_ONLINE_LOOKUPS, True):
@@ -68,8 +77,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
 async def _async_options_updated(
     hass: HomeAssistant, entry: GoogleTvConfigEntry
 ) -> None:
-    """Set the TV up again with its new options."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Set the TV up again with its new options (not for its stored props)."""
+    if entry.options != entry.runtime_data.options:
+        await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> bool:
