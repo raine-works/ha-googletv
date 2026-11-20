@@ -128,6 +128,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        inFront = true
         build()
         if (currentFocus == null) navItems[section]?.requestFocus()
         main.post(watch)
@@ -136,6 +137,7 @@ class MainActivity : Activity() {
     override fun onPause() {
         super.onPause()
         resumed = false
+        inFront = false
         main.removeCallbacks(watch)
     }
 
@@ -208,7 +210,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        row.addView(Brand.logo(this, 44), LinearLayout.LayoutParams(dp(52), dp(52)))
+        row.addView(Brand.logo(this, 52), LinearLayout.LayoutParams(dp(52), dp(52)))
         val names = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
@@ -1157,6 +1159,8 @@ class MainActivity : Activity() {
     private fun dp(value: Number): Int = Theme.dp(this, value)
 
     companion object {
+        /** The screen is in front: it shows a pairing request itself. */
+        @Volatile var inFront = false
         private const val WATCH_MS = 3000L
         private const val RAIL_DP = 272
         // An app row's switch columns

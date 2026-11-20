@@ -41,7 +41,16 @@ def mark(size: int, stroke: float = 4.4, color=FG) -> Image.Image:
 
     def ring(x: float, y: float, r: float) -> None:
         cx, cy = p(x, y)
-        draw.ellipse((cx - r * s - w / 2, cy - r * s - w / 2, cx + r * s + w / 2, cy + r * s + w / 2), outline=color, width=w)
+        draw.ellipse(
+            (
+                cx - r * s - w / 2,
+                cy - r * s - w / 2,
+                cx + r * s + w / 2,
+                cy + r * s + w / 2,
+            ),
+            outline=color,
+            width=w,
+        )
 
     ring(0, 0, 46)
     for a, b in (
@@ -60,33 +69,49 @@ def mark(size: int, stroke: float = 4.4, color=FG) -> Image.Image:
 
 
 def logo(size: int, stroke: float = 4.4, badge: float = 0.46) -> Image.Image:
-    """The mark with Google TV's icon over its bottom-right, a clear gap around it."""
+    """The mark with Google TV's icon over its top-right, a clear gap around it."""
     img = mark(size, stroke)
     bw = round(size * badge)
-    gtv = GOOGLE_TV.resize((bw, round(GOOGLE_TV.height * bw / GOOGLE_TV.width)), Image.LANCZOS)
-    x, y = size - gtv.width, size - gtv.height
+    gtv = GOOGLE_TV.resize(
+        (bw, round(GOOGLE_TV.height * bw / GOOGLE_TV.width)), Image.LANCZOS
+    )
+    x, y = size - gtv.width, 0
     # The gap: the mark cleared a little past the badge's edge
     gap = max(2, round(size * 0.045))
     clear = Image.new("L", img.size, 255)
     ImageDraw.Draw(clear).rounded_rectangle(
-        (x - gap, y - gap, size + gap, size + gap), radius=round(gtv.height * 0.24) + gap, fill=0
+        (x - gap, -gap, size + gap, gtv.height + gap),
+        radius=round(gtv.height * 0.24) + gap,
+        fill=0,
     )
-    img.putalpha(Image.composite(img.getchannel("A"), Image.new("L", img.size, 0), clear))
+    img.putalpha(
+        Image.composite(img.getchannel("A"), Image.new("L", img.size, 0), clear)
+    )
     img.alpha_composite(gtv, (x, y))
     return img
 
 
-def tile(size: int, inset: float, radius: float = 0.0, stroke: float = 4.4) -> Image.Image:
+def tile(
+    size: int, inset: float, radius: float = 0.0, stroke: float = 4.4
+) -> Image.Image:
     """The logo on the dark background, rounded by ``radius`` (of the size)."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ImageDraw.Draw(img).rounded_rectangle((0, 0, size - 1, size - 1), radius=round(size * radius), fill=BG)
+    ImageDraw.Draw(img).rounded_rectangle(
+        (0, 0, size - 1, size - 1), radius=round(size * radius), fill=BG
+    )
     inner = round(size * (1 - 2 * inset))
     art = logo(inner, stroke)
     img.alpha_composite(art, ((size - inner) // 2, (size - inner) // 2))
     return img
 
 
-def lockup(size: tuple[int, int], logo_px: int, title_px: int, line_px: int, line: str = TAGLINE) -> Image.Image:
+def lockup(
+    size: tuple[int, int],
+    logo_px: int,
+    title_px: int,
+    line_px: int,
+    line: str = TAGLINE,
+) -> Image.Image:
     """The logo, the name, and a line under it, centred on the background."""
     img = Image.new("RGBA", size, BG)
     draw = ImageDraw.Draw(img)
@@ -103,7 +128,12 @@ def lockup(size: tuple[int, int], logo_px: int, title_px: int, line_px: int, lin
     top = (size[1] - block) // 2
     x = x0 + logo_px + gap
     draw.text((x - tb[0], top - tb[1]), NAME, font=title, fill=FG)
-    draw.text((x - lb[0] + 2, top + (tb[3] - tb[1]) + spacing - lb[1]), line, font=small, fill=MUTED)
+    draw.text(
+        (x - lb[0] + 2, top + (tb[3] - tb[1]) + spacing - lb[1]),
+        line,
+        font=small,
+        fill=MUTED,
+    )
     return img
 
 
@@ -123,5 +153,13 @@ save(logo(192), RES / "drawable-xhdpi/logo.png")
 save(mark(96, 6.0, (255, 255, 255, 255)), RES / "drawable-xhdpi/ic_stat_logo.png")
 # Google Play: the hi-res icon (Play rounds it), the TV banner, the feature graphic
 save(tile(512, 0.17, 0.0), ROOT / "android/play/icon-512.png", opaque=True)
-save(lockup((1280, 720), 264, 96, 38), ROOT / "android/play/tv-banner-1280x720.png", opaque=True)
-save(lockup((1024, 500), 200, 76, 30), ROOT / "android/play/feature-graphic-1024x500.png", opaque=True)
+save(
+    lockup((1280, 720), 264, 96, 38),
+    ROOT / "android/play/tv-banner-1280x720.png",
+    opaque=True,
+)
+save(
+    lockup((1024, 500), 200, 76, 30),
+    ROOT / "android/play/feature-graphic-1024x500.png",
+    opaque=True,
+)

@@ -1,4 +1,4 @@
-<img src="custom_components/googletv/brand/icon@2x.png" alt="" width="96" align="right">
+<img src="custom_components/googletv/brand/icon@2x.png" alt="Raineworks TV" width="96">
 
 # Raineworks TV
 

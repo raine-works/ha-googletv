@@ -38,7 +38,9 @@ object Pairing {
             context,
             NotificationRequest(
                 title = ask, message = context.getString(R.string.pair_ask_text, name.take(60), address),
-                imageUrl = null, videoUrl = null, mode = NotificationRequest.MODE_BOTH,
+                imageUrl = null, videoUrl = null,
+                // The app's own screen asks already when it's in front: no pop-up over it
+                mode = if (MainActivity.inFront) NotificationRequest.MODE_PANEL else NotificationRequest.MODE_BOTH,
                 position = "center", durationS = 0, size = "medium", color = null, mute = true,
                 ignoreRules = true, whenBlocked = null, tag = Actions.PAIR_TAG, icon = "mdi:home-assistant",
                 actions = listOf(
