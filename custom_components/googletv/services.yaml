@@ -60,9 +60,22 @@ notify:
     duration:
       selector:
         number:
-          min: 1
+          min: 0
           max: 600
           unit_of_measurement: s
+    until_entity:
+      selector:
+        entity:
+    until_state:
+      example: "off"
+      selector:
+        text:
+    progress:
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
     size:
       selector:
         select:

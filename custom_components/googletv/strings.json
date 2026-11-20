@@ -183,6 +183,9 @@
     },
     "nothing_to_show": {
       "message": "Give a message, title, image, video or camera to show."
+    },
+    "unknown_entity": {
+      "message": "There's no entity {entity_id}."
     }
   },
   "services": {
@@ -228,7 +231,19 @@
         },
         "duration": {
           "name": "Duration",
-          "description": "How long the pop-up stays (8 seconds, 20 with a video, if not set)."
+          "description": "How long the pop-up stays (8 seconds, 20 with a video, if not set). 0: until it's dismissed, or until the entity below changes."
+        },
+        "until_entity": {
+          "name": "Until",
+          "description": "Keep it up until this entity changes (the door closes), then take it down. It stays across restarts of Home Assistant and the TV."
+        },
+        "until_state": {
+          "name": "Until state",
+          "description": "Take it down when the entity reaches this state, not at any change."
+        },
+        "progress": {
+          "name": "Progress",
+          "description": "A progress bar, 0 to 100: send again with the same tag to move it."
         },
         "size": {
           "name": "Size",
@@ -244,7 +259,7 @@
         },
         "tag": {
           "name": "Tag",
-          "description": "A pop-up with the same tag replaces this one; dismiss it by its tag."
+          "description": "Send again with the same tag to update it in place (a camera keeps playing); dismiss it by its tag."
         },
         "ignore_rules": {
           "name": "Ignore rules",
@@ -258,11 +273,11 @@
     },
     "dismiss_notifications": {
       "name": "Dismiss notifications",
-      "description": "Takes pop-ups down: the one with a tag, else all.",
+      "description": "Takes notifications down, from the screen and the notification panel: the one with a tag, else all.",
       "fields": {
         "tag": {
           "name": "Tag",
-          "description": "The pop-up's tag."
+          "description": "The notification's tag."
         }
       }
     },

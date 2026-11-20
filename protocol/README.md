@@ -30,13 +30,13 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | Endpoint | Returns |
 | :--- | :--- |
 | `GET /api/info` | `{api, app_version, name, manufacturer, model, android, paired}` |
-| `GET /api/state` | `{screen_on, foreground_app, overlay_permission, usage_access}` |
+| `GET /api/state` | `{screen_on, foreground_app, overlay_permission, usage_access, instance, popups}`: `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
 | `GET /api/apps` | `{apps: [{package, name}]}`: the launcher's apps |
 | `GET /api/inputs` | `{inputs: [{id, name}]}`: HDMI and other external inputs, by their names on the TV |
 | `GET /api/rules` | `{blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}` |
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules |
 | `POST /api/notify` | shows a notification; see below |
-| `POST /api/dismiss` | `{tag}` takes that pop-up down; no tag takes them all down |
+| `POST /api/dismiss` | `{tag}` takes that notification down, from the screen and the panel; no tag takes them all down (but a pairing code) |
 
 ## Notifications
 
@@ -50,19 +50,24 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `video_url` | | A video or live stream (http/https, HLS `.m3u8`, rtsp), played on the pop-up: a doorbell camera |
 | `mode` | `popup` | `popup` over what's on screen, `panel` (the notification panel only), or `both` |
 | `position` | the TV's setting (`top_right`) | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
-| `duration` | 8 (20 with a video) | Seconds on screen, 1 to 600 |
+| `duration` | 8 (20 with a video) | Seconds on screen, 1 to 600; `0` until it's dismissed (in the panel, it can't be swiped away) |
+| `progress` | | A progress bar, 0 to 100 |
 | `size` | the TV's setting (`small`) | `compact` (a one-line pill; a video plays in a small tile on it), `small`, `medium`, `large` |
 | `color` | | The pop-up's border, a hex color (`#03A9F4`) |
 | `mute` | `true` | A video's sound off |
-| `tag` | | A pop-up with the same tag replaces it (and `/api/dismiss` takes it down) |
+| `tag` | | Sent again, it updates the notification with that tag in place: the same slot, no animation, its video still playing if `video_url` is the same, and no new alert in the panel. A pop-up or panel copy the update no longer goes to comes down. `/api/dismiss` takes it down |
 | `ignore_rules` | `false` | Pop up whatever is on screen |
 | `when_blocked` | the TV's setting | `panel` or `drop`, for a pop-up a rule keeps off the screen |
 | `context` | | `{app, input}`: what Home Assistant knows is on screen (over ADB), for the rules |
 
-Returns `{popup, panel, blocked_by, reason}`: whether it popped up and/or went
+Returns `{popup, panel, blocked_by, reason, instance}`: whether it popped up and/or went
 to the panel; `blocked_by` the rule that kept it off the screen
 (`app:<package>` or `input:<id>`), `reason` `blocked` or
 `overlay_not_allowed` when it didn't pop up.
+
+**Stacking**: a stack per position; 3 cards show, persistent ones
+(`duration: 0`) first, then the newest; a "+N more" pill counts the rest,
+which show again as others go (up to 12 are kept per position).
 
 **Rules**: a pop-up isn't shown over an app or input in `blocked_apps` /
 `blocked_inputs`. What's on screen is `context` when given (Home Assistant

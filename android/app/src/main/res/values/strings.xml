@@ -39,6 +39,7 @@
     <string name="position_bottom_left">Bottom left</string>
     <string name="position_bottom">Bottom</string>
     <string name="position_bottom_right">Bottom right</string>
+    <string name="more_popups">+%1$d more</string>
     <string name="test_button">Show a test notification</string>
     <string name="test_title">Raineworks TV Bridge</string>
     <string name="test_message">Notifications from Home Assistant look like this.</string>

@@ -10,13 +10,27 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import logging
 from typing import Any
+from uuid import uuid4
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.const import CONF_HOST, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -54,6 +68,11 @@ BRIDGE_SETUP_COMMANDS = (
     f"cmd deviceidle whitelist +{BRIDGE_PACKAGE}",
     f"am broadcast -a {BRIDGE_PACKAGE}.START -n {BRIDGE_PACKAGE}/.StartReceiver",
 )
+
+# Live notifications (duration 0): kept across restarts, and shown again
+# when the app has restarted (checked this often while there are any)
+LIVE_STORAGE_VERSION = 1
+LIVE_CHECK_INTERVAL = timedelta(seconds=30)
 
 # How far the TV's start time may wander between reads before it's a restart
 BOOT_DRIFT = timedelta(minutes=2)
@@ -135,6 +154,18 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self._diagnostics = Diagnostics()
         self._artwork_for: tuple[str, str, str | None] | None = None
         self._artwork_tried_at: datetime | None = None
+        # Live notifications by tag: {"payload": …, "until": … | None}
+        self._live: dict[str, dict[str, Any]] = {}
+        self._live_unsubs: dict[str, CALLBACK_TYPE] = {}
+        self._live_store: Store[dict[str, Any]] = Store(
+            hass, LIVE_STORAGE_VERSION, f"{DOMAIN}.live.{entry.entry_id}"
+        )
+        # Tags to take down once the app answers again
+        self._dismiss_pending: set[str] = set()
+        # The app's run that shows them (it changes when the app restarts)
+        self._bridge_instance: str | None = None
+        self._live_checked_at: datetime | None = None
+        self._live_checking = False
 
     async def _async_update_data(self) -> GoogleTvData:
         """Read the TV (fully every few seconds, quickly between), and its apps."""
@@ -167,6 +198,8 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         installed = self.bridge_installed
         if installed and not self.bridge.token:
             self._pair_bridge_soon(now)
+        if installed and self.bridge.token:
+            self._check_live_soon(now)
         return GoogleTvData(
             state=state,
             apps=self._named_apps(),
@@ -271,8 +304,57 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             await self._async_pair_bridge(attempts=BRIDGE_PAIRING_ATTEMPTS)
         await self.async_request_refresh()
 
-    async def async_notify(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Show a notification on the TV, telling the app what's on screen."""
+    async def async_notify(
+        self, payload: dict[str, Any], until: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Show a notification on the TV; with duration 0, a live one.
+
+        A live notification stays until it's dismissed, or (``until``: an
+        ``entity_id`` and maybe a ``state``) until that entity reaches the
+        state, or changes from the one it has now. The integration keeps it:
+        it's shown again if the app restarts, and survives a restart of Home
+        Assistant. The reply has the notification's tag.
+        """
+        tag: str | None = payload.get("tag")
+        if until is not None:
+            entity_id = until["entity_id"]
+            state = self.hass.states.get(entity_id)
+            if state is None:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="unknown_entity",
+                    translation_placeholders={"entity_id": entity_id},
+                )
+            until = {"entity_id": entity_id, "state": until.get("state")}
+            until["from"] = state.state
+            tag = tag or f"until:{entity_id}"
+            if _until_met(until, state):
+                # Over before it began (the door's already closed)
+                if tag in self._live:
+                    await self.async_dismiss(tag)
+                return {
+                    "popup": False,
+                    "panel": False,
+                    "reason": "until_met",
+                    "tag": tag,
+                }
+            payload = {"duration": 0, **payload}
+        if payload.get("duration") == 0:
+            tag = tag or f"live-{uuid4().hex[:12]}"
+        if tag:
+            payload = {**payload, "tag": tag}
+        reply = await self._async_send(payload)
+        if tag:
+            self._forget_live(tag)
+            if payload.get("duration") == 0:
+                self._live[tag] = {"payload": payload, "until": until}
+                self._watch_live(tag, until)
+            self._save_live()
+        reply.pop("instance", None)
+        return {**reply, "tag": tag}
+
+    async def _async_send(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Send a notification, telling the app what's on screen."""
         if not self.bridge.token:
             raise HomeAssistantError(
                 translation_domain=DOMAIN, translation_key="bridge_not_paired"
@@ -284,7 +366,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 context["input"] = state.input.id
             payload = {"context": context, **payload}
         try:
-            return await self.bridge.async_notify(payload)
+            reply = await self.bridge.async_notify(payload)
         except BridgeAuthError as err:
             # The app forgot the pairing (reinstalled, data cleared): pair again
             self.bridge.token = None
@@ -298,6 +380,140 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 translation_key="command_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
+        if instance := reply.get("instance"):
+            self._bridge_instance = instance
+        return reply
+
+    async def async_dismiss(self, tag: str | None = None) -> None:
+        """Take a notification (by tag), or all of them, off the TV."""
+        if not self.bridge.token:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_not_paired"
+            )
+        for live in [tag] if tag else list(self._live):
+            self._forget_live(live)
+        self._save_live()
+        try:
+            await self.bridge.async_dismiss(tag)
+        except BridgeError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
+    async def async_load_live(self) -> None:
+        """The live notifications from before a restart, watched again.
+
+        One whose ``until`` came true meanwhile is taken down.
+        """
+        stored = await self._live_store.async_load() or {}
+        self._bridge_instance = stored.get("instance")
+        self._live = stored.get("live", {})
+        self._dismiss_pending = set(stored.get("dismiss", []))
+        for tag, live in list(self._live.items()):
+            until = live.get("until")
+            if until and _until_met(until, self.hass.states.get(until["entity_id"])):
+                self._forget_live(tag)
+                self._dismiss_pending.add(tag)
+            else:
+                self._watch_live(tag, until)
+
+    @callback
+    def async_stop_live(self) -> None:
+        """Stop watching (unloading); the TV keeps showing them."""
+        for unsub in self._live_unsubs.values():
+            unsub()
+        self._live_unsubs.clear()
+
+    def _watch_live(self, tag: str, until: dict[str, Any] | None) -> None:
+        if not until:
+            return
+
+        @callback
+        def changed(event: Event[EventStateChangedData]) -> None:
+            if _until_met(until, event.data["new_state"]):
+                self._forget_live(tag)
+                self._dismiss_pending.add(tag)
+                self._save_live()
+                self.config_entry.async_create_background_task(
+                    self.hass,
+                    self._async_dismiss_pending(),
+                    f"{DOMAIN} live notification {tag} done",
+                )
+
+        self._live_unsubs[tag] = async_track_state_change_event(
+            self.hass, [until["entity_id"]], changed
+        )
+
+    def _forget_live(self, tag: str) -> None:
+        self._live.pop(tag, None)
+        self._dismiss_pending.discard(tag)
+        if unsub := self._live_unsubs.pop(tag, None):
+            unsub()
+
+    def _save_live(self) -> None:
+        self._live_store.async_delay_save(
+            lambda: {
+                "instance": self._bridge_instance,
+                "live": self._live,
+                "dismiss": sorted(self._dismiss_pending),
+            },
+            1,
+        )
+
+    async def _async_dismiss_pending(self) -> None:
+        """Take down what's done; what fails stays pending, tried again later."""
+        for tag in list(self._dismiss_pending):
+            try:
+                await self.bridge.async_dismiss(tag)
+            except BridgeError as err:
+                _LOGGER.debug("Can't take %s down yet: %s", tag, err)
+                return
+            self._dismiss_pending.discard(tag)
+        self._save_live()
+
+    def _check_live_soon(self, now: datetime) -> None:
+        if (
+            not (self._live or self._dismiss_pending)
+            or self._live_checking
+            or (
+                self._live_checked_at is not None
+                and now - self._live_checked_at < LIVE_CHECK_INTERVAL
+            )
+        ):
+            return
+        self._live_checking = True
+        self._live_checked_at = now
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_check_live(), f"{DOMAIN} live notifications"
+        )
+
+    async def _async_check_live(self) -> None:
+        """Dismiss what's pending; show the live ones again if the app restarted."""
+        try:
+            if self._dismiss_pending:
+                await self._async_dismiss_pending()
+            if not self._live:
+                return
+            try:
+                instance = (await self.bridge.async_state()).get("instance")
+            except BridgeError as err:
+                _LOGGER.debug("Can't check the live notifications: %s", err)
+                return
+            if not instance or instance == self._bridge_instance:
+                return
+            _LOGGER.debug("Raineworks TV Bridge restarted: showing live notifications")
+            for tag, live in list(self._live.items()):
+                try:
+                    await self._async_send(live["payload"])
+                except HomeAssistantError as err:
+                    _LOGGER.debug("Can't show %s again: %s", tag, err)
+                    return
+            self._bridge_instance = instance
+            self._save_live()
+        finally:
+            self._live_checking = False
 
     async def async_bridge_rules(self, changes: dict[str, Any]) -> dict[str, Any]:
         """Change the app's notification rules."""
@@ -491,3 +707,13 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 await self.client.async_key("WAKEUP")
             await self.client.async_select_input(input_id)
         await self.async_request_refresh()
+
+
+def _until_met(until: dict[str, Any], state: State | None) -> bool:
+    """A live notification's end: its entity gone, at the state, or changed."""
+    if state is None:
+        return True
+    if until.get("state") is not None:
+        return state.state == until["state"]
+    # Any change but a blip (unavailable, unknown) ends it
+    return state.state not in (until["from"], STATE_UNAVAILABLE, STATE_UNKNOWN)

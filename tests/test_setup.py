@@ -865,6 +865,178 @@ async def test_notify_needs_something_to_show(
         )
 
 
+async def _live_door(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> MockConfigEntry:
+    """The front door opens, and a pill says so until it closes."""
+    hass.states.async_set("binary_sensor.front_door", "on")
+    entry = await _paired(hass, client, web)
+    web.post(f"{BRIDGE}/api/dismiss", json={"ok": True})
+    reply = await hass.services.async_call(
+        DOMAIN,
+        "notify",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "title": "Front door open",
+            "icon": "mdi:door-open",
+            "size": "compact",
+            "until_entity": "binary_sensor.front_door",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert reply["media_player.lott_s_tv"]["tag"] == "until:binary_sensor.front_door"
+    return entry
+
+
+async def test_a_live_notification_until_the_door_closes(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    await _live_door(hass, client, web)
+    call = _bridge_calls(web, "/api/notify")[-1]
+    # Up until it's dismissed, under a tag to update and dismiss it by
+    assert call[2]["duration"] == 0
+    assert call[2]["tag"] == "until:binary_sensor.front_door"
+    # A blip isn't the door closing
+    hass.states.async_set("binary_sensor.front_door", "unavailable")
+    await hass.async_block_till_done()
+    assert not _bridge_calls(web, "/api/dismiss")
+    hass.states.async_set("binary_sensor.front_door", "off")
+    await hass.async_block_till_done()
+    dismiss = _bridge_calls(web, "/api/dismiss")
+    assert [c[2] for c in dismiss] == [{"tag": "until:binary_sensor.front_door"}]
+    # Done: opening again isn't watched by the old one
+    hass.states.async_set("binary_sensor.front_door", "on")
+    hass.states.async_set("binary_sensor.front_door", "off")
+    await hass.async_block_till_done()
+    assert len(_bridge_calls(web, "/api/dismiss")) == 1
+
+
+async def test_a_live_notification_until_a_state(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    hass.states.async_set("sensor.washer", "washing")
+    await _paired(hass, client, web)
+    web.post(f"{BRIDGE}/api/dismiss", json={"ok": True})
+    await hass.services.async_call(
+        DOMAIN,
+        "notify",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "title": "Washing",
+            "progress": 40.4,
+            "tag": "washer",
+            "until_entity": "sensor.washer",
+            "until_state": "idle",
+        },
+        blocking=True,
+    )
+    call = _bridge_calls(web, "/api/notify")[-1]
+    assert (call[2]["tag"], call[2]["progress"]) == ("washer", 40)
+    hass.states.async_set("sensor.washer", "rinsing")
+    await hass.async_block_till_done()
+    assert not _bridge_calls(web, "/api/dismiss")
+    hass.states.async_set("sensor.washer", "idle")
+    await hass.async_block_till_done()
+    assert _bridge_calls(web, "/api/dismiss")[-1][2] == {"tag": "washer"}
+
+
+async def test_a_live_notification_already_over_isnt_shown(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    hass.states.async_set("lock.front", "locked")
+    await _paired(hass, client, web)
+    reply = await hass.services.async_call(
+        DOMAIN,
+        "notify",
+        {
+            "entity_id": "media_player.lott_s_tv",
+            "title": "Unlocked",
+            "until_entity": "lock.front",
+            "until_state": "locked",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert reply["media_player.lott_s_tv"]["reason"] == "until_met"
+    assert not _bridge_calls(web, "/api/notify")
+
+
+async def test_until_an_unknown_entity(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.exceptions import ServiceValidationError
+
+    await _paired(hass, client, web)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {
+                "entity_id": "media_player.lott_s_tv",
+                "title": "Hi",
+                "until_entity": "binary_sensor.nope",
+            },
+            blocking=True,
+        )
+
+
+async def test_dismissing_stops_watching(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    await _live_door(hass, client, web)
+    await hass.services.async_call(
+        DOMAIN,
+        "dismiss_notifications",
+        {"entity_id": "media_player.lott_s_tv"},
+        blocking=True,
+    )
+    assert _bridge_calls(web, "/api/dismiss")[-1][2] == {}
+    hass.states.async_set("binary_sensor.front_door", "off")
+    await hass.async_block_till_done()
+    assert len(_bridge_calls(web, "/api/dismiss")) == 1
+
+
+async def test_live_notifications_come_back_when_the_app_restarts(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _live_door(hass, client, web)
+    coordinator = entry.runtime_data
+    web.get(f"{BRIDGE}/api/state", json={"instance": "run-2", "popups": []})
+    sent = len(_bridge_calls(web, "/api/notify"))
+    await coordinator._async_check_live()
+    calls = _bridge_calls(web, "/api/notify")
+    assert len(calls) == sent + 1
+    assert calls[-1][2]["tag"] == "until:binary_sensor.front_door"
+    # The same run: nothing to show again
+    await coordinator._async_check_live()
+    assert len(_bridge_calls(web, "/api/notify")) == sent + 1
+
+
+async def test_live_notifications_outlast_a_restart(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _live_door(hass, client, web)
+    await hass.async_block_till_done()
+    # Saved, then Home Assistant stops; the door closes while it's down
+    await entry.runtime_data._live_store.async_save(
+        {"instance": None, "live": entry.runtime_data._live, "dismiss": []}
+    )
+    await hass.config_entries.async_unload(entry.entry_id)
+    hass.states.async_set("binary_sensor.front_door", "off")
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    assert coordinator._live == {}
+    await coordinator._async_check_live()
+    assert _bridge_calls(web, "/api/dismiss")[-1][2] == {
+        "tag": "until:binary_sensor.front_door"
+    }
+
+
 async def test_rules_by_name(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:

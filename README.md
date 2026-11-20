@@ -160,11 +160,13 @@ apps and HDMI inputs alike, or in the TV's notification panel.
 | `video` | A video or live stream URL (HLS, RTSP, MP4) |
 | `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
 | `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's own setting when not given |
-| `duration` | Seconds on screen (8, or 20 with a video) |
+| `duration` | Seconds on screen (8, or 20 with a video); `0` keeps it up until it's dismissed |
+| `until_entity`, `until_state` | Keep it up until this entity changes (or reaches `until_state`), then take it down: a live notification |
+| `progress` | A progress bar, 0 to 100 |
 | `size` | `compact` (a one-line pill; a camera or video plays in a small tile on it), `small`, `medium`, `large`; the TV's own setting when not given |
 | `color` | The pop-up's border (`#03A9F4`) |
 | `mute` | A video's sound (off by default) |
-| `tag` | A pop-up with the same tag replaces it; `googletv.dismiss_notifications` takes it down |
+| `tag` | Send again with the same tag to update it in place (a camera keeps playing); `googletv.dismiss_notifications` takes it down, from the screen and the panel |
 | `ignore_rules` | Pop up even where the rules say not to |
 
 ```yaml
@@ -179,6 +181,54 @@ data:
   position: bottom_right
   duration: 30
 ```
+
+**Live notifications** stay up while something is true, and change as it
+does. A pill while the front door is open, gone when it closes:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.front_door
+    to: "on"
+actions:
+  - action: googletv.notify
+    target:
+      entity_id: media_player.living_room_tv
+    data:
+      title: Front door open
+      icon: mdi:door-open
+      size: compact
+      until_entity: binary_sensor.front_door
+```
+
+With `until_entity` (or `duration: 0`) Home Assistant keeps the
+notification: it survives a restart of Home Assistant (and comes down if the
+door closed meanwhile), and is shown again if the TV app restarts. To show
+live values, send it again with the same `tag` whenever they change; it's
+updated where it is, with no animation, and a camera on it keeps playing:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.washer_progress
+actions:
+  - action: googletv.notify
+    target:
+      entity_id: media_player.living_room_tv
+    data:
+      tag: washer
+      title: Washer
+      message: "{{ states('sensor.washer_time_left') }} left"
+      progress: "{{ states('sensor.washer_progress') | int(0) }}"
+      icon: mdi:washing-machine
+      size: compact
+      until_entity: sensor.washer_state
+      until_state: idle
+```
+
+**Stacking**: each corner (and the top, bottom and center) holds a stack.
+Three cards show at a time: live ones first, then the newest; a "+2 more"
+pill counts the others, which come back as cards go.
 
 **Rules**: pop-ups don't show over the apps and inputs you pick, on the TV
 (the app's screen) or with `googletv.set_notification_rules` (apps and

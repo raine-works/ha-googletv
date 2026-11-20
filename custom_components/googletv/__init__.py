@@ -5,11 +5,11 @@ from __future__ import annotations
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers.storage import STORAGE_DIR
+from homeassistant.helpers.storage import STORAGE_DIR, Store
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError, load_signer
-from .const import ADB_KEY_FILE, CONF_ONLINE_LOOKUPS, CONF_PROPS
-from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator
+from .const import ADB_KEY_FILE, CONF_ONLINE_LOOKUPS, CONF_PROPS, DOMAIN
+from .coordinator import LIVE_STORAGE_VERSION, GoogleTvConfigEntry, GoogleTvCoordinator
 from .online import get_lookups
 
 PLATFORMS: list[Platform] = [
@@ -69,6 +69,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         await client.async_close()
         raise
     entry.runtime_data = coordinator
+    await coordinator.async_load_live()
+    entry.async_on_unload(coordinator.async_stop_live)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
@@ -81,6 +83,13 @@ async def _async_options_updated(
     """Set the TV up again with its new options (not for its stored props)."""
     if entry.options != entry.runtime_data.options:
         await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> None:
+    """Forget a removed TV's live notifications."""
+    await Store(
+        hass, LIVE_STORAGE_VERSION, f"{DOMAIN}.live.{entry.entry_id}"
+    ).async_remove()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> bool:

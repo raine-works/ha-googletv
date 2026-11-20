@@ -95,7 +95,11 @@ NOTIFY_SCHEMA = {
     vol.Optional("camera_view", default="live"): vol.In(["live", "snapshot"]),
     vol.Optional("mode"): vol.In(["popup", "panel", "both"]),
     vol.Optional("position"): vol.In(POSITIONS),
-    vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=1, max=600)),
+    # 0: until it's dismissed (a live notification)
+    vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=0, max=600)),
+    vol.Optional("progress"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+    vol.Optional("until_entity"): cv.entity_id,
+    vol.Optional("until_state"): cv.string,
     vol.Optional("size"): vol.In(["compact", "small", "medium", "large"]),
     vol.Optional("color"): cv.string,
     vol.Optional("mute"): cv.boolean,
@@ -371,6 +375,8 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             payload["image_url"] = self._home_assistant_url(image)
         if video := kwargs.get("video"):
             payload["video_url"] = self._home_assistant_url(video)
+        if "progress" in kwargs:
+            payload["progress"] = round(kwargs["progress"])
         if camera := kwargs.get("camera_entity"):
             payload.update(await self._camera_urls(camera, kwargs["camera_view"]))
         if not any(
@@ -379,22 +385,14 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="nothing_to_show"
             )
-        return await self.coordinator.async_notify(payload)
+        until = None
+        if entity_id := kwargs.get("until_entity"):
+            until = {"entity_id": entity_id, "state": kwargs.get("until_state")}
+        return await self.coordinator.async_notify(payload, until)
 
     async def async_dismiss_notifications(self, tag: str | None = None) -> None:
-        """Take pop-ups down (googletv.dismiss_notifications)."""
-        if not self.coordinator.bridge.token:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="bridge_not_paired"
-            )
-        try:
-            await self.coordinator.bridge.async_dismiss(tag)
-        except Exception as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="command_failed",
-                translation_placeholders={"error": str(err)},
-            ) from err
+        """Take notifications down (googletv.dismiss_notifications)."""
+        await self.coordinator.async_dismiss(tag)
 
     async def async_set_notification_rules(self, **kwargs: Any) -> ServiceResponse:
         """Pop-ups' rules: apps and inputs (by name or id) they don't show over."""

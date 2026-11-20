@@ -10,6 +10,7 @@ data class NotificationRequest(
     val videoUrl: String?,
     val mode: String,
     val position: String,
+    // 0: until it's dismissed
     val durationS: Int,
     val size: String,
     val color: Int?,
@@ -19,11 +20,14 @@ data class NotificationRequest(
     val tag: String?,
     // "mdi:<name>", or an image URL, in place of the logo
     val icon: String? = null,
+    // 0 to 100: a progress bar
+    val progress: Int? = null,
     val contextApp: String?,
     val contextInput: String?,
 ) {
     val popup: Boolean get() = mode == MODE_POPUP || mode == MODE_BOTH
     val panel: Boolean get() = mode == MODE_PANEL || mode == MODE_BOTH
+    val persistent: Boolean get() = durationS == 0
 
     companion object {
         const val MODE_POPUP = "popup"
@@ -63,7 +67,7 @@ data class NotificationRequest(
             require(size in SIZES) { "size must be one of $SIZES" }
             val duration = if (json.has("duration")) json.getDouble("duration").toInt()
             else if (videoUrl != null) 20 else 8
-            require(duration in 1..600) { "duration must be 1 to 600 seconds" }
+            require(duration in 0..600) { "duration must be 0 (until dismissed) to 600 seconds" }
             val color = text("color")?.let {
                 try {
                     android.graphics.Color.parseColor(if (it.startsWith("#")) it else "#$it")
@@ -86,6 +90,11 @@ data class NotificationRequest(
                     Regex("^mdi:[a-z0-9-]+$").matches(icon) ||
                     Regex("^https?://\\S+$", RegexOption.IGNORE_CASE).matches(icon),
             ) { "icon must be mdi:<name> or an http(s) image URL" }
+            val progress = if (json.has("progress") && !json.isNull("progress")) {
+                json.getDouble("progress").toInt().also { require(it in 0..100) { "progress must be 0 to 100" } }
+            } else {
+                null
+            }
             val context = json.optJSONObject("context")
             return NotificationRequest(
                 title = title,
@@ -102,6 +111,7 @@ data class NotificationRequest(
                 whenBlocked = whenBlocked,
                 tag = text("tag"),
                 icon = icon,
+                progress = progress,
                 contextApp = context?.optString("app", "")?.takeIf { it.isNotBlank() },
                 contextInput = context?.optString("input", "")?.takeIf { it.isNotBlank() },
             )

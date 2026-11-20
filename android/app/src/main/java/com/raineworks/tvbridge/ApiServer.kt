@@ -81,11 +81,11 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 val request = NotificationRequest.parse(
                     body(session), prefs.defaultPosition, prefs.defaultSize,
                 )
-                json(Notifier.handle(context, request).toJson())
+                json(Notifier.handle(context, request).toJson().put("instance", Notifier.instance))
             }
             method == Method.POST && path == "/api/dismiss" -> {
-                val tag = body(session).optString("tag", "")
-                if (tag.isEmpty()) Overlay.get(context).dismissAll() else Overlay.get(context).dismiss(tag)
+                val tag = body(session).optString("tag", "").ifEmpty { null }
+                Notifier.dismiss(context, tag)
                 json(JSONObject().put("ok", true))
             }
             method == Method.POST && path == "/api/unpair" -> {
@@ -110,6 +110,8 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         .put("foreground_app", TvInfo.foregroundApp(context) ?: JSONObject.NULL)
         .put("overlay_permission", TvInfo.overlayAllowed(context))
         .put("usage_access", TvInfo.usageAccess(context))
+        .put("instance", Notifier.instance)
+        .put("popups", JSONArray(Overlay.get(context).tags))
 
     private fun apps(): JSONArray = JSONArray().apply {
         TvInfo.apps(context).forEach {
