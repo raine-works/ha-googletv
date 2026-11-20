@@ -120,17 +120,21 @@ class Overlay private constructor(private val context: Context) {
         val videoUrl = request.videoUrl
         if (videoUrl != null) {
             // Live video: a small rounded 16:9 tile where the logo goes
+            // Concentric corners: the card's radius is the tile's plus the gap
+            val gap = 6
+            val tileRadius = 10
             val tile = android.widget.FrameLayout(context).apply {
                 background = GradientDrawable().apply {
                     setColor(Theme.MUTED)
-                    cornerRadius = dp(8).toFloat()
+                    cornerRadius = dp(tileRadius).toFloat()
                 }
                 clipToOutline = true
             }
             val texture = TextureView(context)
             tile.addView(texture, android.widget.FrameLayout.LayoutParams(dp(72), dp(40)))
             pill.addView(tile, LinearLayout.LayoutParams(dp(72), dp(40)))
-            pill.setPadding(dp(6), dp(6), dp(16), dp(6))
+            pill.setPadding(dp(gap), dp(gap), dp(16), dp(gap))
+            (pill.background as GradientDrawable).cornerRadius = dp(tileRadius + gap).toFloat()
             player = startVideo(videoUrl, texture, request.mute)
         } else {
             pill.addView(
