@@ -1,14 +1,14 @@
 package com.raineworks.tvbridge
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.StateListDrawable
 import android.util.TypedValue
+import android.view.View
 import androidx.core.content.res.ResourcesCompat
 
 /**
@@ -60,21 +60,48 @@ object Theme {
             setStroke(dp(context, 1), stroke)
         }
 
+    /** The space between a control and its focus ring. */
+    const val FOCUS_GAP_DP = 4
+
     /**
-     * A control's background: [fill] at rest; a lighter fill and a ring when
-     * the remote's focus is on it (TVs have no hover or touch).
+     * A control's background: [fill] at rest; when the remote's focus is on
+     * it, a ring a few dp outside it (the card showing between), so it shows
+     * on light and dark controls alike. The control draws inset by the gap:
+     * give it that much more padding.
      */
     fun focusable(context: Context, fill: Int, radiusDp: Int = RADIUS_DP, stroke: Int = BORDER): Drawable {
-        val focused = GradientDrawable().apply {
-            setColor(if (fill == Color.TRANSPARENT) MUTED else blend(fill, Color.WHITE, 0.08f))
-            cornerRadius = dp(context, radiusDp).toFloat()
+        val gap = dp(context, FOCUS_GAP_DP)
+        val radius = dp(context, radiusDp).toFloat()
+        fun body(color: Int, border: Int) = GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius
+            setStroke(dp(context, 1), border)
+        }
+        val rest = LayerDrawable(arrayOf(body(fill, stroke))).apply {
+            setLayerInset(0, gap, gap, gap, gap)
+        }
+        val ring = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            cornerRadius = radius + gap
             setStroke(dp(context, 2), FOREGROUND)
         }
-        val states = StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_focused), focused)
-            addState(intArrayOf(), surface(context, fill, radiusDp, stroke))
+        val focusedFill = if (fill == Color.TRANSPARENT) MUTED else fill
+        val focused = LayerDrawable(arrayOf(ring, body(focusedFill, if (fill == Color.TRANSPARENT) BORDER else stroke))).apply {
+            setLayerInset(1, gap, gap, gap, gap)
         }
-        return RippleDrawable(ColorStateList.valueOf(Color.argb(40, 255, 255, 255)), states, null)
+        return StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), focused)
+            addState(intArrayOf(android.R.attr.state_pressed), focused)
+            addState(intArrayOf(), rest)
+        }
+    }
+
+    /** Grows a little while focused: easy to spot from the couch. */
+    fun lift(view: View, scale: Float = 1.04f) {
+        view.setOnFocusChangeListener { v, focused ->
+            v.animate().scaleX(if (focused) scale else 1f).scaleY(if (focused) scale else 1f)
+                .setDuration(120).start()
+        }
     }
 
     fun blend(color: Int, with: Int, amount: Float): Int = Color.rgb(

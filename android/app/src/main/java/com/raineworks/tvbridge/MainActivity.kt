@@ -274,7 +274,7 @@ class MainActivity : Activity() {
             id = View.generateViewId()
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setPadding(dp(16), dp(14), dp(16), dp(14))
             if (enabled) {
                 isFocusable = true
                 isClickable = true
@@ -285,7 +285,7 @@ class MainActivity : Activity() {
         parent.addView(
             row,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(-dp(12), dp(1), -dp(12), dp(1))
+                setMargins(-dp(16), -dp(3), -dp(16), -dp(3))
             },
         )
         return row
@@ -300,7 +300,11 @@ class MainActivity : Activity() {
     ) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(4), 0, dp(4))
+            setPadding(0, 0, 0, 0)
+            clipChildren = false
+            clipToPadding = false
+            // The chips' focus gap lines their edge up with the text above
+            translationX = -dp(Theme.FOCUS_GAP_DP).toFloat()
         }
         options.forEach { (value, name) ->
             val picked = value == selected
@@ -310,7 +314,8 @@ class MainActivity : Activity() {
                     gravity = Gravity.CENTER
                     isFocusable = true
                     isClickable = true
-                    setPadding(dp(16), dp(9), dp(16), dp(9))
+                    setPadding(dp(20), dp(13), dp(20), dp(13))
+                    Theme.lift(this)
                     background = Theme.focusable(
                         this@MainActivity,
                         if (picked) Theme.PRIMARY else Color.TRANSPARENT,
@@ -323,7 +328,7 @@ class MainActivity : Activity() {
                     }
                 },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    marginEnd = dp(8)
+                    marginEnd = dp(2)
                 },
             )
         }
@@ -341,7 +346,8 @@ class MainActivity : Activity() {
                 id = View.generateViewId()
                 isFocusable = true
                 isClickable = true
-                setPadding(dp(18), dp(11), dp(18), dp(11))
+                setPadding(dp(22), dp(15), dp(22), dp(15))
+                Theme.lift(this, 1.03f)
                 background = Theme.focusable(
                     this@MainActivity,
                     if (primary) Theme.PRIMARY else Color.TRANSPARENT,
@@ -351,7 +357,8 @@ class MainActivity : Activity() {
                 setOnClickListener { onClick() }
             },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(14)
+                topMargin = dp(10)
+                marginStart = -dp(Theme.FOCUS_GAP_DP)
             },
         )
     }
