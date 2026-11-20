@@ -206,9 +206,12 @@ class GoogleTvClient:
             timeout_s=INSTALL_TIMEOUT_S,
         )
         if "Success" not in output:
-            raise GoogleTvError(
-                f"The TV didn't install the app: {output.strip()[-300:]}"
+            # Its "Failure [REASON: …]" line, else the start of what it said
+            failure = next(
+                (line for line in output.splitlines() if "Failure" in line),
+                output.strip()[:300],
             )
+            raise GoogleTvError(f"The TV didn't install the app: {failure}")
 
     async def async_read_file(self, path: str) -> str:
         """A text file on the TV (empty if it isn't there)."""

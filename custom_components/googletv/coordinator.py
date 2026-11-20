@@ -232,14 +232,26 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         try:
             async with session.get(url, timeout=BRIDGE_DOWNLOAD_TIMEOUT) as response:
                 response.raise_for_status()
-                apk = await response.content.read(BRIDGE_APK_MAX_BYTES + 1)
+                # All of it (read(n) returns what has arrived so far, not n)
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    size += len(chunk)
+                    if size > BRIDGE_APK_MAX_BYTES:
+                        break
+                    chunks.append(chunk)
+                apk = b"".join(chunks)
+                length = response.headers.get("Content-Length", "")
+                expected = int(length) if length.isdigit() else None
+                if expected is not None and size != expected:
+                    raise aiohttp.ClientPayloadError(f"got {size} of {expected} bytes")
         except (aiohttp.ClientError, TimeoutError) as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="bridge_download_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
-        if len(apk) > BRIDGE_APK_MAX_BYTES or not apk.startswith(b"PK"):
+        if size > BRIDGE_APK_MAX_BYTES or not apk.startswith(b"PK"):
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="bridge_download_failed",
