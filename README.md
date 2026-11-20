@@ -71,10 +71,16 @@ Through the app alone, a repair says when the TV app is behind.
    services → **Discovered**. Choose **Add**, then **Submit**.
 3. **Choose Allow on the TV**, when it asks "Allow Home Assistant to
    connect?". No code to type.
-4. **Allow its permissions**, on the TV app's screen, as the TV offers them:
-   **Pop-ups over other apps**, **Notification access** (what other apps
-   are playing) and **Usage access** (which app is in front). Each has a
-   button to its settings screen.
+4. **Allow its permissions**, in the TV app's **Permissions** section (its
+   Home says "Almost there" while any is off): **Pop-ups over other apps**,
+   **Notification access** (what other apps are playing) and **App
+   detection** (Android's Usage access: which app is in front). Each opens
+   its settings screen.
+
+The TV app's sections: **Home** (connected or not, and anything that needs
+a look), **Apps** (which Home Assistant shows, which get pop-ups),
+**Pop-ups** (their size and place, a test), **Permissions**, **ADB** (what
+it adds, and turning it on) and **About**.
 
 ### Over ADB (everything)
 
@@ -97,7 +103,8 @@ TV app**, that does the same at a press. Not discovered? **Add integration
 → Raineworks TV**, with the TV's IP address and port 5555.
 
 **A TV connected through its app, given ADB later**: turn on network
-debugging (the TV app's screen has the steps, with each one's state), then
+debugging (the TV app's **ADB** section has the steps, with each one's
+state), then
 in Home Assistant open the TV (Settings → Devices & services → Raineworks
 TV), choose **⋮ → Reconfigure**, then **Connect over ADB**. The
 app's pairing stays.
@@ -115,12 +122,14 @@ app's pairing stays.
 | Screen on or off, Activity, diagnostics | ✓ | ✓ |
 | Remote keys: D-pad, OK, Back, Home, Settings | | ✓ |
 | Turn off; turn on from network standby | | ✓ |
-| Which HDMI input is on screen | | ✓ |
+| Which HDMI input is on screen (and its artwork) | | ✓ |
+| The TV app kept up to date by Home Assistant | ⁴ | ✓ |
 
 ¹ Pop-ups, and opening media, dashboards, apps and inputs over what's on,
 need **Pop-ups over other apps** allowed. ² Needs **Notification access**.
-³ Needs **Usage access**. Some TVs hide these settings screens: ADB allows
-all three.
+³ Needs **Usage access** (App detection). Some TVs hide these settings
+screens: ADB allows all three. ⁴ From Google Play, Play updates it;
+sideloaded, a repair says when it's behind.
 
 A fixed address for the TV (a DHCP reservation in your router) is optional:
 a discovered TV is followed to a new one.
@@ -337,7 +346,7 @@ the integration makes a local-only Home Assistant user named after the TV,
 **read-only**: dashboards on the TV show your home but can't switch
 anything. To let them control devices, turn on **Dashboards on the TV can
 control devices** in the TV's options (Settings → Devices & services →
-Raineworks TV → Configure). The user is in Settings → People →
+Raineworks TV → Configure → General). The user is in Settings → People →
 Users, where you can remove it; removing the TV removes it too.
 
 **Replacing Google Cast**: everything Home Assistant used Cast for on the
@@ -510,7 +519,7 @@ actions:
 | `googletv.dismiss_notifications` | Take a notification down by `tag`, or all of them |
 | `googletv.set_notification_rules` | The apps and inputs pop-ups don't show over (`blocked_apps`, `blocked_inputs` by name or id) and `when_blocked` |
 | `googletv.show_dashboard` | A dashboard full screen (`dashboard`, `view`) |
-| `googletv.install_tv_bridge` | Install or update the TV app (`development: true` for the latest build from `master`) |
+| `googletv.install_tv_bridge` | Install or update the TV app now (over ADB it's kept up to date by itself; `development: true` for the latest build from `master`) |
 
 ## Privacy and security
 
@@ -521,15 +530,20 @@ actions:
   what's playing from iTunes, TVmaze, Google Play and Wikipedia. No account
   or key. Turn off **Look up app icons and artwork online** in the TV's
   options (Settings → Devices & services → Raineworks TV →
-  Configure) to keep everything on your network.
+  Configure → General) to keep everything on your network.
 * **ADB.** Home Assistant signs in to every TV with one key, kept in
   `.storage/googletv_adbkey`; each TV trusts it once.
-* **Installing the TV app**, Home Assistant checks the download against
-  the SHA-256 published with each release before it goes on the TV.
-* **The TV app** pairs with Home Assistant over ADB, so no code is shown or
-  typed; every request after that carries its token. Ten wrong pairing
-  codes lock pairing for ten minutes. Removing the TV from Home Assistant
-  unpairs it.
+* **Installing or updating the TV app**, Home Assistant checks the
+  download against the SHA-256 published with each release before it goes
+  on the TV, and never installs over a copy from Google Play.
+* **The TV app** pairs with Home Assistant when you choose **Allow** on the
+  TV, or over ADB; no code is typed. Every request after that carries its
+  token. Ten wrong pairing codes lock pairing for ten minutes. Removing the
+  TV from Home Assistant unpairs it.
+* **Links sent to the TV** (a notification's image, clip or icon) that
+  point at Home Assistant are signed for 15 minutes as Home Assistant's
+  read-only content user, so the TV can load them without a sign-in of its
+  own. A clip is kept on the TV only while its pop-up is up.
 * **Dashboards** use the TV's own Home Assistant user
   ([above](#media-and-dashboards)), and stay on Home Assistant: a link to
   another site isn't followed, and only Home Assistant's own pages get the
@@ -554,16 +568,24 @@ otherwise use the integration's **Reconfigure**.
 
 **A live notification is stuck.** Home Assistant takes it down when its
 entity changes, or with `googletv.dismiss_notifications`; on the TV, the
-app's **Clear pop-ups** clears them all.
+app's **Pop-ups → Clear pop-ups** clears them all.
 
 **"Needs ADB".** The TV is connected through its app alone, and only ADB
 can do that (the D-pad, turning it off). Add ADB: see [Setup](#setup).
 
 **Notifications don't show.** Check the media player's `tv_bridge`
 attribute. `not_installed`: run **Install the TV app**. `installed` but not
-`paired`: it pairs by itself within a few minutes. On the TV app's screen,
-**Pop-ups over other apps** must say Allowed (Home Assistant allows it when
-it installs the app).
+`paired`: it pairs by itself within a few minutes. In the TV app's
+**Permissions**, **Pop-ups over other apps** must say Allowed (Home
+Assistant allows it when it installs the app).
+
+**A doorbell clip or `/media` image doesn't show.** Home Assistant signs
+its own links for the TV, but needs to know its address: set it in
+Settings → System → Network (the local address the TV can reach).
+
+**The TV app is behind the integration.** Over ADB it's updated by itself
+when Home Assistant next reads the TV; `googletv.install_tv_bridge` does it
+now. Through the app alone, a repair says so: update it where it came from.
 
 **No inputs.** Inputs come from Android's TV input service, used by TCL
 (Google TV) and Sony (Android TV) among others; a TV whose maker doesn't use

@@ -90,6 +90,9 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
 > full screen. And it knows what the TV is doing: what's playing, the app in
 > front, the volume, as it happens.
 >
+> Choose on the TV which apps Home Assistant shows, and which ones
+> notifications may pop up over.
+>
 > Setup takes a minute: add the Raineworks TV integration to Home
 > Assistant (from HACS), and choose Allow on the TV when it asks. No
 > developer options, no codes. For the remote's keys, turning the TV off
@@ -133,6 +136,7 @@ on their local network; nothing to the developer or third parties.
 | Can users request that data be deleted? | Yes: forget the pairing, or clear the app's data; Home Assistant's data is the user's own |
 | App activity → **Other actions** (which app is in front, what's playing) | Collected, not shared; processed for **App functionality**; required for the features that use it, optional overall (the user allows Usage access and Notification access) |
 | App info and performance → **Diagnostics** (storage, memory, network) | Collected, not shared; App functionality |
+| App activity → **Installed apps** (the launcher's apps, and installs and uninstalls as they happen) | Collected, not shared; App functionality (Home Assistant's app list and buttons) |
 | Device or other IDs (the TV's Android ID, to tell TVs apart) | Collected, not shared; App functionality |
 
 Nothing is shared with third parties, and nothing is used for advertising,
@@ -158,10 +162,10 @@ Home Assistant popping up over a show, and the app's ongoing notification.
 
 **Sensitive permissions**: none of the app's permissions has a Play
 declaration form. For review notes: **Display over other apps** shows Home
-Assistant's notifications over shows and inputs; **Usage access** tells Home
-Assistant which app is in front; **Notification access** reads media
+Assistant's notifications over shows and inputs; **Usage access** (shown as App detection) tells
+Home Assistant which app is in front; **Notification access** reads media
 sessions (what's playing), not notifications. Each is the user's choice,
-explained on the app's screen.
+explained in the app's Permissions section.
 
 ## Test on real TVs
 
@@ -170,7 +174,7 @@ dashboards working; before production, check on real hardware (a Chromecast
 with Google TV or Google TV Streamer, and a Sony or TCL TV):
 
 * Whether **Settings shows** Display over other apps, Notification access
-  and Usage access for the app (the app's Permissions card opens each).
+  and Usage access for the app (the app's Permissions section opens each).
   Where a TV hides one, the app-alone setup loses what it gives; ADB
   allows them.
 * Notifications over a show and over an HDMI input; buttons with the
