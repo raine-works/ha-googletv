@@ -37,7 +37,7 @@ jobs:
           gh release create "$tag" --target "$SHA" --title "$tag" --generate-notes
           echo "created=true" >> "$GITHUB_OUTPUT"
 
-      # Home Assistant Bridge, built from the same commit, attached to the
+      # Raineworks TV Bridge, built from the same commit, attached to the
       # release (the integration installs it from there)
       - uses: actions/setup-java@v4
         if: steps.release.outputs.created == 'true'
@@ -48,7 +48,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         if: steps.release.outputs.created == 'true'
 
-      - name: Build and attach the Home Assistant Bridge app
+      - name: Build and attach the Raineworks TV Bridge app
         if: steps.release.outputs.created == 'true'
         working-directory: android
         env:

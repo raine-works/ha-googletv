@@ -1,6 +1,6 @@
 """A notify entity per TV: Home Assistant's notifications on its screen.
 
-Through Home Assistant Bridge, the TV app: a plain message pops up in the top
+Through Raineworks TV Bridge, the TV app: a plain message pops up in the top
 right. For an image, a camera, a corner, a duration or the panel, use the
 googletv.notify action.
 """
@@ -35,7 +35,7 @@ class GoogleTvNotify(GoogleTvEntity, NotifyEntity):
 
     @property
     def available(self) -> bool:
-        """Available once Home Assistant Bridge is installed and paired."""
+        """Available once Raineworks TV Bridge is installed and paired."""
         return super().available and self.coordinator.data.bridge_paired
 
     async def async_send_message(self, message: str, title: str | None = None) -> None:

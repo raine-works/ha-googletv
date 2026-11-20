@@ -42,7 +42,7 @@ from .wol import async_wake
 
 _LOGGER = logging.getLogger(__name__)
 
-# Home Assistant Bridge: the APK's download, and pairing with it once it's installed
+# Raineworks TV Bridge: the APK's download, and pairing with it once it's installed
 BRIDGE_APK_MAX_BYTES = 100 * 1024 * 1024
 BRIDGE_DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=180)
 BRIDGE_PAIRING_ATTEMPTS = 6
@@ -79,7 +79,7 @@ class GoogleTvData:
     last_boot: datetime | None = None
     # The TV answered: off its network (in standby, unplugged) it's shown off
     reachable: bool = True
-    # Home Assistant Bridge (notifications): installed, and paired with
+    # Raineworks TV Bridge (notifications): installed, and paired with
     bridge_installed: bool = False
     bridge_paired: bool = False
 
@@ -177,7 +177,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             bridge_paired=installed and bool(self.bridge.token),
         )
 
-    # Home Assistant Bridge: installing, pairing, notifications
+    # Raineworks TV Bridge: installing, pairing, notifications
 
     @property
     def bridge_installed(self) -> bool:
@@ -193,7 +193,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self.config_entry.async_create_background_task(
             self.hass,
             self._async_pair_bridge(),
-            f"{DOMAIN} Home Assistant Bridge pairing",
+            f"{DOMAIN} Raineworks TV Bridge pairing",
         )
 
     async def _async_pair_bridge(self, attempts: int = 1) -> bool:
@@ -212,15 +212,13 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                         raise BridgeError("The app wrote no pairing code")
                     token = await self.bridge.async_pair_finish(*parsed)
                 except (BridgeError, GoogleTvError) as err:
-                    _LOGGER.debug("Can't pair with Home Assistant Bridge yet: %s", err)
+                    _LOGGER.debug("Can't pair with Raineworks TV Bridge yet: %s", err)
                     continue
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
                     data={**self.config_entry.data, CONF_BRIDGE_TOKEN: token},
                 )
-                _LOGGER.info(
-                    "Paired with Home Assistant Bridge on %s", self.client.host
-                )
+                _LOGGER.info("Paired with Raineworks TV Bridge on %s", self.client.host)
                 if self.data is not None:
                     self.data = replace(self.data, bridge_paired=True)
                     self.async_update_listeners()
@@ -231,7 +229,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             self._bridge_pairing = False
 
     async def async_install_bridge(self, url: str) -> None:
-        """Install (or update) Home Assistant Bridge, allow it, and pair."""
+        """Install (or update) Raineworks TV Bridge, allow it, and pair."""
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(url, timeout=BRIDGE_DOWNLOAD_TIMEOUT) as response:

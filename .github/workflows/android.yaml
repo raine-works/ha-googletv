@@ -1,7 +1,7 @@
-# Builds Home Assistant Bridge (android/) and, on master, publishes the APK to
+# Builds Raineworks TV Bridge (android/) and, on master, publishes the APK to
 # the rolling "tv-bridge-dev" prerelease that the integration can install
 # from for testing (googletv.install_tv_bridge with its URL).
-name: "Home Assistant Bridge app"
+name: "Raineworks TV Bridge app"
 
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
         run: |
           if ! gh release view tv-bridge-dev >/dev/null 2>&1; then
             gh release create tv-bridge-dev --prerelease --target "$GITHUB_SHA" \
-              --title "Home Assistant Bridge (development build)" \
-              --notes "The latest build of Home Assistant Bridge from master, for testing. Install it with the googletv.install_tv_bridge action and this release's APK URL."
+              --title "Raineworks TV Bridge (development build)" \
+              --notes "The latest build of Raineworks TV Bridge from master, for testing. Install it with the googletv.install_tv_bridge action and this release's APK URL."
           fi
           gh release upload tv-bridge-dev raineworks-tv-bridge.apk --clobber

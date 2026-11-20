@@ -1,4 +1,4 @@
-# Home Assistant Bridge API (v1)
+# Raineworks TV Bridge API (v1)
 
 The TV app (`android/`) serves a small JSON API on the local network, which
 the Home Assistant integration (`custom_components/googletv/`) calls.

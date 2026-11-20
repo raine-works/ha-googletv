@@ -137,13 +137,13 @@ a second; every 5 seconds the full read adds the app, volume and inputs (and
 at once when the screen turns on or off, or after a command). Its app list and
 diagnostics every 10 minutes.
 
-### Notifications: Home Assistant Bridge
+### Notifications: Raineworks TV Bridge
 
-**Home Assistant Bridge** is this project's TV app (`android/`): Home
+**Raineworks TV Bridge** is this project's TV app (`android/`): Home
 Assistant's notifications on the TV, as pop-ups over whatever's on screen,
 apps and HDMI inputs alike, or in the TV's notification panel.
 
-* **Install it from Home Assistant**: the **Install Home Assistant Bridge** action
+* **Install it from Home Assistant**: the **Install Raineworks TV Bridge** action
   (`googletv.install_tv_bridge`) on the TV's media player downloads the app
   from the latest release, installs it over ADB, allows its pop-ups (which
   many TVs have no settings screen for) and pairs with it, no code to type.

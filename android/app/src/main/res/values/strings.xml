@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Home Assistant Bridge</string>
-    <string name="app_maker">Raineworks · version %1$s</string>
+    <string name="app_name">Raineworks TV Bridge</string>
+    <string name="app_maker">Version %1$s</string>
     <string name="service_channel">Bridge service</string>
     <string name="service_text">Ready for Home Assistant on port %1$d</string>
     <string name="notification_channel">Home Assistant</string>
@@ -40,7 +40,7 @@
     <string name="position_bottom">Bottom</string>
     <string name="position_bottom_right">Bottom right</string>
     <string name="test_button">Show a test notification</string>
-    <string name="test_title">Home Assistant Bridge</string>
+    <string name="test_title">Raineworks TV Bridge</string>
     <string name="test_message">Notifications from Home Assistant look like this.</string>
 
     <string name="rules_title">Don\'t pop up over</string>

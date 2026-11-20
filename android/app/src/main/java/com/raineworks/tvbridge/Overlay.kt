@@ -310,7 +310,7 @@ class Overlay private constructor(private val context: Context) {
             // TVs crop their edges (overscan): keep clear of them
             x = if (position == "center" || position == "top" || position == "bottom") 0 else dp(EDGE_DP)
             y = if (position == "center") 0 else dp(EDGE_DP)
-            title = "Home Assistant Bridge"
+            title = "Raineworks TV Bridge"
         }
         container.gravity = if (position.endsWith("right")) Gravity.END else Gravity.START
         return try {
