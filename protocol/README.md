@@ -51,7 +51,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `mode` | `popup` | `popup` over what's on screen, `panel` (the notification panel only), or `both` |
 | `position` | the TV's setting (`top_right`) | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
 | `duration` | 8 (20 with a video) | Seconds on screen, 1 to 600 |
-| `size` | the TV's setting (`small`) | `compact` (a one-line pill), `small`, `medium`, `large` |
+| `size` | the TV's setting (`small`) | `compact` (a one-line pill; a video plays in a small tile on it), `small`, `medium`, `large` |
 | `color` | | The pop-up's border, a hex color (`#03A9F4`) |
 | `mute` | `true` | A video's sound off |
 | `tag` | | A pop-up with the same tag replaces it (and `/api/dismiss` takes it down) |

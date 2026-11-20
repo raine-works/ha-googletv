@@ -106,17 +106,38 @@ class Overlay private constructor(private val context: Context) {
         attach(tag, request.position, card.first, card.second, request.durationS)
     }
 
-    /** A one-line pill: the logo (or the image, small), the title and message. */
+    /**
+     * A one-line pill: the logo (or the icon, or the image, small; or the
+     * live video as a small tile), the title and message.
+     */
     private fun compactCard(request: NotificationRequest, image: Bitmap?, iconBitmap: Bitmap?): Pair<View, ExoPlayer?> {
         val pill = cardLayout(LinearLayout.LayoutParams.WRAP_CONTENT, request.color, pill = true).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(16), dp(8))
         }
-        pill.addView(
-            badge(request.color, iconBitmap ?: image, request.icon, 24),
-            LinearLayout.LayoutParams(dp(24), dp(24)),
-        )
+        var player: ExoPlayer? = null
+        val videoUrl = request.videoUrl
+        if (videoUrl != null) {
+            // Live video: a small rounded 16:9 tile where the logo goes
+            val tile = android.widget.FrameLayout(context).apply {
+                background = GradientDrawable().apply {
+                    setColor(Theme.MUTED)
+                    cornerRadius = dp(8).toFloat()
+                }
+                clipToOutline = true
+            }
+            val texture = TextureView(context)
+            tile.addView(texture, android.widget.FrameLayout.LayoutParams(dp(72), dp(40)))
+            pill.addView(tile, LinearLayout.LayoutParams(dp(72), dp(40)))
+            pill.setPadding(dp(6), dp(6), dp(16), dp(6))
+            player = startVideo(videoUrl, texture, request.mute)
+        } else {
+            pill.addView(
+                badge(request.color, iconBitmap ?: image, request.icon, 24),
+                LinearLayout.LayoutParams(dp(24), dp(24)),
+            )
+        }
         val line = listOfNotNull(request.title, request.message).joinToString("  ·  ")
         pill.addView(
             text(line.ifEmpty { context.getString(R.string.app_name) }, 13f, Theme.medium(context), Theme.FOREGROUND, 1).apply {
@@ -124,7 +145,7 @@ class Overlay private constructor(private val context: Context) {
                 setPadding(dp(10), 0, 0, 0)
             },
         )
-        return pill to null
+        return pill to player
     }
 
     /** A card: the image or video on top, then the logo, title and message, then time left. */

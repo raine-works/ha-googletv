@@ -161,7 +161,7 @@ apps and HDMI inputs alike, or in the TV's notification panel.
 | `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
 | `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's own setting when not given |
 | `duration` | Seconds on screen (8, or 20 with a video) |
-| `size` | `compact` (a one-line pill), `small`, `medium`, `large`; the TV's own setting when not given |
+| `size` | `compact` (a one-line pill; a camera or video plays in a small tile on it), `small`, `medium`, `large`; the TV's own setting when not given |
 | `color` | The pop-up's border (`#03A9F4`) |
 | `mute` | A video's sound (off by default) |
 | `tag` | A pop-up with the same tag replaces it; `googletv.dismiss_notifications` takes it down |
