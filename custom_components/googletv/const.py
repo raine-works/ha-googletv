@@ -23,6 +23,8 @@ CONF_BRIDGE_TOKEN = "bridge_token"
 CONF_INSTALL_BRIDGE = "install_tv_app"
 # The TV's own Home Assistant user, and its long-lived token, for dashboards
 CONF_DASHBOARD_USER = "dashboard_user"
+# Option: dashboards on the TV can control devices (else they only show)
+CONF_DASHBOARD_CONTROLS = "dashboard_controls"
 CONF_DASHBOARD_TOKEN = "dashboard_token"
 
 # The RSA key Home Assistant signs in to every TV with, kept in its storage

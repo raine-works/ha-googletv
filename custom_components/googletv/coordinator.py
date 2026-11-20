@@ -8,12 +8,13 @@ import contextlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+import hashlib
 import logging
 from typing import Any
 from uuid import uuid4
 
 import aiohttp
-from homeassistant.auth.const import GROUP_ID_USER
+from homeassistant.auth.const import GROUP_ID_READ_ONLY, GROUP_ID_USER
 from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -39,6 +40,7 @@ from homeassistant.util import dt as dt_util
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
 from .bridge import (
     BRIDGE_APK_URL,
+    BRIDGE_DEV_APK_URL,
     BRIDGE_PACKAGE,
     BRIDGE_PAIRING_FILE,
     BridgeAuthError,
@@ -49,6 +51,7 @@ from .bridge import (
 from .const import (
     APPS_INTERVAL,
     CONF_BRIDGE_TOKEN,
+    CONF_DASHBOARD_CONTROLS,
     CONF_DASHBOARD_TOKEN,
     CONF_DASHBOARD_USER,
     DOMAIN,
@@ -302,6 +305,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 translation_key="bridge_download_failed",
                 translation_placeholders={"error": "not an APK"},
             )
+        await self._async_check_apk(session, url, apk)
         with translate_errors():
             await self.client.async_install_apk(apk)
             # Pop-ups over other apps and its rules' app detection, which TVs
@@ -313,6 +317,41 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if not self.bridge.token:
             await self._async_pair_bridge(attempts=BRIDGE_PAIRING_ATTEMPTS)
         await self.async_request_refresh()
+
+    async def _async_check_apk(
+        self, session: aiohttp.ClientSession, url: str, apk: bytes
+    ) -> None:
+        """The APK as published: its SHA-256 (``<url>.sha256``) must match.
+
+        Required for the project's own releases; an APK from another address
+        is checked when it has one, else installed as asked.
+        """
+        try:
+            async with session.get(
+                f"{url}.sha256", timeout=BRIDGE_DOWNLOAD_TIMEOUT
+            ) as response:
+                published = (
+                    (await response.text()).split()[0].lower()
+                    if response.status == 200
+                    else None
+                )
+        except (aiohttp.ClientError, TimeoutError, IndexError):
+            published = None
+        if published is None:
+            if url in (BRIDGE_APK_URL, BRIDGE_DEV_APK_URL):
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="bridge_download_failed",
+                    translation_placeholders={"error": "no SHA-256 to check it"},
+                )
+            _LOGGER.warning("Installing %s unchecked: it has no SHA-256", url)
+            return
+        if hashlib.sha256(apk).hexdigest() != published:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="bridge_download_failed",
+                translation_placeholders={"error": "its SHA-256 doesn't match"},
+            )
 
     async def async_install_bridge_quietly(self) -> None:
         """Install the app when the TV is added; a failure is only logged."""
@@ -575,9 +614,10 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
     async def _async_dashboard_token(self) -> str:
         """An access token for the TV's own user, made (once) when first needed.
 
-        The user is an ordinary one (not an administrator), local only, named
-        after the TV: it's in Settings → People → Users, where it can be
-        removed. Its long-lived token is made again if it's revoked.
+        The user is local only and named after the TV: it's in Settings →
+        People → Users, where it can be removed. It's read-only (dashboards
+        show, but don't control) unless the TV's options let them control.
+        Its long-lived token is made again if it's revoked.
         """
         async with self._dashboard_lock:
             return await self._async_dashboard_token_locked()
@@ -588,6 +628,11 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         user = None
         if user_id := data.get(CONF_DASHBOARD_USER):
             user = await auth.async_get_user(user_id)
+        group = (
+            GROUP_ID_USER
+            if self.config_entry.options.get(CONF_DASHBOARD_CONTROLS, False)
+            else GROUP_ID_READ_ONLY
+        )
         if user is None:
             # Home Assistant's first user is its owner: never the TV's
             if await auth.async_get_owner() is None:
@@ -596,9 +641,11 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 )
             user = await auth.async_create_user(
                 f"{self.config_entry.title} (TV)",
-                group_ids=[GROUP_ID_USER],
+                group_ids=[group],
                 local_only=True,
             )
+        elif [g.id for g in user.groups] != [group]:
+            await auth.async_update_user(user, group_ids=[group])
         refresh = None
         if token_id := data.get(CONF_DASHBOARD_TOKEN):
             refresh = auth.async_get_refresh_token(token_id)

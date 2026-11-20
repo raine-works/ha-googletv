@@ -24,7 +24,17 @@ object Notifier {
      * for its tag, so an image that loads late can't bring back a pop-up
      * that was dismissed or updated meanwhile.
      */
-    private fun issue(tag: String?): Long = tickets.incrementAndGet().also { if (tag != null) latest[tag] = it }
+    private fun issue(tag: String?): Long = tickets.incrementAndGet().also { if (tag != null) remember(tag, it) }
+
+    /** The latest ticket for [tag], the map kept bounded (a client making up a tag per request). */
+    private fun remember(tag: String, ticket: Long) {
+        // Cleared, a request still loading its images is dropped (no ticket
+        // matches); what's up stays up
+        if (latest.size >= MAX_TAGS && !latest.containsKey(tag)) latest.clear()
+        latest[tag] = ticket
+    }
+
+    private const val MAX_TAGS = 1024
 
     fun isCurrent(tag: String?, ticket: Long): Boolean =
         ticket > dismissedAllAt && (tag == null || latest[tag] == ticket)
@@ -88,7 +98,7 @@ object Notifier {
             latest.clear()
             Overlay.get(context).dismissAll()
         } else {
-            latest[tag] = tickets.incrementAndGet()
+            remember(tag, tickets.incrementAndGet())
             Overlay.get(context).dismiss(tag)
         }
         Notifications.cancel(context, tag)

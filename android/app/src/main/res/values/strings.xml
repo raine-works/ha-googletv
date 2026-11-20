@@ -55,6 +55,8 @@
     <string name="position_bottom_left">Bottom left</string>
     <string name="position_bottom">Bottom</string>
     <string name="position_bottom_right">Bottom right</string>
+    <string name="dashboard_failed">Couldn\'t open the dashboard</string>
+    <string name="dashboard_certificate">The TV doesn\'t trust Home Assistant\'s certificate (self-signed?). Set Home Assistant\'s local network address to its http:// address, in Settings → System → Network.</string>
     <string name="player_untitled">Playing from Home Assistant</string>
     <string name="player_from">From Home Assistant</string>
     <string name="more_popups">+%1$d more</string>

@@ -144,7 +144,7 @@ class Overlay private constructor(private val context: Context) {
         val texture = built.texture
         if (player != null && texture != null && card.videoUrl == request.videoUrl) {
             player.setVideoTextureView(texture)
-            player.volume = if (request.mute) 0f else 1f
+            sound(player, request.mute)
         } else {
             player?.release()
             card.player = texture?.let { startVideo(request.videoUrl!!, it, request.mute) }
@@ -345,13 +345,28 @@ class Overlay private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * A pop-up's sound: none, or heard over what's on, which ducks as for a
+     * notification (audio focus, held while it plays).
+     */
+    private fun sound(player: ExoPlayer, mute: Boolean) {
+        player.volume = if (mute) 0f else 1f
+        player.setAudioAttributes(
+            androidx.media3.common.AudioAttributes.Builder()
+                .setUsage(androidx.media3.common.C.USAGE_NOTIFICATION_EVENT)
+                .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            !mute,
+        )
+    }
+
     private fun startVideo(url: String, view: TextureView, mute: Boolean): ExoPlayer {
         val item = MediaItem.Builder().setUri(Uri.parse(url)).apply {
             if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
         return ExoPlayer.Builder(context).build().apply {
             setVideoTextureView(view)
-            volume = if (mute) 0f else 1f
+            sound(this, mute)
             repeatMode = Player.REPEAT_MODE_ONE
             addListener(
                 object : Player.Listener {

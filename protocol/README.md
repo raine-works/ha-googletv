@@ -11,7 +11,8 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 * **Auth**: every endpoint but `GET /api/info` and the two pairing ones needs
   `Authorization: Bearer <token>`. A missing or unknown token is `401`.
 * **Errors**: a bad request is `400`, a wrong pairing code `403`, an unknown
-  endpoint `404`; the body is `{"error": "<message>"}`.
+  endpoint `404`, a body sent without a `Content-Length` `411`; the body is
+  `{"error": "<message>"}`.
 
 ## Pairing
 
@@ -26,7 +27,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
    `{"token": "…"}`, or `403`. A code works for 5 minutes and 5 tries.
    10 wrong codes in 10 minutes, across pairings, lock pairing for 10
    minutes: `/api/pair/start` answers `429` (tokens already given keep
-   working).
+   working). It also answers `429` to more than one start a second.
 
 `POST /api/unpair` forgets the calling token.
 
@@ -42,7 +43,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules |
 | `POST /api/notify` | shows a notification; see below |
 | `POST /api/play` | Plays media; see below |
-| `POST /api/dashboard` | `{url, token}`: a Home Assistant dashboard full screen, signed in with `token` (the frontend's external auth, as Home Assistant's phone apps do). It stays on `url`'s address (scheme, host, port): links elsewhere aren't followed, and the token is given only to a page from there. It closes on Back from its first page, or when another app comes to the front |
+| `POST /api/dashboard` | `{url, token}`: a Home Assistant dashboard full screen, signed in with `token` (the frontend's external auth, as Home Assistant's phone apps do). It stays on `url`'s address (scheme, host, port): links elsewhere aren't followed, and the token is given only to a page from there. It closes on Back from its first page, or when another app comes to the front. A page that can't load (an untrusted certificate) shows why |
 | `POST /api/stop` | Closes the player and the dashboard, and stops announcing |
 | `POST /api/dismiss` | `{tag}` takes that notification down, from the screen and the panel; no tag takes them all down (but a pairing code) |
 

@@ -7,6 +7,7 @@ from Google Play, iTunes and TVmaze (``tests/fixtures``).
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 import json
 import pathlib
 from unittest.mock import AsyncMock, patch
@@ -1182,7 +1183,9 @@ async def test_install_tv_bridge(
 
     entry = await _set_up(hass, client)
     _bridge_web(web)
-    web.get(BRIDGE_DEV_APK_URL, content=b"PK\x03\x04 an apk" * 50000)
+    apk = b"PK\x03\x04 an apk" * 50000
+    web.get(BRIDGE_DEV_APK_URL, content=apk)
+    web.get(f"{BRIDGE_DEV_APK_URL}.sha256", text=hashlib.sha256(apk).hexdigest() + "\n")
     client.async_read_file.return_value = "p1 123456\n"
     client.async_get_apps.return_value = [*APPS, BRIDGE_APP]
     with patch("custom_components.googletv.coordinator.BRIDGE_PAIRING_RETRY_S", 0):
@@ -1375,6 +1378,8 @@ async def test_a_dashboard_signs_in_as_the_tvs_own_user(
     user = await hass.auth.async_get_user(entry.data[CONF_DASHBOARD_USER])
     assert user.name == "Lott's TV (TV)"
     assert not user.is_admin
+    # Read-only unless the TV's options let dashboards control devices
+    assert [g.id for g in user.groups] == ["system-read-only"]
     assert not user.is_owner
     assert user.local_only
     # One user and one token, however often it's shown
@@ -1382,6 +1387,23 @@ async def test_a_dashboard_signs_in_as_the_tvs_own_user(
     refresh = hass.auth.async_get_refresh_token(entry.data[CONF_DASHBOARD_TOKEN])
     assert refresh.token_type == "long_lived_access_token"
     assert hass.auth.async_validate_access_token(call[2]["token"]).user.id == user.id
+    # Allowed to control: the same user, in the users' group
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        hass.config_entries.async_update_entry(
+            entry, options={"online_lookups": True, "dashboard_controls": True}
+        )
+        await hass.async_block_till_done()
+    await hass.services.async_call(
+        DOMAIN,
+        "show_dashboard",
+        {"entity_id": "media_player.lott_s_tv"},
+        blocking=True,
+    )
+    user = await hass.auth.async_get_user(entry.data[CONF_DASHBOARD_USER])
+    assert [g.id for g in user.groups] == ["system-users"]
+    assert len(user.refresh_tokens) == 1
     # Removing the TV removes its user, and the app forgets Home Assistant
     web.post(f"{BRIDGE}/api/dismiss", json={"ok": True})
     await hass.config_entries.async_remove(entry.entry_id)
@@ -1397,6 +1419,10 @@ async def test_the_app_installs_when_asked_at_setup(
 
     _bridge_web(web)
     web.get(BRIDGE_APK_URL, content=b"PK\x03\x04 an apk")
+    web.get(
+        f"{BRIDGE_APK_URL}.sha256",
+        text=hashlib.sha256(b"PK\x03\x04 an apk").hexdigest(),
+    )
     client.async_read_file.return_value = "p1 123456\n"
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -1417,6 +1443,37 @@ async def test_the_app_installs_when_asked_at_setup(
     client.async_install_apk.assert_awaited_once_with(b"PK\x03\x04 an apk")
     # Once: not again at the next start
     assert "install_tv_app" not in entry.data
+
+
+@pytest.mark.parametrize(
+    ("published", "error"),
+    [(None, "no SHA-256"), ("0" * 64, "doesn't match")],
+)
+async def test_an_apk_that_isnt_as_published_isnt_installed(
+    hass: HomeAssistant,
+    client: AsyncMock,
+    web: AiohttpClientMocker,
+    published: str | None,
+    error: str,
+) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.googletv.bridge import BRIDGE_APK_URL
+
+    await _set_up(hass, client)
+    web.get(BRIDGE_APK_URL, content=b"PK\x03\x04 an apk")
+    if published:
+        web.get(f"{BRIDGE_APK_URL}.sha256", text=published)
+    else:
+        web.get(f"{BRIDGE_APK_URL}.sha256", status=404)
+    with pytest.raises(HomeAssistantError, match=error):
+        await hass.services.async_call(
+            DOMAIN,
+            "install_tv_bridge",
+            {"entity_id": "media_player.lott_s_tv"},
+            blocking=True,
+        )
+    client.async_install_apk.assert_not_awaited()
 
 
 async def test_a_forgotten_pairing_pairs_again(

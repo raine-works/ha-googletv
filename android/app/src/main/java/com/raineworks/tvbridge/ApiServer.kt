@@ -16,8 +16,12 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     private val prefs = Prefs(context)
 
+    private class LengthRequired : RuntimeException()
+
     override fun serve(session: IHTTPSession): Response = try {
         route(session)
+    } catch (e: LengthRequired) {
+        error(Response.Status.LENGTH_REQUIRED, "Send the body with a Content-Length")
     } catch (e: IllegalArgumentException) {
         error(Response.Status.BAD_REQUEST, e.message ?: "Bad request")
     } catch (e: JSONException) {
@@ -35,6 +39,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
             method == Method.GET && path == "/api/info" -> return json(info())
             method == Method.POST && path == "/api/pair/start" -> {
                 if (Pairing.locked()) return error(Response.Status.TOO_MANY_REQUESTS, "Too many wrong codes: try again later")
+                if (!Pairing.mayStart()) return error(Response.Status.TOO_MANY_REQUESTS, "One pairing a second")
                 val body = body(session)
                 val via = body.optString("via", Pairing.VIA_SCREEN)
                 require(via == Pairing.VIA_SCREEN || via == Pairing.VIA_ADB) { "via must be screen or adb" }
@@ -154,6 +159,9 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     /** The request's JSON body (UTF-8, at most 64 KB). */
     private fun body(session: IHTTPSession): JSONObject {
+        if (session.headers["content-length"] == null && session.headers["transfer-encoding"] != null) {
+            throw LengthRequired()
+        }
         val length = session.headers["content-length"]?.toIntOrNull() ?: 0
         require(length in 0..MAX_BODY) { "Body too large" }
         if (length == 0) return JSONObject()

@@ -327,7 +327,8 @@ async def test_options_turn_lookups_off(hass: HomeAssistant) -> None:
             result["flow_id"], {CONF_ONLINE_LOOKUPS: False}
         )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {CONF_ONLINE_LOOKUPS: False}
+    # Dashboards on the TV only show unless allowed to control
+    assert entry.options == {CONF_ONLINE_LOOKUPS: False, "dashboard_controls": False}
 
 
 async def test_reconfigure_a_new_address(hass: HomeAssistant) -> None:

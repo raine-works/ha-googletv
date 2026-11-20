@@ -53,6 +53,24 @@ class DashboardActivity : Activity() {
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                     pageUrl = url
                 }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: android.webkit.WebResourceError,
+                ) {
+                    if (request.isForMainFrame) failed(error.description.toString())
+                }
+
+                override fun onReceivedSslError(
+                    view: WebView,
+                    handler: android.webkit.SslErrorHandler,
+                    error: android.net.http.SslError,
+                ) {
+                    // Not trusted (a self-signed certificate): said, not shown blank
+                    handler.cancel()
+                    failed(getString(R.string.dashboard_certificate))
+                }
             }
             addJavascriptInterface(Bridge(), "externalApp")
         }
@@ -108,6 +126,30 @@ class DashboardActivity : Activity() {
         pageUrl = url
         val separator = if ('?' in url) '&' else '?'
         web.loadUrl("$url${separator}external_auth=1")
+    }
+
+    /** Why the dashboard couldn't open, in place of a blank page. */
+    private fun failed(reason: String) {
+        Log.w(TAG, "Couldn't open the dashboard: $reason")
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            setBackgroundColor(Theme.BACKGROUND)
+            setPadding(Theme.dp(this@DashboardActivity, 96), 0, Theme.dp(this@DashboardActivity, 96), 0)
+        }
+        fun line(text: String, sp: Float, color: Int, face: android.graphics.Typeface) =
+            android.widget.TextView(this).apply {
+                this.text = text
+                setTextColor(color)
+                textSize = sp
+                typeface = face
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, Theme.dp(this@DashboardActivity, 6), 0, Theme.dp(this@DashboardActivity, 6))
+            }
+        box.addView(line(getString(R.string.dashboard_failed), 26f, Theme.FOREGROUND, Theme.semibold(this)))
+        box.addView(line(reason, 16f, Theme.MUTED_FOREGROUND, Theme.regular(this)))
+        token = ""
+        setContentView(box)
     }
 
     /** Only for a page on Home Assistant's own address. */

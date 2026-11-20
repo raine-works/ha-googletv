@@ -40,7 +40,13 @@ import voluptuous as vol
 from . import async_get_client
 from .adb import GoogleTvAuthError, GoogleTvError
 from .bridge import BRIDGE_SERVICE_TYPE
-from .const import CONF_INSTALL_BRIDGE, CONF_ONLINE_LOOKUPS, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_DASHBOARD_CONTROLS,
+    CONF_INSTALL_BRIDGE,
+    CONF_ONLINE_LOOKUPS,
+    DEFAULT_PORT,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -342,7 +348,7 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class GoogleTvOptionsFlow(OptionsFlow):
-    """Whether the TV looks up app icons and artwork online."""
+    """Online lookups, and whether dashboards on the TV can control devices."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -350,10 +356,19 @@ class GoogleTvOptionsFlow(OptionsFlow):
         """Show the options."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
-        current = self.config_entry.options.get(CONF_ONLINE_LOOKUPS, True)
+        options = self.config_entry.options
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
-                {vol.Required(CONF_ONLINE_LOOKUPS, default=current): bool}
+                {
+                    vol.Required(
+                        CONF_ONLINE_LOOKUPS,
+                        default=options.get(CONF_ONLINE_LOOKUPS, True),
+                    ): bool,
+                    vol.Required(
+                        CONF_DASHBOARD_CONTROLS,
+                        default=options.get(CONF_DASHBOARD_CONTROLS, False),
+                    ): bool,
+                }
             ),
         )

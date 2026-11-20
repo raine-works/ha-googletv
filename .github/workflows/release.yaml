@@ -34,8 +34,10 @@ jobs:
             echo "Release $tag already exists; nothing to do."
             exit 0
           fi
-          gh release create "$tag" --target "$SHA" --title "$tag" --generate-notes
+          # A draft until the TV app is attached: "latest" never lacks it
+          gh release create "$tag" --target "$SHA" --title "$tag" --generate-notes --draft
           echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # The TV app, built from the same commit, attached to the
       # release (the integration installs it from there)
@@ -56,5 +58,8 @@ jobs:
         run: |
           ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk raineworks-tv-bridge.apk
-          version=$(jq -r .version ../custom_components/googletv/manifest.json)
-          gh release upload "v${version}" raineworks-tv-bridge.apk --clobber
+          # Its SHA-256, which Home Assistant checks before installing it
+          sha256sum raineworks-tv-bridge.apk | cut -d' ' -f1 > raineworks-tv-bridge.apk.sha256
+          gh release upload "${{ steps.release.outputs.tag }}" \
+            raineworks-tv-bridge.apk raineworks-tv-bridge.apk.sha256 --clobber
+          gh release edit "${{ steps.release.outputs.tag }}" --draft=false --latest

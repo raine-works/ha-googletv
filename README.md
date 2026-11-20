@@ -230,11 +230,13 @@ While Home Assistant's media plays, the media player shows it like any app's
 (title, playing or paused), and the remote's play and pause keys work.
 
 **Dashboards sign in as the TV's own user.** The first time you show one,
-the integration makes an ordinary (not administrator), local-only Home
-Assistant user named after the TV, "Living Room TV (TV)", with a long-lived
-token the TV app uses. It's in Settings → People → Users, where you can
-remove it; removing the TV removes it too. Like any user, it can see and
-control your devices.
+the integration makes a local-only Home Assistant user named after the TV,
+"Living Room TV (TV)", with a long-lived token the TV app uses. It's
+**read-only**: dashboards on the TV show your home but can't switch
+anything. To let them control devices, turn on **Dashboards on the TV can
+control devices** in the TV's options (Settings → Devices & services →
+Google TV by Raineworks → Configure). The user is in Settings → People →
+Users, where you can remove it; removing the TV removes it too.
 
 **Replacing Google Cast**: everything Home Assistant used Cast for on the
 TV works here, so you can remove the Google Cast integration's entries for
@@ -385,6 +387,8 @@ actions:
   Configure) to keep everything on your network.
 * **ADB.** Home Assistant signs in to every TV with one key, kept in
   `.storage/googletv_adbkey`; each TV trusts it once.
+* **Installing the TV app**, Home Assistant checks the download against
+  the SHA-256 published with each release before it goes on the TV.
 * **The TV app** pairs with Home Assistant over ADB, so no code is shown or
   typed; every request after that carries its token. Ten wrong pairing
   codes lock pairing for ten minutes. Removing the TV from Home Assistant

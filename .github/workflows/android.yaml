@@ -39,8 +39,10 @@ jobs:
       - name: Build
         run: ./gradlew --no-daemon assembleRelease lintRelease
 
-      - name: Keep the APK
-        run: cp app/build/outputs/apk/release/app-release.apk raineworks-tv-bridge.apk
+      - name: Keep the APK, and its SHA-256 (Home Assistant checks it)
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk raineworks-tv-bridge.apk
+          sha256sum raineworks-tv-bridge.apk | cut -d' ' -f1 > raineworks-tv-bridge.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
@@ -65,4 +67,4 @@ jobs:
               --title "Google TV by Raineworks: TV app (development build)" \
               --notes "The latest build of the TV app from master, for testing. Install it with the googletv.install_tv_bridge action and this release's APK URL."
           fi
-          gh release upload tv-bridge-dev raineworks-tv-bridge.apk --clobber
+          gh release upload tv-bridge-dev raineworks-tv-bridge.apk raineworks-tv-bridge.apk.sha256 --clobber

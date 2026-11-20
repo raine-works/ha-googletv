@@ -70,10 +70,12 @@
       "init": {
         "title": "Google TV options",
         "data": {
-          "online_lookups": "Look up app icons and artwork online"
+          "online_lookups": "Look up app icons and artwork online",
+          "dashboard_controls": "Dashboards on the TV can control devices"
         },
         "data_description": {
-          "online_lookups": "Names and icons of the TV's apps from Google Play, and covers and posters for what's playing from iTunes and TVmaze. Off keeps everything on your network."
+          "online_lookups": "Names and icons of the TV's apps from Google Play, and covers and posters for what's playing from iTunes and TVmaze. Off keeps everything on your network.",
+          "dashboard_controls": "Dashboards shown on the TV sign in as the TV's own user. Off, it's read-only: they show your home, but can't switch anything. On, they can control devices like any user."
         }
       }
     }
@@ -318,7 +320,7 @@
     },
     "show_dashboard": {
       "name": "Show a dashboard",
-      "description": "Shows a Home Assistant dashboard full screen on the TV, through the TV app. It signs in as the TV's own user (made the first time, in Settings → People → Users). Back, or the media player's stop, closes it.",
+      "description": "Shows a Home Assistant dashboard full screen on the TV, through the TV app. It signs in as the TV's own user (made the first time, in Settings → People → Users): read-only unless the TV's options let dashboards control devices. Back, or the media player's stop, closes it.",
       "fields": {
         "dashboard": {
           "name": "Dashboard",

@@ -28,6 +28,17 @@ object Pairing {
     private val failures = ArrayDeque<Long>()
     private var lockedUntil = 0L
 
+    private var lastStart = 0L
+
+    /** One pairing started a second: no flood of codes on screen, or of pairings evicting a real one. */
+    @Synchronized
+    fun mayStart(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastStart < 1000) return false
+        lastStart = now
+        return true
+    }
+
     /** Pairing is locked a while after too many wrong codes (a guess at every code takes ~1M). */
     @Synchronized
     fun locked(): Boolean = System.currentTimeMillis() < lockedUntil
