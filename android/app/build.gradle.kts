@@ -20,16 +20,23 @@ val gitSha: String = try {
 
 android {
     namespace = "com.raineworks.tvbridge"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.raineworks.tvbridge"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
         versionName = integrationVersion
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
     }
+
+    // A Google Play build (`./gradlew bundleRelease -Pplay`) is signed with the
+    // private upload key (never the sideload key in this repo): its keystore
+    // and passwords come from the environment, as CI's secrets give them.
+    // Google Play re-signs it with the app's own key (Play App Signing), so a
+    // Play install and a sideloaded one can't update each other.
+    val play = providers.gradleProperty("play").isPresent
 
     signingConfigs {
         // Sideloaded builds (installed by the integration over ADB, or by
@@ -44,10 +51,19 @@ android {
         }
     }
 
+    if (play) {
+        signingConfigs.create("upload") {
+            storeFile = file(System.getenv("UPLOAD_KEYSTORE") ?: error("UPLOAD_KEYSTORE isn't set"))
+            storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("UPLOAD_KEY_ALIAS") ?: "upload"
+            keyPassword = System.getenv("UPLOAD_KEY_PASSWORD") ?: System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("sideload")
+            signingConfig = signingConfigs.getByName(if (play) "upload" else "sideload")
         }
         debug {
             signingConfig = signingConfigs.getByName("sideload")

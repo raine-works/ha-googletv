@@ -1,0 +1,85 @@
+# Builds the TV app for Google Play: an app bundle signed with the private
+# upload key (never the sideload key in the repo), and, given a Play service
+# account, uploads it to the internal testing track as a draft (promoted in
+# the Play Console; a new app's first release is made there). Runs after the
+# Release workflow (a release made with GITHUB_TOKEN triggers no workflow
+# itself), or by hand. Without the secrets it says so and stops.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   UPLOAD_KEYSTORE_BASE64    the upload keystore (.jks), base64
+#   UPLOAD_KEYSTORE_PASSWORD  its password (and the key's, unless:)
+#   UPLOAD_KEY_PASSWORD       the key's password, if it differs
+#   UPLOAD_KEY_ALIAS          the key's alias, if not "upload"
+#   PLAY_SERVICE_ACCOUNT_JSON a Play Console service account (to upload)
+name: "Google Play"
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Signed bundle
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    env:
+      HAS_KEY: ${{ secrets.UPLOAD_KEYSTORE_BASE64 != '' }}
+      HAS_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - name: No upload key yet
+        if: env.HAS_KEY != 'true'
+        working-directory: .
+        run: |
+          echo "::notice::No UPLOAD_KEYSTORE_BASE64 secret: no Google Play build. See PLAY_STORE.md."
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_KEY == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-java@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: env.HAS_KEY == 'true'
+
+      - name: Build the bundle
+        if: env.HAS_KEY == 'true'
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+        run: |
+          export UPLOAD_KEYSTORE="$RUNNER_TEMP/upload.jks"
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$UPLOAD_KEYSTORE"
+          ./gradlew --no-daemon bundleRelease -Pplay
+          rm -f "$UPLOAD_KEYSTORE"
+
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          name: google-tv-by-raineworks-play
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload to the internal testing track
+        if: env.HAS_KEY == 'true' && env.HAS_PLAY == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.raineworks.tvbridge
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: draft

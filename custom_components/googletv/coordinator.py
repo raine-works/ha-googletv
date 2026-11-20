@@ -388,7 +388,14 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             self._bridge_pairing = False
 
     async def async_install_bridge(self, url: str) -> None:
-        """Install (or update) the TV app, allow it, and pair."""
+        """Install (or update) the TV app, allow it, and pair.
+
+        Not over one from Google Play: it's signed differently (Play updates it).
+        """
+        if await self._async_bridge_from_play():
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="bridge_from_play"
+            )
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(url, timeout=BRIDGE_DOWNLOAD_TIMEOUT) as response:
@@ -431,6 +438,23 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if not self.bridge.token:
             await self._async_pair_bridge(attempts=BRIDGE_PAIRING_ATTEMPTS)
         await self.async_request_refresh()
+
+    async def _async_bridge_from_play(self) -> bool:
+        """The installed TV app came from Google Play."""
+        if not self.bridge_installed or self.app_only:
+            return self.app_only
+        try:
+            listing = await self.client.async_shell(
+                f"pm list packages -i {BRIDGE_PACKAGE}"
+            )
+        except GoogleTvError:
+            return False
+        return any(
+            line.split()[0] == f"package:{BRIDGE_PACKAGE}"
+            and "installer=com.android.vending" in line
+            for line in listing.splitlines()
+            if line.strip()
+        )
 
     async def _async_check_apk(
         self, session: aiohttp.ClientSession, url: str, apk: bytes

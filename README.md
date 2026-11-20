@@ -55,7 +55,11 @@ connected through its app at any time.
 
 1. **Install the TV app** on the TV and open it. Its screen shows the way:
    a QR code that opens the integration in HACS on your phone, then the
-   step below.
+   step below. Google Play is coming; until then, install the Downloader
+   app from Google Play and open
+   `https://github.com/raine-works/ha-googletv/releases/latest/download/raineworks-tv-bridge.apk`
+   in it (no developer options; Android asks once to let Downloader
+   install apps).
 2. **Add the TV.** It appears in Home Assistant under Settings → Devices &
    services → **Discovered**. Choose **Add**, then **Submit**.
 3. **Choose Allow on the TV**, when it asks "Allow Home Assistant to

@@ -1807,3 +1807,22 @@ async def test_a_tv_over_adb_without_the_app_offers_to_install_it(
         ir.async_get(hass).async_get_issue(DOMAIN, f"install_tv_app_{entry.entry_id}")
         is None
     )
+
+
+async def test_the_tv_app_from_google_play_isnt_installed_over(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    await _paired(hass, client, web)
+    client.async_shell.return_value = (
+        "package:com.raineworks.tvbridge  installer=com.android.vending\n"
+    )
+    with pytest.raises(HomeAssistantError, match="from Google Play"):
+        await hass.services.async_call(
+            DOMAIN,
+            "install_tv_bridge",
+            {"entity_id": "media_player.lott_s_tv"},
+            blocking=True,
+        )
+    client.async_install_apk.assert_not_awaited()

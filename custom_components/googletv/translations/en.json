@@ -249,6 +249,9 @@
     },
     "needs_adb": {
       "message": "{error}. This TV is connected through its app alone: turn on network debugging on the TV (the TV app's screen shows how), then Reconfigure the TV in Home Assistant and choose Connect over ADB."
+    },
+    "bridge_from_play": {
+      "message": "The TV app on this TV is from Google Play, which keeps it up to date. Home Assistant doesn't install over it."
     }
   },
   "services": {
