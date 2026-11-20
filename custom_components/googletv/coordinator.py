@@ -16,6 +16,7 @@ from uuid import uuid4
 import aiohttp
 from homeassistant.auth.const import GROUP_ID_READ_ONLY, GROUP_ID_USER
 from homeassistant.auth.models import TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import (
@@ -38,10 +39,12 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
+from yarl import URL
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
 from .app_client import AppClient, NeedsAdbError
@@ -96,6 +99,13 @@ EVENTS_RETRY_S = 5
 EVENTS_MAX_RETRY_S = 300
 # Fired on Home Assistant's bus for each event from the TV
 EVENT_TYPE = f"{DOMAIN}_event"
+
+# Home Assistant URLs sent to the TV are signed for this long: it loads each
+# file once (a clip, downloaded whole before it plays)
+SIGNED_URL_LIFETIME = timedelta(minutes=15)
+SIGNED_QUERY = "authSig"
+# Paths that carry their own access token (a camera's live stream)
+SELF_SIGNED_PATHS = ("/api/hls/",)
 
 # How long the TV's dashboard token lasts (it's made again if revoked)
 DASHBOARD_TOKEN_LIFETIME = timedelta(days=3650)
@@ -861,7 +871,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 context["input"] = state.input.id
             payload = {"context": context, **payload}
         try:
-            reply = await self.bridge.async_notify(payload)
+            reply = await self.bridge.async_notify(self._signed(payload))
         except BridgeAuthError as err:
             self._forget_pairing()
             raise HomeAssistantError(
@@ -878,6 +888,47 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if self._bridge_instance is None:
             self._bridge_instance = reply.get("instance")
         return reply
+
+    def _signed(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """The payload with its Home Assistant URLs signed, for the TV to load.
+
+        The TV fetches images, clips and icons with no sign-in, so a path
+        that needs one (/media/local/…, a UniFi Protect clip) is signed, for
+        a while, as Home Assistant's read-only content user. Only the copy
+        sent is: a live notification keeps its URLs as given, and is signed
+        afresh each time it's shown again.
+        """
+        bases = set()
+        for external in (False, True):
+            with contextlib.suppress(NoURLAvailableError):
+                bases.add(
+                    get_url(
+                        self.hass,
+                        allow_internal=not external,
+                        allow_external=external,
+                    ).rstrip("/")
+                )
+        signed = dict(payload)
+        for key in ("image_url", "video_url", "icon"):
+            url = payload.get(key)
+            if not isinstance(url, str):
+                continue
+            base = next((b for b in bases if url.startswith(f"{b}/")), None)
+            if base is None:
+                continue
+            path = url.removeprefix(base)
+            query = URL(path).query
+            if (
+                SIGNED_QUERY in query
+                or "token" in query
+                or path.startswith(SELF_SIGNED_PATHS)
+            ):
+                # Signed already: by a token (the camera proxy), or in its path
+                continue
+            signed[key] = base + async_sign_path(
+                self.hass, path, SIGNED_URL_LIFETIME, use_content_user=True
+            )
+        return signed
 
     async def async_dismiss(self, tag: str | None = None) -> None:
         """Take a notification (by tag), or all of them, off the TV."""

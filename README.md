@@ -138,7 +138,7 @@ Each TV is a device with these entities.
 | State | `off` (asleep), `playing` / `paused` (what the front app reports), else `on` |
 | Sources | Every app in the TV's launcher, then its HDMI inputs, by their names on the TV ("Xbox"; "HDMI 2" when unnamed). `source` is the input on screen, else the app in front. A device on HDMI-CEC's own input counts as its port's input |
 | Now playing | Title, artist or show and position, from the TV's media sessions, with no Cast needed |
-| Artwork | A song's cover (iTunes), a show's poster (TVmaze) or a film's poster (Google Play, else Wikipedia), else the app's icon |
+| Artwork | A song's cover (iTunes), a show's poster (TVmaze) or a film's poster (Google Play, else Wikipedia), else the app's icon. On an HDMI input: its icon on its colour (an Xbox's logo on Xbox green), with the input's name as the title |
 | Volume | The TV's media volume as a level: set, step, mute |
 | Controls | Turn on / off, play, pause, stop, next, previous, select source |
 | Media | Browse and play Home Assistant's media, announcements, and apps, inputs and links: see [Media and dashboards](#media-and-dashboards) |
@@ -237,9 +237,15 @@ top right. The **`googletv.notify`** action does the rest:
 | :--- | :--- |
 | `message`, `title` | The text |
 | `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Raineworks TV logo if not set |
-| `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`) |
+
+Home Assistant paths, and URLs on Home Assistant's own address, are signed
+for 15 minutes as Home Assistant's read-only content user before they go to
+the TV, so ones that need a sign-in (media, UniFi Protect clips) load. The
+camera proxy and camera streams carry their own tokens and are sent as they
+are; a live notification is signed afresh each time it's shown again.
+| `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`, `/media/local/snapshot.jpg`). With a `video`, it shows until the video's first frame: a doorbell's snapshot, then its clip |
 | `camera_entity` | A camera's live stream (`camera_view: live`, the default) or a snapshot |
-| `video` | A video or live stream URL (HLS, RTSP, MP4) |
+| `video` | A video or live stream URL (HLS, RTSP, MP4), or a Home Assistant path (a UniFi Protect clip, `/api/unifiprotect/video/…`). A clip is downloaded whole, then loops from the TV; a stream plays as it comes |
 | `size` | `compact` (a one-line pill; a camera plays in a small tile on it), `small`, `medium`, `large`; the TV's setting if not given |
 | `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's setting if not given |
 | `duration` | Seconds on screen (8, or 20 with a video); `0` keeps it up until it's dismissed |

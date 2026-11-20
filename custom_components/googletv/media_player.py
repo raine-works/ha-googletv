@@ -32,6 +32,7 @@ from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
+from .artwork import input_artwork
 from .bridge import BRIDGE_APK_URL, BRIDGE_DEV_APK_URL, BRIDGE_PACKAGE
 from .const import DOMAIN
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, translate_errors
@@ -162,6 +163,10 @@ NOTIFY_SCHEMA = {
     vol.Optional("ignore_rules"): cv.boolean,
     vol.Optional("when_blocked"): vol.In(["panel", "drop"]),
 }
+
+
+# media_image_url for an input's artwork (not fetched: drawn)
+INPUT_ARTWORK = "googletv-input:"
 
 
 class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
@@ -303,14 +308,22 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
 
     @property
     def media_title(self) -> str | None:
-        """The title of what's playing, as its app reports it."""
-        playing = self._state.now_playing if self._state.awake else None
+        """The title of what's playing, as its app reports it; else the input on."""
+        if not self._state.awake:
+            return None
+        if self._state.input:
+            return self._state.input.label
+        playing = self._state.now_playing
         return playing.title if playing else None
 
     @property
     def media_artist(self) -> str | None:
-        """The show, channel or artist."""
-        playing = self._state.now_playing if self._state.awake else None
+        """The show, channel or artist; on an input, what its device calls itself."""
+        if not self._state.awake:
+            return None
+        if (tv_input := self._state.input) is not None:
+            return tv_input.device if tv_input.device != tv_input.label else None
+        playing = self._state.now_playing
         return playing.subtitle if playing else None
 
     @property
@@ -323,15 +336,29 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
 
     @property
     def media_image_url(self) -> str | None:
-        """What's playing's cover or poster, else its app's icon."""
+        """What's playing's cover or poster, else its app's icon.
+
+        On an input, its artwork (``async_get_media_image`` draws it): this
+        names it, so the picture changes with the input.
+        """
         state = self._state
-        if not state.awake or state.input:
+        if not state.awake:
             return None
+        if state.input:
+            return f"{INPUT_ARTWORK}{state.input.kind.key}/{state.input.icon}"
         if self.coordinator.data.artwork:
             return self.coordinator.data.artwork
         playing = state.now_playing
         app = self._app(playing.package if playing else state.app)
         return app.icon if app else None
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        """The input's artwork, drawn here; anything else, fetched."""
+        url = self.media_image_url
+        if url and url.startswith(INPUT_ARTWORK):
+            kind, icon = url.removeprefix(INPUT_ARTWORK).split("/", 1)
+            return input_artwork(kind, icon), "image/svg+xml"
+        return await super().async_get_media_image()
 
     @property
     def media_position(self) -> int | None:

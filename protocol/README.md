@@ -71,8 +71,8 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | :--- | :--- | :--- |
 | `title`, `message` | | Text; at least one of these, `image_url` or `video_url` |
 | `icon` | | The badge: `mdi:<name>` (Material Design Icons 7.4.47, bundled) or an http(s) image URL; the logo if not set |
-| `image_url` | | An image (http/https only), shown on the pop-up and in the panel |
-| `video_url` | | A video or live stream (http/https, HLS `.m3u8`, rtsp), played on the pop-up: a doorbell camera |
+| `image_url` | | An image (http/https only), shown on the pop-up and in the panel; with `video_url`, the video's poster until its first frame |
+| `video_url` | | A video or live stream (http/https, HLS `.m3u8`, rtsp), played on the pop-up: a doorbell camera. A stream (HLS, rtsp) plays as it comes; anything else is a clip, downloaded whole first (up to 3 tries; a response that ends short is kept when it's a complete MP4), then looped from the file, which goes when the pop-up does |
 | `mode` | `popup` | `popup` over what's on screen, `panel` (the notification panel only), or `both` |
 | `position` | the TV's setting (`top_right`) | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
 | `duration` | 8 (20 with a video) | Seconds on screen, 1 to 600; `0` until it's dismissed (in the panel, it can't be swiped away) |

@@ -930,7 +930,10 @@ async def test_the_notify_action(
         return_response=True,
     )
     call = _bridge_calls(web, "/api/notify")[-1]
-    assert call[2]["image_url"] == "http://192.168.1.2:8123/local/doorbell.jpg"
+    # Signed, for the TV to load it without signing in
+    assert call[2]["image_url"].startswith(
+        "http://192.168.1.2:8123/local/doorbell.jpg?authSig="
+    )
     assert call[2]["icon"] == "mdi:doorbell"
     assert (call[2]["position"], call[2]["duration"], call[2]["size"]) == (
         "bottom_right",
@@ -2068,3 +2071,68 @@ async def test_an_app_uninstalled_on_the_tv_goes_at_once(
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=11))
     await hass.async_block_till_done()
     assert hass.states.get("button.lott_s_tv_app_netflix") is not None
+
+
+async def test_an_input_on_screen_has_its_artwork(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker, hass_client
+) -> None:
+    """On the Xbox: its name as the title, and its icon on Xbox green."""
+    await _set_up(hass, client)
+    tv = hass.states.get("media_player.lott_s_tv")
+    assert tv.attributes["media_title"] == "Xbox"
+    picture = tv.attributes["entity_picture"]
+    assert picture.startswith("/api/media_player_proxy/media_player.lott_s_tv")
+    response = await (await hass_client()).get(picture)
+    assert response.status == 200
+    assert response.headers["Content-Type"].startswith("image/svg+xml")
+    svg = await response.text()
+    assert "#107C10" in svg and svg.startswith("<svg")
+
+
+def _signed_by(url: str) -> dict:
+    """The claims of a URL's authSig (not checked: Home Assistant does that)."""
+    import base64
+
+    from yarl import URL
+
+    claims = URL(url).query["authSig"].split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(claims + "=" * (-len(claims) % 4)))
+
+
+async def test_home_assistant_urls_are_signed_for_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Its own paths signed (as the content user); others left as they are."""
+    from homeassistant.components.http.auth import STORAGE_KEY
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    entry = await _paired(hass, client, web)
+
+    async def sent(**fields: str) -> dict:
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {"entity_id": "media_player.lott_s_tv", "title": "Doorbell", **fields},
+            blocking=True,
+            return_response=True,
+        )
+        return _bridge_calls(web, "/api/notify")[-1][2]
+
+    call = await sent(
+        image="/media/local/doorbell_snapshot.jpg",
+        video="/api/unifiprotect/video/e1/ev1",
+        icon="https://example.com/bell.png",
+    )
+    image = _signed_by(call["image_url"])
+    assert image["path"] == "/media/local/doorbell_snapshot.jpg"
+    assert image["iss"] == hass.data[STORAGE_KEY]
+    assert image["exp"] - image["iat"] == 15 * 60
+    assert _signed_by(call["video_url"])["path"] == "/api/unifiprotect/video/e1/ev1"
+    assert call["icon"] == "https://example.com/bell.png"
+    # The camera proxy carries its own token
+    proxy = "http://192.168.1.2:8123/api/camera_proxy/camera.door?token=abc"
+    assert (await sent(image=proxy))["image_url"] == proxy
+    # A live one is kept as given, and signed afresh each time it's sent
+    await sent(image="/media/local/doorbell_snapshot.jpg", duration="0", tag="door")
+    kept = entry.runtime_data._live["door"]["payload"]["image_url"]
+    assert kept == "http://192.168.1.2:8123/media/local/doorbell_snapshot.jpg"

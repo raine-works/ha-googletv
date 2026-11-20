@@ -47,10 +47,15 @@ class Overlay private constructor(private val context: Context) {
         // Has buttons: its window takes the remote's focus while it's up
         var actionable: Boolean = false,
         var hide: Runnable? = null,
+        // Its video clip, downloaded (deleted when the card comes down)
+        var clip: java.io.File? = null,
+        // The image over the video until its first frame
+        var poster: View? = null,
+        var rendered: Boolean = false,
     )
 
-    /** A card's view, and the surface its video plays on. */
-    private class Built(val view: View, val texture: TextureView?)
+    /** A card's view, the surface its video plays on, and the image over it until it does. */
+    private class Built(val view: View, val texture: TextureView?, val poster: View? = null)
 
     private val main = Handler(Looper.getMainLooper())
     private val windows = context.getSystemService(WindowManager::class.java)
@@ -69,8 +74,9 @@ class Overlay private constructor(private val context: Context) {
         // An image icon first, then the image, then the card
         val icon = request.icon?.takeUnless { Icons.isMdi(it) }
         val withImage = { iconBitmap: Bitmap? ->
+            // With a video too, the image is its poster until it plays
             val imageUrl = request.imageUrl
-            if (imageUrl != null && request.videoUrl == null) {
+            if (imageUrl != null) {
                 Images.load(imageUrl, 1280) { bitmap -> add(request, ticket, bitmap, iconBitmap) }
             } else {
                 main.post { add(request, ticket, null, iconBitmap) }
@@ -133,9 +139,10 @@ class Overlay private constructor(private val context: Context) {
             update(tag, existing, built, request)
         } else {
             existing?.let { remove(tag, it, animate = false) }
-            val player = built.texture?.let { startVideo(request.videoUrl!!, it, request.mute) }
+            val player = built.texture?.let { startVideo(tag, request.videoUrl!!, it, request.mute) }
             attach(tag, request.position, built.view, player, request.videoUrl, request.durationS, request.persistent)
             cards[tag]?.let {
+                it.poster = built.poster
                 it.actionable = request.actions.isNotEmpty()
                 layout(request.position)
             }
@@ -155,10 +162,16 @@ class Overlay private constructor(private val context: Context) {
         if (player != null && texture != null && card.videoUrl == request.videoUrl) {
             player.setVideoTextureView(texture)
             sound(player, request.mute)
+            // Playing already: no poster over it
+            if (card.rendered) built.poster?.visibility = View.GONE
         } else {
             player?.release()
-            card.player = texture?.let { startVideo(request.videoUrl!!, it, request.mute) }
+            card.clip?.delete()
+            card.clip = null
+            card.rendered = false
+            card.player = texture?.let { startVideo(tag, request.videoUrl!!, it, request.mute) }
         }
+        card.poster = built.poster
         card.view = built.view
         card.videoUrl = request.videoUrl
         card.pinned = request.persistent
@@ -178,6 +191,7 @@ class Overlay private constructor(private val context: Context) {
             setPadding(dp(10), dp(8), dp(16), dp(8))
         }
         var texture: TextureView? = null
+        var poster: View? = null
         if (request.videoUrl != null) {
             // Live video: a small rounded 16:9 tile where the logo goes
             // Concentric corners: the card's radius is the tile's plus the gap
@@ -192,6 +206,9 @@ class Overlay private constructor(private val context: Context) {
             }
             texture = TextureView(context)
             tile.addView(texture, android.widget.FrameLayout.LayoutParams(dp(72), dp(40)))
+            poster = image?.let { posterView(it) }?.also {
+                tile.addView(it, android.widget.FrameLayout.LayoutParams(dp(72), dp(40)))
+            }
             pill.addView(tile, LinearLayout.LayoutParams(dp(72), dp(40)))
             pill.setPadding(dp(gap), dp(gap), dp(16), dp(gap))
             (pill.background as GradientDrawable).cornerRadius = dp(tileRadius + gap).toFloat()
@@ -226,7 +243,7 @@ class Overlay private constructor(private val context: Context) {
             pill.clipToOutline = false
             pill.clipChildren = false
         }
-        return Built(pill, texture)
+        return Built(pill, texture, poster)
     }
 
     /**
@@ -248,9 +265,15 @@ class Overlay private constructor(private val context: Context) {
         }
         val card = cardLayout(width, request.color, pill = false)
         var texture: TextureView? = null
+        var poster: View? = null
         if (request.videoUrl != null) {
+            val frame = android.widget.FrameLayout(context)
             texture = TextureView(context)
-            card.addView(texture, LinearLayout.LayoutParams(width, width * 9 / 16))
+            frame.addView(texture, android.widget.FrameLayout.LayoutParams(width, width * 9 / 16))
+            poster = image?.let { posterView(it) }?.also {
+                frame.addView(it, android.widget.FrameLayout.LayoutParams(width, width * 9 / 16))
+            }
+            card.addView(frame, LinearLayout.LayoutParams(width, width * 9 / 16))
         } else if (image != null) {
             val height = (width * image.height / image.width.coerceAtLeast(1)).coerceAtMost(width * 3 / 4)
             card.addView(
@@ -311,7 +334,7 @@ class Overlay private constructor(private val context: Context) {
                 LinearLayout.LayoutParams(width, dp(2)),
             )
         }
-        return Built(card, texture)
+        return Built(card, texture, poster)
     }
 
     /**
@@ -466,25 +489,61 @@ class Overlay private constructor(private val context: Context) {
         )
     }
 
-    private fun startVideo(url: String, view: TextureView, mute: Boolean): ExoPlayer {
-        val item = MediaItem.Builder().setUri(Uri.parse(url)).apply {
-            if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
-        }.build()
-        return ExoPlayer.Builder(context).build().apply {
-            setVideoTextureView(view)
-            sound(this, mute)
-            repeatMode = Player.REPEAT_MODE_ONE
-            addListener(
-                object : Player.Listener {
-                    override fun onPlayerError(error: PlaybackException) {
-                        Log.w(TAG, "Couldn't play $url: ${error.errorCodeName}")
-                    }
-                },
-            )
-            setMediaItem(item)
-            prepare()
-            playWhenReady = true
+    /** The image a video shows until its first frame. */
+    private fun posterView(image: Bitmap): View =
+        ImageView(context).apply {
+            setImageBitmap(image)
+            scaleType = ImageView.ScaleType.CENTER_CROP
         }
+
+    /**
+     * The card [tag]'s video on [view]: a live stream (a camera) as it
+     * comes; a clip downloaded whole first, then played from the file on a
+     * loop (the poster, if any, showing meanwhile).
+     */
+    private fun startVideo(tag: String, url: String, view: TextureView, mute: Boolean): ExoPlayer {
+        val player = ExoPlayer.Builder(context).build()
+        player.setVideoTextureView(view)
+        sound(player, mute)
+        player.repeatMode = Player.REPEAT_MODE_ONE
+        player.addListener(
+            object : Player.Listener {
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.w(TAG, "Couldn't play ${url.substringBefore('?')}: ${error.errorCodeName}")
+                }
+
+                override fun onRenderedFirstFrame() {
+                    val card = cards.values.firstOrNull { it.player === player } ?: return
+                    card.rendered = true
+                    card.poster?.animate()?.alpha(0f)?.setDuration(ANIMATION_MS)
+                        ?.withEndAction { card.poster?.visibility = View.GONE }?.start()
+                }
+            },
+        )
+        if (Clips.isStream(url)) {
+            player.setMediaItem(
+                MediaItem.Builder().setUri(Uri.parse(url)).apply {
+                    if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
+                }.build(),
+            )
+            player.prepare()
+            player.playWhenReady = true
+        } else {
+            Clips.fetch(context, url) { file ->
+                val card = cards[tag]
+                if (file == null) return@fetch
+                if (card == null || card.player !== player) {
+                    // Down, or another video, before it arrived
+                    file.delete()
+                    return@fetch
+                }
+                card.clip = file
+                player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+                player.prepare()
+                player.playWhenReady = card.view.visibility == View.VISIBLE
+            }
+        }
+        return player
     }
 
     /**
@@ -547,6 +606,7 @@ class Overlay private constructor(private val context: Context) {
         card.hide?.let { main.removeCallbacks(it) }
         val finish = {
             card.player?.release()
+            card.clip?.delete()
             containers[card.position]?.removeView(card.view)
             layout(card.position)
         }
