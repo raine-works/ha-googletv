@@ -1,9 +1,21 @@
 # Google TV for Home Assistant
 
-One integration for a Google TV or Android TV: power, apps, HDMI inputs, volume,
-what's playing and a remote, all over one local connection (ADB network
-debugging). No Android TV Remote, Google Cast or ADB integrations to combine,
-and no helpers to make.
+An **unofficial** [Home Assistant](https://www.home-assistant.io/) integration for
+Google TV and Android TV, from [raine-works](https://github.com/raine-works): power,
+apps, HDMI inputs, volume, what's playing and a remote, all over one local
+connection (ADB network debugging). No Android TV Remote, Google Cast or ADB
+integrations to combine, and no helpers to make.
+
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg?style=for-the-badge)](LICENSE)
+
+[![Test](https://github.com/raine-works/ha-googletv/actions/workflows/test.yaml/badge.svg)](https://github.com/raine-works/ha-googletv/actions/workflows/test.yaml)
+[![Validate](https://github.com/raine-works/ha-googletv/actions/workflows/validate.yaml/badge.svg)](https://github.com/raine-works/ha-googletv/actions/workflows/validate.yaml)
+
+<a href="https://buymeacoffee.com/raineworks"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
+
+> This project is not affiliated with, authorized, or endorsed by Google. Google
+> TV and Android TV are trademarks of Google LLC.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=raine-works&repository=ha-googletv&category=integration)
 
@@ -76,6 +88,13 @@ pytest -q
 
 The parsers (`custom_components/googletv/parsers.py`) are tested on output
 captured from real TVs (`tests/test_parsers.py`).
+
+## ☕ Support
+
+If you find this project helpful, consider buying me a coffee to support continued
+maintenance and development:
+
+<a href="https://buymeacoffee.com/raineworks"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 
 ## License
 
