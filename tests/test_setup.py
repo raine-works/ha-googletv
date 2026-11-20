@@ -45,6 +45,13 @@ from custom_components.googletv.parsers import (  # noqa: E402
 )
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+# The integration's version: a TV app as old is up to date
+VERSION = json.loads(
+    (
+        pathlib.Path(__file__).parent.parent
+        / "custom_components/googletv/manifest.json"
+    ).read_text()
+)["version"]
 # The Master Suite Sony's diagnostics, verbatim: wired, 74% of /data used
 SONY_DIAGNOSTICS = """\
 @@net
@@ -223,24 +230,24 @@ async def test_a_button_per_app_named_and_pictured(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:
     await _set_up(hass, client)
-    netflix = hass.states.get("button.lott_s_tv_apps_netflix")
+    netflix = hass.states.get("button.lott_s_tv_netflix")
     assert netflix.attributes["entity_picture"] == NETFLIX_ICON
     assert netflix.attributes["package"] == "com.netflix.ninja"
     # Named by its listing ("YouTube TV: Live TV & more" → "YouTube TV")
-    assert hass.states.get("button.lott_s_tv_apps_youtube_tv") is not None
+    assert hass.states.get("button.lott_s_tv_youtube_tv") is not None
     # Not on the Play Store: its package, and no picture
-    tcl = hass.states.get("button.lott_s_tv_apps_com_tcl_tv")
+    tcl = hass.states.get("button.lott_s_tv_com_tcl_tv")
     assert "entity_picture" not in tcl.attributes
 
     await hass.services.async_call(
-        "button", "press", {"entity_id": "button.lott_s_tv_apps_netflix"}, blocking=True
+        "button", "press", {"entity_id": "button.lott_s_tv_netflix"}, blocking=True
     )
     client.async_launch_app.assert_awaited_with(
         "com.netflix.ninja", "com.netflix.ninja.MainActivity"
     )
 
 
-async def test_the_apps_are_a_device_under_the_tv(
+async def test_the_apps_are_on_the_tv_device(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:
     from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -248,13 +255,52 @@ async def test_the_apps_are_a_device_under_the_tv(
     await _set_up(hass, client)
     devices, entities = dr.async_get(hass), er.async_get(hass)
     tv = devices.async_get_device(identifiers={(DOMAIN, "X1")})
-    apps = devices.async_get_device(identifiers={(DOMAIN, "X1_apps")})
-    assert apps.name == "Lott's TV Apps" and apps.via_device_id == tv.id
-    netflix = entities.async_get("button.lott_s_tv_apps_netflix")
-    assert netflix.device_id == apps.id
-    # The input and the remote's keys stay on the TV
+    assert devices.async_get_device(identifiers={(DOMAIN, "X1_apps")}) is None
+    assert entities.async_get("button.lott_s_tv_netflix").device_id == tv.id
     assert entities.async_get("select.lott_s_tv_input").device_id == tv.id
     assert entities.async_get("button.lott_s_tv_home").device_id == tv.id
+
+
+async def test_the_apps_device_from_before_goes(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Its buttons move to the TV, a disabled one too; the device goes."""
+    from homeassistant.helpers import device_registry as dr, entity_registry as er
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="X1",
+        title="Lott's TV",
+        data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555},
+    )
+    entry.add_to_hass(hass)
+    devices, entities = dr.async_get(hass), er.async_get(hass)
+    devices.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(DOMAIN, "X1")}
+    )
+    old = devices.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "X1_apps")},
+        name="Lott's TV Apps",
+    )
+    tcl = entities.async_get_or_create(
+        "button",
+        DOMAIN,
+        "X1_app_com.tcl.tv",
+        config_entry=entry,
+        device_id=old.id,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    with patch(
+        "custom_components.googletv.async_get_client",
+        AsyncMock(return_value=client),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    tv = devices.async_get_device(identifiers={(DOMAIN, "X1")})
+    assert devices.async_get(old.id) is None
+    moved = entities.async_get(tcl.entity_id)
+    assert moved.device_id == tv.id and moved.disabled
 
 
 async def test_the_remote_keys(
@@ -290,7 +336,7 @@ async def test_a_new_app_gets_a_button(
     web.get(store_url("com.netflix.extra"), status=404)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states.get("button.lott_s_tv_apps_extra") is not None
+    assert hass.states.get("button.lott_s_tv_extra") is not None
 
 
 async def test_a_shows_poster(
@@ -367,7 +413,7 @@ async def test_nothing_online_when_turned_off(
     await hass.async_block_till_done()
     assert web.call_count == 0
     assert entry.runtime_data.data.artwork is None
-    netflix = hass.states.get("button.lott_s_tv_apps_netflix")
+    netflix = hass.states.get("button.lott_s_tv_netflix")
     assert "entity_picture" not in netflix.attributes
 
 
@@ -413,7 +459,7 @@ async def test_an_asleep_tv_wakes_to_open_an_app(
     )
     await _set_up(hass, client)
     await hass.services.async_call(
-        "button", "press", {"entity_id": "button.lott_s_tv_apps_netflix"}, blocking=True
+        "button", "press", {"entity_id": "button.lott_s_tv_netflix"}, blocking=True
     )
     client.async_key.assert_awaited_with("WAKEUP")
     client.async_launch_app.assert_awaited()
@@ -751,13 +797,32 @@ def _bridge_web(web: AiohttpClientMocker, token: str = "T0KEN") -> None:
         f"{BRIDGE}/api/rules",
         json={"blocked_apps": [], "blocked_inputs": [], "when_blocked": "panel"},
     )
+    web.get(f"{BRIDGE}/api/rules", json=RULES)
     web.get(
         f"{BRIDGE}/api/info",
-        json={"api": 1, "app_version": "2.3.0", "build": "abc1234", "paired": True},
+        json={
+            "api": 1,
+            "app_version": VERSION,
+            "build": "abc1234",
+            "paired": True,
+            "features": ["events", "confirm_pairing", "device", "hidden_apps"],
+            "installer": None,
+        },
     )
     web.post(f"{BRIDGE}/api/client", json={"ok": True})
     # The event stream: the app's hello, then it ends (connected again later)
     web.get(f"{BRIDGE}/api/events", text='{"type": "hello", "instance": "run-1"}\n')
+
+
+# The TV app's rules: YouTube TV left out of Home Assistant
+RULES = {
+    "hidden_apps": [OTHER_APP],
+    "blocked_apps": [],
+    "blocked_inputs": [],
+    "when_blocked": "panel",
+    "default_size": "small",
+    "default_position": "top_right",
+}
 
 
 def _bridge_calls(web: AiohttpClientMocker, path: str) -> list:
@@ -1754,20 +1819,20 @@ async def test_the_tv_apps_version(
     entry = await _app_only(hass, web)
     await hass.async_block_till_done()
     state = hass.states.get("sensor.lott_s_tv_tv_app")
-    assert state.state == "2.3.0"
+    assert state.state == VERSION
     assert state.attributes["build"] == "abc1234"
     # A newer one says hello
     entry.runtime_data._async_handle_event(
         {
             "type": "hello",
             "instance": "run-2",
-            "app_version": "2.3.1",
+            "app_version": "99.0.0",
             "build": "def5678",
         }
     )
     await hass.async_block_till_done()
     state = hass.states.get("sensor.lott_s_tv_tv_app")
-    assert (state.state, state.attributes["build"]) == ("2.3.1", "def5678")
+    assert (state.state, state.attributes["build"]) == ("99.0.0", "def5678")
 
 
 async def test_a_tv_over_adb_without_the_app_offers_to_install_it(
@@ -1826,3 +1891,140 @@ async def test_the_tv_app_from_google_play_isnt_installed_over(
             blocking=True,
         )
     client.async_install_apk.assert_not_awaited()
+
+
+# Apps left out of Home Assistant, and the TV app kept up to date
+
+
+async def test_an_app_left_out_on_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Its switch in the TV app: out of the app list, its button disabled."""
+    from homeassistant.helpers import entity_registry as er
+
+    await _paired(hass, client, web)
+    tv = hass.states.get("media_player.lott_s_tv")
+    assert "YouTube TV" not in tv.attributes["source_list"]
+    assert "Netflix" in tv.attributes["source_list"]
+    assert OTHER_APP not in [a["package"] for a in tv.attributes["apps"]]
+    button = er.async_get(hass).async_get("button.lott_s_tv_youtube_tv")
+    assert button.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+
+async def test_a_switch_flipped_on_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """The TV app says at once: the buttons and the app list follow."""
+    from homeassistant.helpers import entity_registry as er
+
+    entry = await _paired(hass, client, web)
+    registry = er.async_get(hass)
+    entry.runtime_data._async_handle_event(
+        {"type": "rules", **RULES, "hidden_apps": ["com.netflix.ninja"]}
+    )
+    await hass.async_block_till_done()
+    assert registry.async_get("button.lott_s_tv_youtube_tv").disabled_by is None
+    assert registry.async_get("button.lott_s_tv_netflix").disabled
+    sources = hass.states.get("media_player.lott_s_tv").attributes["source_list"]
+    assert "YouTube TV" in sources and "Netflix" not in sources
+
+
+async def test_an_app_button_disabled_here_hides_it_on_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    await _paired(hass, client, web)
+    er.async_get(hass).async_update_entity(
+        "button.lott_s_tv_netflix", disabled_by=er.RegistryEntryDisabler.USER
+    )
+    await hass.async_block_till_done()
+    assert _bridge_calls(web, "/api/rules")[-1][2] == {
+        "hidden_apps": sorted(["com.netflix.ninja", OTHER_APP])
+    }
+
+
+async def test_the_apps_in_the_options(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """The TV app's switches, on the integration's Configure: kept on the TV."""
+    entry = await _paired(hass, client, web)
+    data = entry.runtime_data.data
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == "menu"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "apps"}
+    )
+    assert result["step_id"] == "apps"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "apps_shown": ["com.netflix.ninja"],
+            "popups_apps": [a.package for a in data.apps if a.package != OTHER_APP],
+            "popups_inputs": [],
+        },
+    )
+    assert result["type"] == "create_entry"
+    assert entry.options == {}
+    sent = _bridge_calls(web, "/api/rules")[-1][2]
+    assert sent["hidden_apps"] == sorted(
+        a.package for a in data.apps if a.package != "com.netflix.ninja"
+    )
+    assert sent["blocked_apps"] == [OTHER_APP]
+    assert sent["blocked_inputs"] == sorted(i.id for i in data.state.inputs)
+
+
+def _old_app(web: AiohttpClientMocker, installer: str | None = None) -> None:
+    """The TV app at 2.3.0 (registered first, so it's what's answered)."""
+    web.get(
+        f"{BRIDGE}/api/info",
+        json={
+            "api": 1,
+            "app_version": "2.3.0",
+            "build": "abc1234",
+            "paired": True,
+            "features": ["events", "confirm_pairing", "device"],
+            "installer": installer,
+        },
+    )
+
+
+async def test_an_old_tv_app_is_updated_over_adb(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.bridge import APK_NAME, BRIDGE_RELEASES_URL
+
+    url = f"{BRIDGE_RELEASES_URL}/v{VERSION}/{APK_NAME}"
+    apk = b"PK\x03\x04 the new app" * 1000
+    web.get(url, content=apk)
+    web.get(f"{url}.sha256", text=hashlib.sha256(apk).hexdigest())
+    _old_app(web)
+    client.async_shell.return_value = "package:com.raineworks.tvbridge\n"
+    await _paired(hass, client, web)
+    await hass.async_block_till_done()
+    # The integration's own version, once
+    client.async_install_apk.assert_awaited_once_with(apk)
+
+
+async def test_an_old_tv_app_from_google_play_is_plays_to_update(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    _old_app(web, installer="com.android.vending")
+    await _paired(hass, client, web)
+    await hass.async_block_till_done()
+    client.async_install_apk.assert_not_awaited()
+
+
+async def test_an_old_tv_app_without_adb_is_a_repair(
+    hass: HomeAssistant, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    _old_app(web)
+    entry = await _app_only(hass, web)
+    await hass.async_block_till_done()
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, f"update_tv_app_{entry.entry_id}"
+    )
+    assert issue is not None
+    assert issue.translation_placeholders["version"] == "2.3.0"

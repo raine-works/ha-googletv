@@ -1,68 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Google TV by Raineworks</string>
-    <string name="header_title">Google TV</string>
-    <string name="app_maker">by Raineworks · Version %1$s · %2$s</string>
+    <string name="app_name">Raineworks TV</string>
+    <string name="app_tagline">for Home Assistant</string>
+    <string name="version_line">Version %1$s</string>
     <string name="service_channel">Bridge service</string>
     <string name="service_text">Ready for Home Assistant on port %1$d</string>
     <string name="notification_channel">Home Assistant</string>
     <string name="pairing_title">Pair with Home Assistant</string>
-    <string name="pairing_hint">Enter this code in Home Assistant (Google TV by Raineworks)</string>
+    <string name="pairing_hint">Enter this code in Home Assistant (Raineworks TV)</string>
+
+    <string name="nav_home">Home</string>
+    <string name="nav_apps">Apps</string>
+    <string name="nav_popups">Pop-ups</string>
+    <string name="nav_permissions">Permissions</string>
+    <string name="nav_adb">ADB</string>
+    <string name="nav_about">About</string>
+
+    <string name="home_subtitle">This TV and Home Assistant, at a glance</string>
+    <string name="hero_ready_title">All set</string>
+    <string name="hero_ready_adb">Home Assistant is connected and keeps this app up to date. There\'s nothing to do here.</string>
+    <string name="hero_ready_app">Home Assistant is connected. Notifications, media and dashboards are ready. ADB adds the remote and power, and keeps this app up to date.</string>
+    <string name="hero_setup_title">Let\'s set up Home Assistant</string>
+    <string name="hero_setup_text">Two steps, below. This screen follows along.</string>
+    <string name="hero_attention_title">Almost there</string>
+    <plurals name="hero_attention_text">
+        <item quantity="one">Home Assistant is connected, but a permission is off.</item>
+        <item quantity="other">Home Assistant is connected, but %1$d permissions are off.</item>
+    </plurals>
+    <string name="review_permissions">Review permissions</string>
 
     <string name="pair_ask_title">Allow Home Assistant to connect?</string>
     <string name="pair_ask_text">%1$s at %2$s wants to show notifications and control this TV.</string>
     <string name="pair_allow">Allow</string>
     <string name="pair_deny">Don\'t allow</string>
     <string name="pill_paired">Connected</string>
-    <string name="pill_not_paired">Not paired</string>
+    <string name="pill_not_paired">Not connected</string>
 
     <string name="setup_title">Set up with Home Assistant</string>
-    <string name="setup_subtitle">Two steps; this screen follows along</string>
-    <string name="setup_qr">QR code: Google TV by Raineworks in HACS</string>
+    <string name="setup_subtitle">No code to type, no developer options</string>
+    <string name="setup_qr">QR code: Raineworks TV in HACS</string>
     <string name="setup_hacs_title">Add the integration</string>
-    <string name="setup_hacs_text">Scan with your phone to open Google TV by Raineworks in HACS. Download it, then restart Home Assistant.</string>
+    <string name="setup_hacs_text">Scan with your phone to open Raineworks TV in HACS. Download it, then restart Home Assistant.</string>
     <string name="setup_debugging_title">Turn on network debugging</string>
     <string name="setup_debugging_text">In Developer options, turn on USB debugging, and Network debugging where it\'s a separate switch.</string>
     <string name="setup_open_settings">Open settings</string>
     <string name="setup_on">On</string>
     <string name="setup_off">Off</string>
     <string name="setup_add_title">Add this TV</string>
-    <string name="setup_add_text">In Home Assistant, it\'s under Settings → Devices &amp; services → Discovered. Choose Add, then choose Allow here when the TV asks. No code, no developer options.</string>
+    <string name="setup_add_text">In Home Assistant, it\'s under Settings → Devices &amp; services → Discovered. Choose Add, then Allow here when the TV asks.</string>
 
     <string name="status_title">Connection</string>
     <string name="status_paired_adb">Connected, with ADB</string>
-    <string name="status_paired_app">Connected (the TV app)</string>
+    <string name="status_paired_app">Connected through this app</string>
     <string name="status_integration">Integration</string>
-    <string name="permissions_subtitle">What the app may do on this TV. Some TVs hide these screens: ADB, below, allows them all</string>
-    <string name="permission_overlay_why">Pop-ups over shows and inputs, and opening media, dashboards and apps</string>
-    <string name="permission_notifications">Notification access</string>
-    <string name="permission_notifications_why">What other apps are playing: titles, artwork, playing or paused. Reads no notifications</string>
-    <string name="permission_usage_why">Which app is in front: the Current app sensor and the pop-up rules</string>
-    <string name="adb_title">More with ADB (optional)</string>
-    <string name="adb_subtitle">Network debugging lets Home Assistant do what an app can\'t</string>
-    <string name="adb_gain_remote">The remote: D-pad, OK, Back, Home and Settings, from Home Assistant</string>
-    <string name="adb_gain_power">Turning the TV off, and on again from network standby</string>
-    <string name="adb_gain_input">Knowing which HDMI input is on screen</string>
-    <string name="adb_gain_permissions">The permissions above, where the TV hides their screens</string>
-    <string name="adb_step_developer">Turn on developer options</string>
-    <string name="adb_step_developer_text">In Settings → System → About, select Android TV OS build seven times.</string>
-    <string name="adb_open_about">Open About</string>
-    <string name="adb_step_connect">Connect Home Assistant over ADB</string>
-    <string name="adb_step_connect_text">In Home Assistant, open this TV (Settings → Devices &amp; services → Google TV by Raineworks), choose ⋮ → Reconfigure, then Connect over ADB, and allow it here.</string>
-    <string name="status_address">Address</string>
+    <string name="status_address">This TV</string>
     <string name="status_home_assistant">Home Assistant</string>
-    <string name="status_paired">Paired (%1$d)</string>
-    <string name="status_not_paired">Add this TV in Home Assistant (Google TV by Raineworks)</string>
+    <string name="status_not_paired">Not connected yet</string>
+    <string name="status_updates">Updates</string>
+    <string name="updates_auto">Automatic, from Home Assistant</string>
+    <string name="updates_store">By Google Play, or with ADB by Home Assistant</string>
 
-    <string name="permissions_title">Permissions</string>
-    <string name="permission_overlay">Pop-ups over other apps</string>
-    <string name="permission_usage">App detection, for the rules</string>
-    <string name="allowed">Allowed</string>
-    <string name="not_allowed">Not allowed</string>
-    <string name="permission_unavailable">This TV has no settings screen for it. Home Assistant grants it over ADB.</string>
+    <string name="apps_subtitle">What Home Assistant shows, and where pop-ups appear</string>
+    <string name="apps_card">Apps</string>
+    <string name="apps_card_text">Home Assistant: the app is in its app list and has a button. Pop-ups: notifications pop up while it\'s on screen.</string>
+    <string name="column_home_assistant">Home Assistant</string>
+    <string name="column_popups">Pop-ups</string>
+    <string name="inputs_card">Inputs</string>
+    <string name="inputs_card_text">Pop-ups while an HDMI input is on screen</string>
+    <string name="no_inputs">No HDMI inputs found</string>
+    <string name="when_blocked">When pop-ups are off</string>
+    <string name="when_blocked_text">What happens to a notification that arrives then</string>
+    <string name="when_blocked_panel">Notification panel</string>
+    <string name="when_blocked_drop">Don\'t show it</string>
 
-    <string name="popups_title">Pop-ups</string>
-    <string name="popups_subtitle">Used when a notification doesn\'t say</string>
+    <string name="popups_subtitle">How notifications look when Home Assistant doesn\'t say</string>
     <string name="default_size">Size</string>
     <string name="default_position">Position</string>
     <string name="size_compact">Compact</string>
@@ -76,27 +87,55 @@
     <string name="position_bottom_left">Bottom left</string>
     <string name="position_bottom">Bottom</string>
     <string name="position_bottom_right">Bottom right</string>
+    <string name="try_title">Try it</string>
+    <string name="test_button">Show a test notification</string>
+    <string name="test_title">Raineworks TV</string>
+    <string name="test_message">Notifications from Home Assistant look like this.</string>
+    <string name="clear_button">Clear pop-ups</string>
+    <string name="cleared">Pop-ups cleared</string>
+    <string name="more_popups">+%1$d more</string>
+
+    <string name="permissions_subtitle">What the app may do on this TV</string>
+    <string name="permissions_card">Permissions</string>
+    <string name="permissions_card_text">Some TVs hide these screens. Home Assistant allows them all over ADB.</string>
+    <string name="permission_overlay">Pop-ups over other apps</string>
+    <string name="permission_overlay_why">Pop-ups over shows and inputs, and opening media, dashboards and apps</string>
+    <string name="permission_notifications">Notification access</string>
+    <string name="permission_notifications_why">What other apps are playing: titles, artwork, playing or paused. Reads no notifications</string>
+    <string name="permission_usage">App detection</string>
+    <string name="permission_usage_why">Which app is in front: the Current app sensor, and where pop-ups appear</string>
+    <string name="allowed">Allowed</string>
+    <string name="not_allowed">Not allowed</string>
+    <string name="permission_unavailable">This TV has no settings screen for it. Home Assistant allows it over ADB.</string>
+
+    <string name="adb_subtitle">Optional: network debugging lets Home Assistant do what an app can\'t</string>
+    <string name="adb_gains_title">What it adds</string>
+    <string name="adb_gain_updates">This app kept up to date by Home Assistant</string>
+    <string name="adb_gain_remote">The remote: D-pad, OK, Back, Home and Settings</string>
+    <string name="adb_gain_power">Turning the TV off, and on again from network standby</string>
+    <string name="adb_gain_input">Knowing which HDMI input is on screen</string>
+    <string name="adb_gain_permissions">Every permission allowed, where the TV hides their screens</string>
+    <string name="adb_steps_title">Turn it on</string>
+    <string name="adb_step_developer">Turn on developer options</string>
+    <string name="adb_step_developer_text">In Settings → System → About, select Android TV OS build seven times.</string>
+    <string name="adb_open_about">Open About</string>
+    <string name="adb_step_connect">Connect Home Assistant over ADB</string>
+    <string name="adb_step_connect_text">In Home Assistant, open this TV (Settings → Devices &amp; services → Raineworks TV), choose ⋮ → Reconfigure, then Connect over ADB, and allow it here.</string>
+
+    <string name="about_subtitle">Raineworks TV, by Raineworks</string>
+    <string name="about_card">This app</string>
+    <string name="about_version">Version</string>
+    <string name="about_build">Build</string>
+    <string name="about_device">TV</string>
+    <string name="about_privacy">Everything stays on your network: the app talks only to your Home Assistant.</string>
+    <string name="about_disclaimer">Made by Raineworks. Google TV is a trademark of Google LLC; this app isn\'t made or endorsed by Google.</string>
+    <string name="pairing_section">Pairing</string>
+    <string name="pairing_section_text">Home Assistant asks to connect again the next time it needs to</string>
+    <string name="forget_button">Forget all Home Assistant pairings</string>
+    <string name="forgotten">Pairings forgotten</string>
+
     <string name="dashboard_failed">Couldn\'t open the dashboard</string>
     <string name="dashboard_certificate">The TV doesn\'t trust Home Assistant\'s certificate (self-signed?). Set Home Assistant\'s local network address to its http:// address, in Settings → System → Network.</string>
     <string name="player_untitled">Playing from Home Assistant</string>
     <string name="player_from">From Home Assistant</string>
-    <string name="more_popups">+%1$d more</string>
-    <string name="clear_button">Clear pop-ups</string>
-    <string name="cleared">Pop-ups cleared</string>
-    <string name="test_button">Show a test notification</string>
-    <string name="test_title">Google TV by Raineworks</string>
-    <string name="test_message">Notifications from Home Assistant look like this.</string>
-
-    <string name="rules_title">Don\'t pop up over</string>
-    <string name="rules_subtitle">Notifications that arrive while one of these is on screen go to the notification panel instead</string>
-    <string name="rules_apps">Apps</string>
-    <string name="rules_inputs">Inputs</string>
-    <string name="when_blocked">Instead</string>
-    <string name="when_blocked_panel">Notification panel</string>
-    <string name="when_blocked_drop">Don\'t show it</string>
-    <string name="no_inputs">No HDMI inputs found</string>
-
-    <string name="pairing_section">Pairing</string>
-    <string name="forget_button">Forget all Home Assistant pairings</string>
-    <string name="forgotten">Pairings forgotten</string>
 </resources>

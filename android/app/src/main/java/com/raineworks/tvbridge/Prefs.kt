@@ -2,10 +2,12 @@ package com.raineworks.tvbridge
 
 import android.content.Context
 import android.util.Base64
+import org.json.JSONArray
+import org.json.JSONObject
 import java.security.MessageDigest
 import java.security.SecureRandom
 
-/** What the bridge keeps: Home Assistant's tokens and the notification rules. */
+/** What the bridge keeps: Home Assistant's tokens, the notification rules, the apps it hides. */
 class Prefs(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("bridge", Context.MODE_PRIVATE)
@@ -54,6 +56,11 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(KEY_BLOCKED_APPS, emptySet())!!.toSet()
         set(value) = prefs.edit().putStringSet(KEY_BLOCKED_APPS, value).apply()
 
+    /** Apps (packages) Home Assistant leaves out: its app list, its buttons. */
+    var hiddenApps: Set<String>
+        get() = prefs.getStringSet(KEY_HIDDEN_APPS, emptySet())!!.toSet()
+        set(value) = prefs.edit().putStringSet(KEY_HIDDEN_APPS, value).apply()
+
     /** HDMI inputs (TV input ids) that pop-ups don't show over. */
     var blockedInputs: Set<String>
         get() = prefs.getStringSet(KEY_BLOCKED_INPUTS, emptySet())!!.toSet()
@@ -74,6 +81,15 @@ class Prefs(context: Context) {
         get() = prefs.getString(KEY_WHEN_BLOCKED, WHEN_BLOCKED_PANEL)!!
         set(value) = prefs.edit().putString(KEY_WHEN_BLOCKED, value).apply()
 
+    /** The rules and the hidden apps, as the API and its events say them. */
+    fun rules(): JSONObject = JSONObject()
+        .put("hidden_apps", JSONArray(hiddenApps.sorted()))
+        .put("blocked_apps", JSONArray(blockedApps.sorted()))
+        .put("blocked_inputs", JSONArray(blockedInputs.sorted()))
+        .put("when_blocked", whenBlocked)
+        .put("default_size", defaultSize)
+        .put("default_position", defaultPosition)
+
     companion object {
         // Pairing and unpairing change the token set one at a time
         private val LOCK = Any()
@@ -83,6 +99,7 @@ class Prefs(context: Context) {
         const val WHEN_BLOCKED_DROP = "drop"
         private const val KEY_TOKENS = "tokens"
         private const val KEY_BLOCKED_APPS = "blocked_apps"
+        private const val KEY_HIDDEN_APPS = "hidden_apps"
         private const val KEY_BLOCKED_INPUTS = "blocked_inputs"
         private const val KEY_WHEN_BLOCKED = "when_blocked"
         private const val KEY_DEFAULT_SIZE = "default_size"

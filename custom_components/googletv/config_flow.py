@@ -11,7 +11,7 @@ TVs are also found on their own: every Google TV announces
 entry's unique id (read over ADB too), so a TV already set up isn't offered
 again, and its entry follows it to a new address.
 
-A TV with the app (Google TV by Raineworks) announces ``_rwtvbridge._tcp`` too:
+A TV with the app (Raineworks TV) announces ``_rwtvbridge._tcp`` too:
 it's offered even with network debugging off, and the flow says how to turn
 it on. Adding a TV without the app offers to install it.
 """
@@ -27,14 +27,22 @@ from homeassistant.config_entries import (
     SOURCE_REAUTH,
     SOURCE_RECONFIGURE,
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
 )
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 import voluptuous as vol
 
@@ -502,17 +510,31 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class GoogleTvOptionsFlow(OptionsFlow):
-    """Online lookups, and whether dashboards on the TV can control devices."""
+    """Online lookups, dashboards' controls, and the TV's apps."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the options."""
+        """General options, or the apps (while the TV is set up)."""
+        if self._coordinator() is None:
+            return await self.async_step_general()
+        return self.async_show_menu(step_id="init", menu_options=["apps", "general"])
+
+    def _coordinator(self) -> Any:
+        entry = self.config_entry
+        if entry.state is ConfigEntryState.LOADED and entry.runtime_data.data:
+            return entry.runtime_data
+        return None
+
+    async def async_step_general(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Online lookups, and whether dashboards on the TV can control devices."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
         options = self.config_entry.options
         return self.async_show_form(
-            step_id="init",
+            step_id="general",
             data_schema=vol.Schema(
                 {
                     vol.Required(
@@ -526,3 +548,84 @@ class GoogleTvOptionsFlow(OptionsFlow):
                 }
             ),
         )
+
+    async def async_step_apps(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Which apps Home Assistant shows, and where pop-ups appear.
+
+        The same switches as the TV app's Apps screen: they're kept there.
+        """
+        coordinator = self._coordinator()
+        if coordinator is None:
+            return self.async_abort(reason="not_loaded")
+        apps = coordinator.data.apps
+        inputs = coordinator.data.state.inputs
+        # Pop-ups' rules are the TV app's (2.4 or later)
+        rules = coordinator.app_rules
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            shown = set(user_input.get(APPS_SHOWN, []))
+            changes = {
+                "hidden_apps": [a.package for a in apps if a.package not in shown]
+            }
+            if rules is not None:
+                over = set(user_input.get(POPUPS_APPS, []))
+                changes["blocked_apps"] = [
+                    a.package for a in apps if a.package not in over
+                ]
+                over_inputs = set(user_input.get(POPUPS_INPUTS, []))
+                changes["blocked_inputs"] = [
+                    i.id for i in inputs if i.id not in over_inputs
+                ]
+            try:
+                await coordinator.async_set_app_rules(changes)
+            except HomeAssistantError:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_create_entry(data=dict(self.config_entry.options))
+
+        def choices(pairs: list[tuple[str, str]]) -> SelectSelector:
+            return SelectSelector(
+                SelectSelectorConfig(
+                    options=[SelectOptionDict(value=v, label=n) for v, n in pairs],
+                    multiple=True,
+                    mode=SelectSelectorMode.LIST,
+                )
+            )
+
+        app_choices = [(a.package, a.name) for a in apps]
+        hidden = coordinator.hidden_apps
+        schema: dict[Any, Any] = {
+            vol.Optional(
+                APPS_SHOWN, default=[a.package for a in apps if a.package not in hidden]
+            ): choices(app_choices)
+        }
+        if rules is not None:
+            blocked = set(rules.get("blocked_apps") or [])
+            schema[
+                vol.Optional(
+                    POPUPS_APPS,
+                    default=[a.package for a in apps if a.package not in blocked],
+                )
+            ] = choices(app_choices)
+            if inputs:
+                blocked_inputs = set(rules.get("blocked_inputs") or [])
+                schema[
+                    vol.Optional(
+                        POPUPS_INPUTS,
+                        default=[i.id for i in inputs if i.id not in blocked_inputs],
+                    )
+                ] = choices([(i.id, i.label) for i in inputs])
+        return self.async_show_form(
+            step_id="apps",
+            data_schema=vol.Schema(schema),
+            errors=errors,
+            description_placeholders={"name": self.config_entry.title},
+        )
+
+
+# The apps step's fields
+APPS_SHOWN = "apps_shown"
+POPUPS_APPS = "popups_apps"
+POPUPS_INPUTS = "popups_inputs"

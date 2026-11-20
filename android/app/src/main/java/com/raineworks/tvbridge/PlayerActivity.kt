@@ -200,7 +200,7 @@ class PlayerActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = Theme.surface(this@PlayerActivity, Theme.MUTED, 16)
             clipToOutline = true
-            setImageResource(R.drawable.logo_gtv)
+            setImageResource(R.drawable.logo)
             val pad = dp(56)
             setPadding(pad, pad, pad, pad)
         }

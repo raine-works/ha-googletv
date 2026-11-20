@@ -1,4 +1,6 @@
-# Google TV by Raineworks
+<img src="custom_components/googletv/brand/icon@2x.png" alt="" width="96" align="right">
+
+# Raineworks TV
 
 An **unofficial** [Home Assistant](https://www.home-assistant.io/) integration for
 Google TV and Android TV, from [Raineworks](https://github.com/raine-works), with a
@@ -45,11 +47,16 @@ artwork ([Privacy](#privacy-and-security)).
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=raine-works&repository=ha-googletv&category=integration)
 
-Install the integration first: in HACS, open **Google TV by Raineworks** with
+Install the integration first: in HACS, open **Raineworks TV** with
 the button above (or add `https://github.com/raine-works/ha-googletv` as a
 custom repository, category **Integration**), download it and restart Home
 Assistant. Then connect the TV one of two ways; you can add ADB to a TV
 connected through its app at any time.
+
+After that there's nothing to look after. Over ADB, Home Assistant keeps
+the TV app at the integration's version: update the integration in HACS and
+the TV follows by itself (an app from Google Play is Play's to update).
+Through the app alone, a repair says when the TV app is behind.
 
 ### With the TV app (no developer mode)
 
@@ -87,12 +94,12 @@ connected through its app at any time.
 Home Assistant installs the TV app over ADB, allows its permissions and
 pairs with it. A TV over ADB without the app gets a repair, **Install the
 TV app**, that does the same at a press. Not discovered? **Add integration
-→ Google TV by Raineworks**, with the TV's IP address and port 5555.
+→ Raineworks TV**, with the TV's IP address and port 5555.
 
 **A TV connected through its app, given ADB later**: turn on network
 debugging (the TV app's screen has the steps, with each one's state), then
-in Home Assistant open the TV (Settings → Devices & services → Google TV by
-Raineworks), choose **⋮ → Reconfigure**, then **Connect over ADB**. The
+in Home Assistant open the TV (Settings → Devices & services → Raineworks
+TV), choose **⋮ → Reconfigure**, then **Connect over ADB**. The
 app's pairing stays.
 
 ### What each way gives
@@ -182,12 +189,18 @@ from the name its device gives itself over HDMI-CEC:
 
 * **Current app** (`sensor.<tv>_current_app`): the app in front by name,
   its package in the `package` attribute.
-* **Apps**: a device of its own, "<TV> Apps", with a button per app
-  (`button.<tv>_apps_netflix`, …), named and pictured from its Google Play
-  listing. Press to open it (the TV wakes first). Apps installed later get
-  their buttons on their own. Apps open by their launch screen, so the ones
-  Android TV Remote can no longer launch (YouTube TV, Apple TV, HBO Max,
-  Hulu) open here.
+* **Apps**: a button per app on the TV's device (`button.<tv>_netflix`,
+  …), named and pictured from its Google Play listing. Press to open it (the
+  TV wakes first). Apps installed later get their buttons on their own. Apps
+  open by their launch screen, so the ones Android TV Remote can no longer
+  launch (YouTube TV, Apple TV, HBO Max, Hulu) open here. (Before 2.4 they
+  were a device of their own, "<TV> Apps"; it's folded into the TV, and
+  the buttons keep their entity ids.)
+* **Choosing apps**: leave an app out of Home Assistant (the Source list,
+  the `apps` attribute, its button) with its **Home Assistant** switch in
+  the TV app's Apps screen, on the integration's **Configure → Apps**, or
+  by disabling its button. All three stay in step: disabling a button flips
+  the switch on the TV, and the other way round.
 * **Remote keys** (`button.<tv>_home`, …): Home, Back, Up, Down, Left,
   Right, OK, Play/pause, Volume up, Volume down, Mute and Settings.
 * **Remote** (`remote.<tv>`): `remote.send_command` with any key (`HOME`,
@@ -219,7 +232,7 @@ top right. The **`googletv.notify`** action does the rest:
 | Field | |
 | :--- | :--- |
 | `message`, `title` | The text |
-| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Google TV logo if not set |
+| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Raineworks TV logo if not set |
 | `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`) |
 | `camera_entity` | A camera's live stream (`camera_view: live`, the default) or a snapshot |
 | `video` | A video or live stream URL (HLS, RTSP, MP4) |
@@ -261,8 +274,10 @@ rest, which come back as cards go.
 
 ### Rules
 
-Pop-ups can stay off the apps and inputs you pick: on the TV app's screen,
-or with **`googletv.set_notification_rules`** (by name: `Netflix`, `Xbox`).
+Pop-ups can stay off the apps and inputs you pick: their **Pop-ups** switch
+on the TV app's Apps screen, **Configure → Apps** on the integration, or
+**`googletv.set_notification_rules`** (by name: `Netflix`, `Xbox`). An app
+can be left out of Home Assistant and still get pop-ups, or the reverse.
 Those notifications go to the panel instead, or nowhere. The integration
 tells the app which input is on screen, so input rules work.
 
@@ -312,7 +327,7 @@ the integration makes a local-only Home Assistant user named after the TV,
 **read-only**: dashboards on the TV show your home but can't switch
 anything. To let them control devices, turn on **Dashboards on the TV can
 control devices** in the TV's options (Settings → Devices & services →
-Google TV by Raineworks → Configure). The user is in Settings → People →
+Raineworks TV → Configure). The user is in Settings → People →
 Users, where you can remove it; removing the TV removes it too.
 
 **Replacing Google Cast**: everything Home Assistant used Cast for on the
@@ -495,7 +510,7 @@ actions:
   (kept in `.storage/googletv.apps`, read again monthly), and artwork for
   what's playing from iTunes, TVmaze, Google Play and Wikipedia. No account
   or key. Turn off **Look up app icons and artwork online** in the TV's
-  options (Settings → Devices & services → Google TV by Raineworks →
+  options (Settings → Devices & services → Raineworks TV →
   Configure) to keep everything on your network.
 * **ADB.** Home Assistant signs in to every TV with one key, kept in
   `.storage/googletv_adbkey`; each TV trusts it once.

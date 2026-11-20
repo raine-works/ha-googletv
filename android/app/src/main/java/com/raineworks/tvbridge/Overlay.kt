@@ -88,7 +88,7 @@ class Overlay private constructor(private val context: Context) {
                 setPadding(dp(28), dp(24), dp(28), dp(24))
             }
             card.addView(
-                ImageView(context).apply { setImageResource(R.drawable.logo_gtv) },
+                ImageView(context).apply { setImageResource(R.drawable.logo) },
                 LinearLayout.LayoutParams(dp(52), dp(52)).apply { bottomMargin = dp(12) },
             )
             card.addView(text(context.getString(R.string.pairing_title), 18f, Theme.semibold(context), Theme.FOREGROUND, 2))
@@ -411,7 +411,7 @@ class Overlay private constructor(private val context: Context) {
 
     /**
      * The badge in a soft circle (tinted by the notification's color): an
-     * image, a Home Assistant icon ("mdi:doorbell"), else the Google TV logo
+     * image, a Home Assistant icon ("mdi:doorbell"), else the app's logo
      * in its own colors.
      */
     private fun badge(color: Int?, image: Bitmap?, icon: String?, sizeDp: Int): View {
@@ -444,7 +444,7 @@ class Overlay private constructor(private val context: Context) {
             }
         }
         return ImageView(context).apply {
-            setImageResource(R.drawable.logo_gtv)
+            setImageResource(R.drawable.logo)
             val pad = dp(sizeDp) / 5
             setPadding(pad, pad, pad, pad)
             background = circle
@@ -655,7 +655,7 @@ class Overlay private constructor(private val context: Context) {
             // TVs crop their edges (overscan): keep clear of them
             x = if (position == "center" || position == "top" || position == "bottom") 0 else dp(EDGE_DP)
             y = if (position == "center") 0 else dp(EDGE_DP)
-            title = "Google TV by Raineworks"
+            title = "Raineworks TV"
         }
         container.gravity = if (position.endsWith("right")) Gravity.END else Gravity.START
         return try {

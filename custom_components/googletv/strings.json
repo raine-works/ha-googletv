@@ -14,7 +14,7 @@
           "host": "The TV's IP address or host name.",
           "port": "The TV's ADB port, 5555 unless you changed it.",
           "name": "Optional. The TV's maker and model when empty.",
-          "install_tv_app": "Google TV by Raineworks on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
+          "install_tv_app": "Raineworks TV on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
         }
       },
       "reauth_confirm": {
@@ -32,7 +32,7 @@
           "install_tv_app": "Install the TV app"
         },
         "data_description": {
-          "install_tv_app": "Google TV by Raineworks on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
+          "install_tv_app": "Raineworks TV on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
         }
       },
       "reconfigure": {
@@ -88,7 +88,14 @@
   "options": {
     "step": {
       "init": {
-        "title": "Google TV options",
+        "title": "Raineworks TV",
+        "menu_options": {
+          "apps": "Apps",
+          "general": "General"
+        }
+      },
+      "general": {
+        "title": "General",
         "data": {
           "online_lookups": "Look up app icons and artwork online",
           "dashboard_controls": "Dashboards on the TV can control devices"
@@ -97,7 +104,27 @@
           "online_lookups": "Names and icons of the TV's apps from Google Play, and covers and posters for what's playing from iTunes and TVmaze. Off keeps everything on your network.",
           "dashboard_controls": "Dashboards shown on the TV sign in as the TV's own user. Off, it's read-only: they show your home, but can't switch anything. On, they can control devices like any user."
         }
+      },
+      "apps": {
+        "title": "Apps on {name}",
+        "description": "The same switches as the Apps screen of the TV app: change them here or on the TV.",
+        "data": {
+          "apps_shown": "Apps in Home Assistant",
+          "popups_apps": "Pop-ups over these apps",
+          "popups_inputs": "Pop-ups over these inputs"
+        },
+        "data_description": {
+          "apps_shown": "In the TV's app list (Source) and with a button. An app left out has its button disabled; enabling the button brings it back.",
+          "popups_apps": "Notifications pop up while one of these is on screen. Over the others, they go to the notification panel (or nowhere, as the TV app's set).",
+          "popups_inputs": "The same, for the HDMI inputs."
+        }
       }
+    },
+    "error": {
+      "cannot_connect": "Couldn't reach the TV app: the change is made when it's back."
+    },
+    "abort": {
+      "not_loaded": "The TV isn't set up right now: try again once it is."
     }
   },
   "entity": {
@@ -224,13 +251,13 @@
       "message": "The TV has no app or input called {source}."
     },
     "unsupported_media_type": {
-      "message": "Google TV plays audio, video, images, an app, an input or a url, not {media_type}."
+      "message": "Raineworks TV plays audio, video, images, an app, an input or a url, not {media_type}."
     },
     "unreachable": {
       "message": "The TV is off its network and Home Assistant doesn't know its network address (MAC) to wake it. Turn on its network standby (Sony: Remote start) so it stays reachable."
     },
     "bridge_not_paired": {
-      "message": "The TV app (Google TV by Raineworks) isn't installed and paired on this TV. Install it with the Install the TV app action (googletv.install_tv_bridge)."
+      "message": "The TV app (Raineworks TV) isn't installed and paired on this TV. Install it with the Install the TV app action (googletv.install_tv_bridge)."
     },
     "bridge_download_failed": {
       "message": "Couldn't download the TV app: {error}"
@@ -257,7 +284,7 @@
   "services": {
     "notify": {
       "name": "Show a notification",
-      "description": "Shows a notification on the TV through its app (Google TV by Raineworks): a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
+      "description": "Shows a notification on the TV through its app (Raineworks TV): a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
       "fields": {
         "message": {
           "name": "Message",
@@ -269,7 +296,7 @@
         },
         "icon": {
           "name": "Icon",
-          "description": "The badge's icon: a Home Assistant icon (mdi:doorbell), or an image URL or path. The Google TV logo if not set."
+          "description": "The badge's icon: a Home Assistant icon (mdi:doorbell), or an image URL or path. The Raineworks TV logo if not set."
         },
         "image": {
           "name": "Image",
@@ -385,7 +412,7 @@
     },
     "install_tv_bridge": {
       "name": "Install the TV app",
-      "description": "Installs or updates the TV app (Google TV by Raineworks) over ADB, allows its pop-ups, and pairs with it.",
+      "description": "Installs or updates the TV app (Raineworks TV) over ADB, allows its pop-ups, and pairs with it.",
       "fields": {
         "development": {
           "name": "Development build",
@@ -445,7 +472,7 @@
         "step": {
           "confirm": {
             "title": "Install the TV app on {name}",
-            "description": "Home Assistant reaches {name} over ADB, but the TV app (Google TV by Raineworks) isn't on it. The app shows Home Assistant's notifications on the TV, plays its media and dashboards, and tells it what happens there. Submit to install it over ADB now (a minute or so); it's paired by itself."
+            "description": "Home Assistant reaches {name} over ADB, but the TV app (Raineworks TV) isn't on it. The app shows Home Assistant's notifications on the TV, plays its media and dashboards, and tells it what happens there. Submit to install it over ADB now (a minute or so); it's paired by itself."
           }
         },
         "error": {
@@ -455,6 +482,10 @@
           "tv_removed": "The TV isn't set up anymore."
         }
       }
+    },
+    "update_tv_app": {
+      "title": "Update the TV app on {name}",
+      "description": "The TV app on {name} is version {version}; this integration is {latest}. Home Assistant reaches {name} through the app alone, so it can't update it: install the latest app on the TV, or connect over ADB (the TV's ⋮ → Reconfigure) and Home Assistant keeps it up to date by itself."
     }
   }
 }

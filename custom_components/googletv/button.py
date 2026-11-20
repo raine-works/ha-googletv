@@ -1,7 +1,9 @@
-"""Buttons: the remote's keys on the TV, and one per app on its Apps device.
+"""Buttons: the remote's keys on the TV, and one per app.
 
 The keys (Home, Back, the d-pad, OK, playback, volume, Settings) are the TV's
-own controls; each app's button opens it, waking the TV first.
+own controls; each app's button opens it, waking the TV first. An app left
+out of Home Assistant (its switch in the TV app, or its button disabled here)
+has its button disabled.
 """
 
 from __future__ import annotations
@@ -96,8 +98,12 @@ class GoogleTvAppButton(GoogleTvEntity, ButtonEntity):
 
     def __init__(self, coordinator: GoogleTvCoordinator, package: str) -> None:
         """Initialize the button."""
-        super().__init__(coordinator, f"app_{package}", apps=True)
+        super().__init__(coordinator, f"app_{package}")
         self._package = package
+        # Made disabled for an app that's left out
+        self._attr_entity_registry_enabled_default = (
+            package not in coordinator.data.hidden_apps
+        )
 
     @property
     def _app(self) -> App | None:

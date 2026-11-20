@@ -103,9 +103,10 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 newChunkedResponse(Response.Status.OK, "application/x-ndjson", Events.open())
             method == Method.GET && path == "/api/apps" -> json(JSONObject().put("apps", apps()))
             method == Method.GET && path == "/api/inputs" -> json(JSONObject().put("inputs", inputs()))
-            method == Method.GET && path == "/api/rules" -> json(rules())
+            method == Method.GET && path == "/api/rules" -> json(prefs.rules())
             method == Method.POST && path == "/api/rules" -> {
                 val body = body(session)
+                body.optJSONArray("hidden_apps")?.let { prefs.hiddenApps = strings(it) }
                 body.optJSONArray("blocked_apps")?.let { prefs.blockedApps = strings(it) }
                 body.optJSONArray("blocked_inputs")?.let { prefs.blockedInputs = strings(it) }
                 if (body.has("default_size")) {
@@ -125,7 +126,9 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                     }
                     prefs.whenBlocked = value
                 }
-                json(rules())
+                // Every Home Assistant connected hears of it (more than one may be)
+                Events.emit("rules", prefs.rules())
+                json(prefs.rules())
             }
             method == Method.POST && path == "/api/notify" -> {
                 val request = NotificationRequest.parse(
@@ -179,7 +182,20 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         // The TV's id (Android ID, as its mDNS announcement says): Home Assistant's unique id for it
         .put("id", android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID))
         // What this app can do, for an integration that knows older ones
-        .put("features", org.json.JSONArray(listOf("events", "confirm_pairing", "device")))
+        .put("features", org.json.JSONArray(FEATURES))
+        // Who installed it: Google Play updates its own; Home Assistant, over ADB, the rest
+        .put("installer", installer() ?: JSONObject.NULL)
+
+    private fun installer(): String? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getInstallerPackageName(context.packageName)
+        }
+    } catch (e: Exception) {
+        null
+    }
 
     private fun state(): JSONObject = Device.state(context)
         .put("instance", Notifier.instance)
@@ -194,13 +210,6 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
     private fun inputs(): JSONArray = JSONArray().apply {
         TvInfo.inputs(context).forEach { put(JSONObject().put("id", it.id).put("name", it.name)) }
     }
-
-    private fun rules(): JSONObject = JSONObject()
-        .put("blocked_apps", JSONArray(prefs.blockedApps.sorted()))
-        .put("blocked_inputs", JSONArray(prefs.blockedInputs.sorted()))
-        .put("when_blocked", prefs.whenBlocked)
-        .put("default_size", prefs.defaultSize)
-        .put("default_position", prefs.defaultPosition)
 
     /** The request's JSON body (UTF-8, at most 64 KB). */
     private fun body(session: IHTTPSession): JSONObject {
@@ -236,6 +245,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     companion object {
         const val API_VERSION = 1
+        val FEATURES = listOf("events", "confirm_pairing", "device", "hidden_apps")
         const val PORT = 8721
         private const val MAX_BODY = 64 * 1024
         private const val TAG = "TvBridge"

@@ -7,6 +7,7 @@ import contextlib
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import STORAGE_DIR, Store
 
@@ -105,6 +106,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         await client.async_close()
         raise
     entry.async_on_unload(coordinator.async_stop_live)
+    entry.async_on_unload(coordinator.async_watch_app_buttons())
     coordinator.async_start_events()
     coordinator.async_report_soon()
     if entry.data.get(CONF_INSTALL_BRIDGE):
@@ -127,7 +129,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
         await client.async_close()
         raise
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    _remove_apps_device(hass, entry)
     return True
+
+
+def _remove_apps_device(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> None:
+    """The "<TV> Apps" device from before 2.4: its buttons are the TV's now."""
+    registry = dr.async_get(hass)
+    unique = entry.unique_id or entry.entry_id
+    device = registry.async_get_device(identifiers={(DOMAIN, f"{unique}_apps")})
+    tv = registry.async_get_device(identifiers={(DOMAIN, unique)})
+    if device is None or tv is None:
+        return
+    # Disabled buttons weren't set up, so weren't moved: moved now, as removing
+    # the device would remove them
+    entities = er.async_get(hass)
+    for entity in er.async_entries_for_device(
+        entities, device.id, include_disabled_entities=True
+    ):
+        entities.async_update_entity(entity.entity_id, device_id=tv.id)
+    registry.async_remove_device(device.id)
 
 
 async def _async_options_updated(

@@ -1,7 +1,7 @@
 # Publishing the TV app on Google Play
 
 What's ready in this repo, and what only the account holder can do. The app
-is `com.raineworks.tvbridge`, the TV half of Google TV by Raineworks.
+is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
 
 ## Ready
 
@@ -62,13 +62,14 @@ is `com.raineworks.tvbridge`, the TV half of Google TV by Raineworks.
 
 ## Listing
 
-**App name** (30 characters at most): `Google TV by Raineworks`
+**App name** (30 characters at most): `Raineworks TV`
 
-> **Review risk: impersonation.** Google Play's impersonation policy
-> rejects apps whose name or icon suggests they're made by another company.
-> A listing called "Google TV…" with the Google TV logo is likely to be
-> rejected. If it is, list it as **`Raineworks for Home Assistant`**, with a
-> Raineworks icon, and keep the app's own name and screens as they are.
+> **Why this name and icon.** Google Play's impersonation policy rejects
+> apps whose name or icon suggests another company made them. The name is
+> Raineworks', the icon is the Raineworks mark (Google TV's icon only as a
+> small badge for where it runs), and the description and the app's About
+> screen say it isn't Google's. If review still objects to the badge,
+> `brand/art.py` draws every icon: drop the badge there.
 
 **Short description** (80 characters at most):
 
@@ -89,12 +90,12 @@ is `com.raineworks.tvbridge`, the TV half of Google TV by Raineworks.
 > full screen. And it knows what the TV is doing: what's playing, the app in
 > front, the volume, as it happens.
 >
-> Setup takes a minute: add the Google TV by Raineworks integration to Home
+> Setup takes a minute: add the Raineworks TV integration to Home
 > Assistant (from HACS), and choose Allow on the TV when it asks. No
 > developer options, no codes. For the remote's keys, turning the TV off
 > and knowing its HDMI input, turn on network debugging; the app shows how.
 >
-> Requires Home Assistant with the Google TV by Raineworks integration
+> Requires Home Assistant with the Raineworks TV integration
 > (github.com/raine-works/ha-googletv). Everything stays on your network:
 > the app talks only to your Home Assistant.
 >
@@ -109,7 +110,7 @@ Console asks for, and the website `https://github.com/raine-works/ha-googletv`.
 **App access**: all functionality needs a Home Assistant server on the
 user's network. Give the reviewers instructions: "The app connects to the
 user's own Home Assistant (home-assistant.io) on their local network, with
-the Google TV by Raineworks integration installed. Without one, the app
+the Raineworks TV integration installed. Without one, the app
 shows its setup screen (a QR code to the integration, and the steps). No
 account or login is involved."
 

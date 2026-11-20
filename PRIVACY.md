@@ -1,9 +1,9 @@
-# Privacy policy: Google TV by Raineworks
+# Privacy policy: Raineworks TV
 
 _Last updated: 20 November 2026_
 
-This policy covers the **Google TV by Raineworks** TV app (package
-`com.raineworks.tvbridge`) and the **Google TV by Raineworks** Home Assistant
+This policy covers the **Raineworks TV** TV app (package
+`com.raineworks.tvbridge`) and the **Raineworks TV** Home Assistant
 integration, both made by Raineworks (Raine Petersen).
 
 ## In short

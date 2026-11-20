@@ -1,4 +1,4 @@
-# Google TV by Raineworks: the TV app's API (v1)
+# Raineworks TV: the TV app's API (v1)
 
 The TV app (`android/`) serves a small JSON API on the local network, which
 the Home Assistant integration (`custom_components/googletv/`) calls.
@@ -43,7 +43,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 
 | Endpoint | Returns |
 | :--- | :--- |
-| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`) |
+| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`), `installer` the package that installed it (`com.android.vending`: Google Play) or null |
 | `GET /api/events` | What happens on the TV, as it happens: see [Events](#events) |
 | `GET /api/state` | `{screen_on, foreground_app, uptime_ms, volume: {level, max, muted}, sessions, overlay_permission, usage_access, notification_access, network_debugging, instance, popups}`: `sessions` the media sessions (`package, state, position_ms, updated_ms, speed, title, subtitle, description`), null without notification access; `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
 | `GET /api/apps` | `{apps: [{package, activity, name}]}`: the launcher's apps |
@@ -55,8 +55,8 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `POST /api/input` | `{id}`: switches to an input, through the TV's own input app (`409` without the overlay permission) |
 | `POST /api/client` | `{integration_version, adb}`: Home Assistant says which integration it is and whether it also uses ADB, for the app's screen |
 | `GET /api/inputs` | `{inputs: [{id, name}]}`: HDMI and other external inputs, by their names on the TV |
-| `GET /api/rules` | `{blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}` |
-| `POST /api/rules` | the same fields (any of them) to change; returns the rules |
+| `GET /api/rules` | `{hidden_apps: [package], blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}`: `hidden_apps` are left out of Home Assistant (its app list, its buttons) |
+| `POST /api/rules` | the same fields (any of them) to change; returns the rules, and every event stream gets them (`rules`) |
 | `POST /api/notify` | shows a notification; see below |
 | `POST /api/play` | Plays media; see below |
 | `POST /api/dashboard` | `{url, token}`: a Home Assistant dashboard full screen, signed in with `token` (the frontend's external auth, as Home Assistant's phone apps do). It stays on `url`'s address (scheme, host, port): links elsewhere aren't followed, and the token is given only to a page from there. It closes on Back from its first page, or when another app comes to the front. A page that can't load (an untrusted certificate) shows why |
@@ -130,7 +130,8 @@ a stream that stops reading loses its oldest events.
 
 | `type` | Fields | When |
 | :--- | :--- | :--- |
-| `hello` | `instance`, `app_version`, `build` | First, on connecting. A new `instance`: the app restarted |
+| `hello` | `instance`, `app_version`, `build`, `features` | First, on connecting. A new `instance`: the app restarted |
+| `rules` | the rules, as `GET /api/rules` | They changed, on the TV's screen or through the API |
 | `state` | `change` (`screen`, `volume`) | The screen turned on or off, or the volume changed: worth reading the state again |
 | `ping` | | Every 15 seconds with nothing else: the connection's alive |
 | `notification_action` | `tag`, `action` | A notification's button was pressed (on a pop-up or in the panel); the notification comes down |

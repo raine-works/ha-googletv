@@ -31,7 +31,11 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
-from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -42,10 +46,12 @@ from homeassistant.util import dt as dt_util
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError
 from .app_client import AppClient, NeedsAdbError
 from .bridge import (
+    APK_NAME,
     BRIDGE_APK_URL,
     BRIDGE_DEV_APK_URL,
     BRIDGE_PACKAGE,
     BRIDGE_PAIRING_FILE,
+    BRIDGE_RELEASES_URL,
     BridgeAuthError,
     BridgeClient,
     BridgeError,
@@ -81,6 +87,9 @@ BRIDGE_SETUP_COMMANDS = (
     f"cmd deviceidle whitelist +{BRIDGE_PACKAGE}",
     f"am broadcast -a {BRIDGE_PACKAGE}.START -n {BRIDGE_PACKAGE}/.StartReceiver",
 )
+
+# Who installed the TV app, when it was Google Play (Play updates it)
+PLAY_STORE = "com.android.vending"
 
 # The TV app's event stream: tried again this soon after it ends, then less often
 EVENTS_RETRY_S = 5
@@ -126,6 +135,9 @@ class GoogleTvData:
     # Its version and build (the commit), as it reports them
     bridge_version: str | None = None
     bridge_build: str | None = None
+    # Apps Home Assistant leaves out: the TV app's switches, else the app
+    # buttons disabled here
+    hidden_apps: frozenset[str] = frozenset()
 
 
 @contextmanager
@@ -212,6 +224,15 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self._dashboard_lock = asyncio.Lock()
         # The event entity, told of notification events
         self._event_listeners: list[Callable[[dict[str, Any]], None]] = []
+        # The app's rules (hidden apps, pop-ups' rules) as it last said; None
+        # until read, or for an app from before 2.4 (its buttons say then)
+        self.app_rules: dict[str, Any] | None = None
+        # Changes made here the app hasn't taken yet (it was unreachable)
+        self._rules_pending: dict[str, list[str]] = {}
+        # The integration version an update of the app was last tried for
+        self._update_tried: str | None = None
+        # Who installed the app (Google Play updates its own)
+        self._bridge_installer: str | None = None
 
     async def _async_update_data(self) -> GoogleTvData:
         """Read the TV (fully every few seconds, quickly between), and its apps."""
@@ -257,6 +278,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             bridge_paired=installed and bool(self.bridge.token),
             bridge_version=self.bridge_info.get("version"),
             bridge_build=self.bridge_info.get("build"),
+            hidden_apps=frozenset(self.hidden_apps),
         )
 
     # The TV app: installing, pairing, notifications
@@ -273,7 +295,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         """With the app list read: the app's version; over ADB, a missing app."""
         if self.bridge.token and self.bridge_installed:
             self.config_entry.async_create_background_task(
-                self.hass, self._async_read_bridge_info(), f"{DOMAIN} TV app info"
+                self.hass, self._async_read_bridge(), f"{DOMAIN} TV app info"
             )
         if self.app_only:
             return
@@ -307,13 +329,201 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
                 _LOGGER.debug("Can't grant the TV app %s: %s", command, err)
                 return
 
-    async def _async_read_bridge_info(self) -> None:
+    async def _async_read_bridge(self) -> None:
+        """The app's version (an old one is updated) and its rules."""
         try:
             info = await self.bridge.async_info()
         except BridgeError as err:
             _LOGGER.debug("Can't read the TV app's version: %s", err)
             return
         self._set_bridge_info(info.get("app_version"), info.get("build"))
+        self._bridge_installer = info.get("installer")
+        await self._async_after_bridge_info(info)
+
+    async def _async_after_bridge_info(self, info: dict[str, Any]) -> None:
+        """Its rules (an app that has them), and an update if it's old."""
+        if "hidden_apps" in (info.get("features") or []):
+            await self._async_sync_rules()
+        await self._async_update_bridge_if_old(info)
+
+    async def _async_update_bridge_if_old(self, info: dict[str, Any]) -> None:
+        """An app older than the integration: updated over ADB, once per version.
+
+        One from Google Play is Play's to update; through the app alone (no
+        ADB), a repair says to update it.
+        """
+        ours = str((await async_get_integration(self.hass, DOMAIN)).version or "")
+        issue = f"update_tv_app_{self.config_entry.entry_id}"
+        theirs = info.get("app_version") or self.bridge_info.get("version")
+        installer = info.get("installer", self._bridge_installer)
+        if not _older(theirs, ours) or installer == PLAY_STORE:
+            ir.async_delete_issue(self.hass, DOMAIN, issue)
+            return
+        if self.app_only:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="update_tv_app",
+                translation_placeholders={
+                    "name": self.config_entry.title,
+                    "version": str(theirs),
+                    "latest": ours,
+                },
+            )
+            return
+        if self._update_tried == ours:
+            return
+        self._update_tried = ours
+        _LOGGER.info(
+            "Updating the TV app on %s from %s to %s", self.client.host, theirs, ours
+        )
+        try:
+            await self.async_install_bridge(f"{BRIDGE_RELEASES_URL}/v{ours}/{APK_NAME}")
+        except HomeAssistantError as err:
+            _LOGGER.warning(
+                "Couldn't update the TV app on %s to %s: %s",
+                self.client.host,
+                ours,
+                err,
+            )
+
+    # Apps' rules: which Home Assistant leaves out, which pop-ups don't show over
+
+    @property
+    def hidden_apps(self) -> set[str]:
+        """Apps left out: the TV app's switches, else the buttons disabled here."""
+        if self.app_rules is not None:
+            return set(self.app_rules.get("hidden_apps") or [])
+        return {package for package, e in self._app_buttons().items() if e.disabled}
+
+    def _app_buttons(self) -> dict[str, er.RegistryEntry]:
+        """The app buttons in the entity registry, by package."""
+        prefix = self.app_button_prefix
+        return {
+            e.unique_id.removeprefix(prefix): e
+            for e in er.async_entries_for_config_entry(
+                er.async_get(self.hass), self.config_entry.entry_id
+            )
+            if e.domain == "button" and e.unique_id.startswith(prefix)
+        }
+
+    @property
+    def app_button_prefix(self) -> str:
+        """The start of an app button's unique id (the package follows)."""
+        return f"{self.config_entry.unique_id or self.config_entry.entry_id}_app_"
+
+    async def _async_sync_rules(self) -> None:
+        """The app's rules, once it has the changes it missed."""
+        try:
+            rules = await self.bridge.async_rules(self._rules_pending or None)
+        except BridgeError as err:
+            _LOGGER.debug("Can't read the TV app's rules: %s", err)
+            return
+        self._rules_pending = {}
+        self._apply_rules(rules)
+
+    @callback
+    def _apply_rules(self, rules: dict[str, Any]) -> None:
+        """The app's rules as it says them: the app buttons follow."""
+        if self._rules_pending:
+            # It's back: it takes what it missed first, then says again
+            self.config_entry.async_create_background_task(
+                self.hass, self._async_sync_rules(), f"{DOMAIN} TV app rules"
+            )
+            return
+        rules = {k: v for k, v in rules.items() if k != "type" and k != "time"}
+        if rules == self.app_rules:
+            return
+        self.app_rules = rules
+        self._rules_changed()
+
+    @callback
+    def _rules_changed(self) -> None:
+        hidden = self.hidden_apps
+        registry = er.async_get(self.hass)
+        for package, entry in self._app_buttons().items():
+            if package in hidden and not entry.disabled:
+                registry.async_update_entity(
+                    entry.entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION
+                )
+            elif package not in hidden and entry.disabled_by in (
+                er.RegistryEntryDisabler.INTEGRATION,
+                er.RegistryEntryDisabler.USER,
+            ):
+                registry.async_update_entity(entry.entity_id, disabled_by=None)
+        if self.data is not None:
+            self.data = replace(self.data, hidden_apps=frozenset(hidden))
+            self.async_update_listeners()
+
+    async def async_set_app_rules(self, changes: dict[str, list[str]]) -> None:
+        """Change which apps are left out, or which pop-ups don't show over.
+
+        The TV app keeps them (one that's unreachable gets them when it's
+        back); without it, apps are left out by disabling their buttons.
+        """
+        changes = {k: sorted(set(v)) for k, v in changes.items()}
+        if self.app_rules is None:
+            if "hidden_apps" in changes:
+                self._hide_by_buttons(set(changes["hidden_apps"]))
+            if self.bridge.token and (
+                rest := {k: v for k, v in changes.items() if k != "hidden_apps"}
+            ):
+                await self.async_bridge_rules(rest)
+            return
+        self.app_rules = {**self.app_rules, **changes}
+        self._rules_pending = {**self._rules_pending, **changes}
+        self._rules_changed()
+        await self._async_sync_rules()
+
+    @callback
+    def _hide_by_buttons(self, hidden: set[str]) -> None:
+        """Without the TV app's rules: the hidden apps' buttons disabled."""
+        registry = er.async_get(self.hass)
+        for package, entry in self._app_buttons().items():
+            if package in hidden and not entry.disabled:
+                registry.async_update_entity(
+                    entry.entity_id, disabled_by=er.RegistryEntryDisabler.USER
+                )
+            elif package not in hidden and entry.disabled_by is not None:
+                registry.async_update_entity(entry.entity_id, disabled_by=None)
+        if self.data is not None:
+            self.data = replace(self.data, hidden_apps=frozenset(hidden))
+            self.async_update_listeners()
+
+    @callback
+    def async_watch_app_buttons(self) -> CALLBACK_TYPE:
+        """An app button disabled or enabled here hides or shows it in the TV app."""
+
+        @callback
+        def updated(event: Event[er.EventEntityRegistryUpdatedData]) -> None:
+            data = event.data
+            if data["action"] != "update" or "disabled_by" not in data["changes"]:
+                return
+            entry = er.async_get(self.hass).async_get(data["entity_id"])
+            prefix = self.app_button_prefix
+            if (
+                entry is None
+                or entry.config_entry_id != self.config_entry.entry_id
+                or entry.domain != "button"
+                or not entry.unique_id.startswith(prefix)
+                or self.app_rules is None
+            ):
+                return
+            package = entry.unique_id.removeprefix(prefix)
+            hidden = self.hidden_apps
+            if entry.disabled == (package in hidden):
+                # As the app says already (its own change, mirrored)
+                return
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self.async_set_app_rules({"hidden_apps": list(hidden ^ {package})}),
+                f"{DOMAIN} TV app rules",
+            )
+
+        return self.hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, updated)
 
     @callback
     def _set_bridge_info(self, version: str | None, build: str | None) -> None:
@@ -476,7 +686,9 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         except (aiohttp.ClientError, TimeoutError, IndexError):
             published = None
         if published is None:
-            if url in (BRIDGE_APK_URL, BRIDGE_DEV_APK_URL):
+            if url in (BRIDGE_APK_URL, BRIDGE_DEV_APK_URL) or url.startswith(
+                BRIDGE_RELEASES_URL
+            ):
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="bridge_download_failed",
@@ -531,8 +743,15 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         kind = event.get("type")
         if kind == "ping":
             return
+        if kind == "rules":
+            self._apply_rules(event)
+            return
         if kind == "hello":
             self._set_bridge_info(event.get("app_version"), event.get("build"))
+            # Connected again: anything changed meanwhile (rules, a new version)
+            self.config_entry.async_create_background_task(
+                self.hass, self._async_after_bridge_info(event), f"{DOMAIN} TV app"
+            )
             # A new run of the app: its live notifications are checked at once
             instance = event.get("instance")
             if self._bridge_instance is None:
@@ -862,7 +1081,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if refresh is None or refresh.user.id != user.id:
             refresh = await auth.async_create_refresh_token(
                 user,
-                client_name=f"Google TV by Raineworks: {self.config_entry.title}",
+                client_name=f"Raineworks TV: {self.config_entry.title}",
                 token_type=TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN,
                 access_token_expiration=DASHBOARD_TOKEN_LIFETIME,
             )
@@ -929,6 +1148,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             diagnostics=self._diagnostics,
             last_boot=self._last_boot,
             reachable=False,
+            hidden_apps=frozenset(self.hidden_apps),
         )
 
     async def _async_read_state(self, now: datetime) -> TvState:
@@ -1105,3 +1325,16 @@ def _until_met(until: dict[str, Any], state: State | None) -> bool:
         return state.state == until["state"]
     # Any change but a blip (unavailable, unknown) ends it
     return state.state not in (until["from"], STATE_UNAVAILABLE, STATE_UNKNOWN)
+
+
+def _older(version: str | None, than: str) -> bool:
+    """Whether a version (``2.3.0``) is older than another; unknown ones aren't."""
+
+    def parts(v: str) -> tuple[int, ...] | None:
+        try:
+            return tuple(int(p) for p in v.split("."))
+        except ValueError:
+            return None
+
+    mine, other = parts(version or ""), parts(than)
+    return mine is not None and other is not None and mine < other

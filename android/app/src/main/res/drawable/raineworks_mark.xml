@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The raineworks mark (a circle, three rain lines, a circuit trace ending
+     in a pad), from raineworks' blocks/brand, centred on 0,0 as there. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <group
+        android:translateX="48"
+        android:translateY="48">
+        <path
+            android:pathData="M-46,0 A46,46 0 1,0 46,0 A46,46 0 1,0 -46,0 Z M-22.98,-6.72 L-35.36,5.66 M-2.83,-14.14 L-34.29,17.32 M12.02,-16.26 L-30.05,25.81 M-22.98,31.47 L2.83,5.66 L22.9,5.66 M22.9,5.66 A3.7,3.7 0 1,0 30.3,5.66 A3.7,3.7 0 1,0 22.9,5.66 Z"
+            android:strokeColor="#FAFAFA"
+            android:strokeWidth="4.2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

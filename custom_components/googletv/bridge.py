@@ -1,4 +1,4 @@
-"""The TV app (Google TV by Raineworks): its local API (see protocol/README.md).
+"""The TV app (Raineworks TV): its local API (see protocol/README.md).
 
 The app shows Home Assistant's notifications on the TV: pop-ups over whatever
 is on screen (apps and HDMI inputs) with text, an image or a video, or in the
@@ -17,7 +17,10 @@ import aiohttp
 BRIDGE_PACKAGE = "com.raineworks.tvbridge"
 BRIDGE_PORT = 8721
 BRIDGE_SERVICE_TYPE = "_rwtvbridge._tcp.local."
-# The APK attached to the latest release, and master's build for testing
+# The APK attached to each release (releases/download/v<version>/…), the
+# latest one, and master's build for testing
+APK_NAME = "raineworks-tv-bridge.apk"
+BRIDGE_RELEASES_URL = "https://github.com/raine-works/ha-googletv/releases/download"
 BRIDGE_APK_URL = (
     "https://github.com/raine-works/ha-googletv/releases/latest/download/"
     "raineworks-tv-bridge.apk"
@@ -178,7 +181,7 @@ class BridgeClient:
     async def async_rules(
         self, changes: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """The notification rules, changed first when ``changes`` are given."""
+        """The rules (hidden apps, pop-ups'), changed first if ``changes`` given."""
         if changes:
             return await self._request("POST", "/api/rules", changes)
         return await self._request("GET", "/api/rules")

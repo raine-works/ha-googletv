@@ -37,7 +37,7 @@ object Events {
             streams.add(it)
             it.offer(
                 (JSONObject().put("type", "hello").put("instance", Notifier.instance).put("app_version", BuildConfig.VERSION_NAME).put("build", BuildConfig.GIT_SHA)
-                    .put("time", System.currentTimeMillis()).toString() + "\n").toByteArray(Charsets.UTF_8),
+                    .put("features", org.json.JSONArray(ApiServer.FEATURES)).put("time", System.currentTimeMillis()).toString() + "\n").toByteArray(Charsets.UTF_8),
             )
         }
     }

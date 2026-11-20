@@ -280,10 +280,11 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str]:
-        """The launcher's apps, then the HDMI inputs."""
-        return [a.name for a in self.coordinator.data.apps] + [
-            i.label for i in self._state.inputs
-        ]
+        """The launcher's apps (those not left out), then the HDMI inputs."""
+        hidden = self.coordinator.data.hidden_apps
+        return [
+            a.name for a in self.coordinator.data.apps if a.package not in hidden
+        ] + [i.label for i in self._state.inputs]
 
     @property
     def source(self) -> str | None:
@@ -350,6 +351,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             "apps": [
                 {"package": a.package, "name": a.name, "icon": a.icon}
                 for a in self.coordinator.data.apps
+                if a.package not in self.coordinator.data.hidden_apps
             ],
             "inputs": [
                 {

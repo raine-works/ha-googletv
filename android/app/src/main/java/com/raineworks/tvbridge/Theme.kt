@@ -18,7 +18,11 @@ import androidx.core.content.res.ResourcesCompat
 object Theme {
     val BACKGROUND = Color.parseColor("#0A0A0A")
     val CARD = Color.parseColor("#171717")
+    // The sections' rail, a step above the background
+    val RAIL = Color.parseColor("#111111")
     val MUTED = Color.parseColor("#262626")
+    // A switch that's off: it shows on a card and on a focused row alike
+    val SWITCH_OFF = Color.parseColor("#404040")
     val FOREGROUND = Color.parseColor("#FAFAFA")
     val MUTED_FOREGROUND = Color.parseColor("#A1A1A1")
     val PRIMARY = Color.parseColor("#E5E5E5")
