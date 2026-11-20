@@ -44,14 +44,14 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk raineworks-tv-bridge.apk
           sha256sum raineworks-tv-bridge.apk | cut -d' ' -f1 > raineworks-tv-bridge.apk.sha256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: raineworks-tv-bridge
           path: android/raineworks-tv-bridge.apk
 
       - name: Lint report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lint-report
           path: android/app/build/reports/lint-results-release.*

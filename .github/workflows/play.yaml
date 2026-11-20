@@ -68,7 +68,7 @@ jobs:
           ./gradlew --no-daemon bundleRelease -Pplay
           rm -f "$UPLOAD_KEYSTORE"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: env.HAS_KEY == 'true'
         with:
           name: google-tv-by-raineworks-play
