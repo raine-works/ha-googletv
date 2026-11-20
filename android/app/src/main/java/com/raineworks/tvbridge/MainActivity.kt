@@ -206,6 +206,9 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             background = Theme.surface(this@MainActivity, Theme.CARD, 12)
             setPadding(dp(24), dp(18), dp(24), dp(20))
+            // Rows reach 12 dp into the padding, their focus ring with them
+            clipChildren = false
+            clipToPadding = false
         }
         card.addView(text(title, 17f, Theme.semibold(this), Theme.FOREGROUND))
         subtitle?.let {
@@ -214,6 +217,8 @@ class MainActivity : Activity() {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(10), 0, 0)
+            clipChildren = false
+            clipToPadding = false
         }
         fill(body)
         card.addView(body)
