@@ -211,9 +211,12 @@ from the name its device gives itself over HDMI-CEC:
   from 2.4.1 keep each kind together on the device's page.)
 * **Choosing apps**: leave an app out of Home Assistant (the Source list,
   the `apps` attribute, its button) with its **Home Assistant** switch in
-  the TV app's Apps screen, on the integration's **Configure → Apps**, or
+  the TV app's Apps section, on the integration's **Configure → Apps and
+  inputs**, or
   by disabling its button. All three stay in step: disabling a button flips
-  the switch on the TV, and the other way round.
+  the switch on the TV, and the other way round. HDMI inputs have the same
+  switch (the TV app's Apps section, or **Configure → Apps and inputs**):
+  an input left out goes from the Source list and the Input picker.
 * **Remote keys** ("Remote · Home", `button.<tv>_remote_home`, …): Home, Back, Up, Down, Left,
   Right, OK, Play/pause, Volume up, Volume down, Mute and Settings.
 * **Remote** (`remote.<tv>`): `remote.send_command` with any key (`HOME`,
@@ -294,7 +297,7 @@ rest, which come back as cards go.
 ### Rules
 
 Pop-ups can stay off the apps and inputs you pick: their **Pop-ups** switch
-on the TV app's Apps screen, **Configure → Apps** on the integration, or
+on the TV app's Apps section, **Configure → Apps and inputs** on the integration, or
 **`googletv.set_notification_rules`** (by name: `Netflix`, `Xbox`). An app
 can be left out of Home Assistant and still get pop-ups, or the reverse.
 Those notifications go to the panel instead, or nowhere. The integration

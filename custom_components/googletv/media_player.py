@@ -289,7 +289,11 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         hidden = self.coordinator.data.hidden_apps
         return [
             a.name for a in self.coordinator.data.apps if a.package not in hidden
-        ] + [i.label for i in self._state.inputs]
+        ] + [
+            i.label
+            for i in self._state.inputs
+            if i.id not in self.coordinator.data.hidden_inputs
+        ]
 
     @property
     def source(self) -> str | None:
@@ -390,6 +394,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
                     "device": i.device,
                 }
                 for i in state.inputs
+                if i.id not in self.coordinator.data.hidden_inputs
             ],
             "input": state.input.id if state.awake and state.input else None,
             "tv_bridge": "paired"

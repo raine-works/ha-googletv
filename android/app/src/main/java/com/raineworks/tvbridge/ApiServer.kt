@@ -108,6 +108,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 val body = body(session)
                 body.optJSONArray("hidden_apps")?.let { prefs.hiddenApps = strings(it) }
                 body.optJSONArray("blocked_apps")?.let { prefs.blockedApps = strings(it) }
+                body.optJSONArray("hidden_inputs")?.let { prefs.hiddenInputs = strings(it) }
                 body.optJSONArray("blocked_inputs")?.let { prefs.blockedInputs = strings(it) }
                 if (body.has("default_size")) {
                     val value = body.getString("default_size")
@@ -245,7 +246,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     companion object {
         const val API_VERSION = 1
-        val FEATURES = listOf("events", "confirm_pairing", "device", "hidden_apps")
+        val FEATURES = listOf("events", "confirm_pairing", "device", "hidden_apps", "hidden_inputs")
         const val PORT = 8721
         private const val MAX_BODY = 64 * 1024
         private const val TAG = "TvBridge"

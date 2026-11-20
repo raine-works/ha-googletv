@@ -44,7 +44,13 @@ class GoogleTvInputSelect(GoogleTvEntity, SelectEntity):
     @property
     def options(self) -> list[str]:
         """Every input ("Xbox", "HDMI 2")."""
-        return [i.label for i in self._state.inputs]
+        return [i.label for i in self._shown]
+
+    @property
+    def _shown(self) -> list:
+        """The inputs, but those left out (the TV app's switches)."""
+        hidden = self.coordinator.data.hidden_inputs
+        return [i for i in self._state.inputs if i.id not in hidden]
 
     @property
     def icon(self) -> str:
@@ -66,15 +72,19 @@ class GoogleTvInputSelect(GoogleTvEntity, SelectEntity):
                     "kind": i.kind.key,
                     "device": i.device,
                 }
-                for i in self._state.inputs
+                for i in self._shown
             ]
         }
 
     @property
     def current_option(self) -> str | None:
-        """The input on screen; none while an app is (or the TV is off)."""
+        """The input on screen; none on an app, off, or on an input left out."""
         state = self._state
-        return state.input.label if state.awake and state.input else None
+        if not state.awake or not state.input:
+            return None
+        if state.input.id in self.coordinator.data.hidden_inputs:
+            return None
+        return state.input.label
 
     async def async_select_option(self, option: str) -> None:
         """Switch to the input (waking the TV)."""

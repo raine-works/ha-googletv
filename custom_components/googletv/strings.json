@@ -90,7 +90,7 @@
       "init": {
         "title": "Raineworks TV",
         "menu_options": {
-          "apps": "Apps",
+          "apps": "Apps and inputs",
           "general": "General"
         }
       },
@@ -106,16 +106,18 @@
         }
       },
       "apps": {
-        "title": "Apps on {name}",
-        "description": "The same switches as the Apps screen of the TV app: change them here or on the TV.",
+        "title": "Apps and inputs on {name}",
+        "description": "The same switches as the Apps section of the TV app: change them here or on the TV.",
         "data": {
           "apps_shown": "Apps in Home Assistant",
           "popups_apps": "Pop-ups over these apps",
+          "inputs_shown": "Inputs in Home Assistant",
           "popups_inputs": "Pop-ups over these inputs"
         },
         "data_description": {
           "apps_shown": "In the TV's app list (Source) and with a button. An app left out has its button disabled; enabling the button brings it back.",
           "popups_apps": "Notifications pop up while one of these is on screen. Over the others, they go to the notification panel (or nowhere, as the TV app's set).",
+          "inputs_shown": "In the TV's source list and its Input picker.",
           "popups_inputs": "The same, for the HDMI inputs."
         }
       }

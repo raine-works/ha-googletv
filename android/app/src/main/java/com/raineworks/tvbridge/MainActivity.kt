@@ -471,10 +471,13 @@ class MainActivity : Activity() {
                 muted(body, getString(R.string.no_inputs))
                 return@card
             }
-            columns(body, null, getString(R.string.column_popups))
+            columns(body, getString(R.string.column_home_assistant), getString(R.string.column_popups))
             inputs.forEach { input ->
                 val row = itemRow(body, input.name, null, "mdi:video-input-hdmi")
-                spacerCell(row)
+                switchCell(row, input.id !in prefs.hiddenInputs, getString(R.string.column_home_assistant)) { on ->
+                    prefs.hiddenInputs = if (on) prefs.hiddenInputs - input.id else prefs.hiddenInputs + input.id
+                    rulesChanged()
+                }
                 switchCell(row, input.id !in prefs.blockedInputs, getString(R.string.column_popups)) { on ->
                     prefs.blockedInputs = if (on) prefs.blockedInputs - input.id else prefs.blockedInputs + input.id
                     rulesChanged()
@@ -962,10 +965,6 @@ class MainActivity : Activity() {
             },
             LinearLayout.LayoutParams(dp(COLUMN_DP), dp(48)),
         )
-    }
-
-    private fun spacerCell(row: LinearLayout) {
-        row.addView(View(this), LinearLayout.LayoutParams(dp(COLUMN_DP), dp(48)))
     }
 
     /** A row the remote can land on and select. */

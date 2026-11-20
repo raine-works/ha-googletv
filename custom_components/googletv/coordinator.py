@@ -148,6 +148,8 @@ class GoogleTvData:
     # Apps Home Assistant leaves out: the TV app's switches, else the app
     # buttons disabled here
     hidden_apps: frozenset[str] = frozenset()
+    # Inputs (their ids) Home Assistant leaves out, by the TV app's switches
+    hidden_inputs: frozenset[str] = frozenset()
 
 
 @contextmanager
@@ -289,6 +291,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             bridge_version=self.bridge_info.get("version"),
             bridge_build=self.bridge_info.get("build"),
             hidden_apps=frozenset(self.hidden_apps),
+            hidden_inputs=frozenset(self.hidden_inputs),
         )
 
     # The TV app: installing, pairing, notifications
@@ -409,6 +412,11 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             return set(self.app_rules.get("hidden_apps") or [])
         return {package for package, e in self._app_buttons().items() if e.disabled}
 
+    @property
+    def hidden_inputs(self) -> set[str]:
+        """Inputs left out, by the TV app's switches (none without them)."""
+        return set((self.app_rules or {}).get("hidden_inputs") or [])
+
     def _app_buttons(self) -> dict[str, er.RegistryEntry]:
         """The app buttons in the entity registry, by package."""
         prefix = self.app_button_prefix
@@ -465,7 +473,11 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             ):
                 registry.async_update_entity(entry.entity_id, disabled_by=None)
         if self.data is not None:
-            self.data = replace(self.data, hidden_apps=frozenset(hidden))
+            self.data = replace(
+                self.data,
+                hidden_apps=frozenset(hidden),
+                hidden_inputs=frozenset(self.hidden_inputs),
+            )
             self.async_update_listeners()
 
     async def async_set_app_rules(self, changes: dict[str, list[str]]) -> None:
@@ -500,7 +512,11 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             elif package not in hidden and entry.disabled_by is not None:
                 registry.async_update_entity(entry.entity_id, disabled_by=None)
         if self.data is not None:
-            self.data = replace(self.data, hidden_apps=frozenset(hidden))
+            self.data = replace(
+                self.data,
+                hidden_apps=frozenset(hidden),
+                hidden_inputs=frozenset(self.hidden_inputs),
+            )
             self.async_update_listeners()
 
     @callback
@@ -1204,6 +1220,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             last_boot=self._last_boot,
             reachable=False,
             hidden_apps=frozenset(self.hidden_apps),
+            hidden_inputs=frozenset(self.hidden_inputs),
         )
 
     async def _async_read_state(self, now: datetime) -> TvState:

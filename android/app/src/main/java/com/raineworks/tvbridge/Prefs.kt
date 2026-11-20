@@ -61,6 +61,11 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(KEY_HIDDEN_APPS, emptySet())!!.toSet()
         set(value) = prefs.edit().putStringSet(KEY_HIDDEN_APPS, value).apply()
 
+    /** HDMI inputs (TV input ids) Home Assistant leaves out: its source list, its Input. */
+    var hiddenInputs: Set<String>
+        get() = prefs.getStringSet(KEY_HIDDEN_INPUTS, emptySet())!!.toSet()
+        set(value) = prefs.edit().putStringSet(KEY_HIDDEN_INPUTS, value).apply()
+
     /** HDMI inputs (TV input ids) that pop-ups don't show over. */
     var blockedInputs: Set<String>
         get() = prefs.getStringSet(KEY_BLOCKED_INPUTS, emptySet())!!.toSet()
@@ -85,6 +90,7 @@ class Prefs(context: Context) {
     fun rules(): JSONObject = JSONObject()
         .put("hidden_apps", JSONArray(hiddenApps.sorted()))
         .put("blocked_apps", JSONArray(blockedApps.sorted()))
+        .put("hidden_inputs", JSONArray(hiddenInputs.sorted()))
         .put("blocked_inputs", JSONArray(blockedInputs.sorted()))
         .put("when_blocked", whenBlocked)
         .put("default_size", defaultSize)
@@ -100,6 +106,7 @@ class Prefs(context: Context) {
         private const val KEY_TOKENS = "tokens"
         private const val KEY_BLOCKED_APPS = "blocked_apps"
         private const val KEY_HIDDEN_APPS = "hidden_apps"
+        private const val KEY_HIDDEN_INPUTS = "hidden_inputs"
         private const val KEY_BLOCKED_INPUTS = "blocked_inputs"
         private const val KEY_WHEN_BLOCKED = "when_blocked"
         private const val KEY_DEFAULT_SIZE = "default_size"

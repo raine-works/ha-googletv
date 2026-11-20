@@ -66,7 +66,7 @@
     <string name="column_home_assistant">Home Assistant</string>
     <string name="column_popups">Pop-ups</string>
     <string name="inputs_card">Inputs</string>
-    <string name="inputs_card_text">Pop-ups while an HDMI input is on screen</string>
+    <string name="inputs_card_text">Home Assistant: the input is in its source list and its Input picker. Pop-ups: notifications pop up while it\'s on screen.</string>
     <string name="no_inputs">No HDMI inputs found</string>
     <string name="when_blocked">When pop-ups are off</string>
     <string name="when_blocked_text">What happens to a notification that arrives then</string>

@@ -569,6 +569,11 @@ class GoogleTvOptionsFlow(OptionsFlow):
             changes = {
                 "hidden_apps": [a.package for a in apps if a.package not in shown]
             }
+            if rules is not None and inputs:
+                shown_inputs = set(user_input.get(INPUTS_SHOWN, []))
+                changes["hidden_inputs"] = [
+                    i.id for i in inputs if i.id not in shown_inputs
+                ]
             if rules is not None:
                 over = set(user_input.get(POPUPS_APPS, []))
                 changes["blocked_apps"] = [
@@ -610,6 +615,13 @@ class GoogleTvOptionsFlow(OptionsFlow):
                 )
             ] = choices(app_choices)
             if inputs:
+                hidden_inputs = set(rules.get("hidden_inputs") or [])
+                schema[
+                    vol.Optional(
+                        INPUTS_SHOWN,
+                        default=[i.id for i in inputs if i.id not in hidden_inputs],
+                    )
+                ] = choices([(i.id, i.label) for i in inputs])
                 blocked_inputs = set(rules.get("blocked_inputs") or [])
                 schema[
                     vol.Optional(
@@ -629,3 +641,4 @@ class GoogleTvOptionsFlow(OptionsFlow):
 APPS_SHOWN = "apps_shown"
 POPUPS_APPS = "popups_apps"
 POPUPS_INPUTS = "popups_inputs"
+INPUTS_SHOWN = "inputs_shown"

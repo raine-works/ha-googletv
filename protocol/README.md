@@ -43,7 +43,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 
 | Endpoint | Returns |
 | :--- | :--- |
-| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`), `installer` the package that installed it (`com.android.vending`: Google Play) or null |
+| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`, `hidden_inputs`), `installer` the package that installed it (`com.android.vending`: Google Play) or null |
 | `GET /api/events` | What happens on the TV, as it happens: see [Events](#events) |
 | `GET /api/state` | `{screen_on, foreground_app, uptime_ms, volume: {level, max, muted}, sessions, overlay_permission, usage_access, notification_access, network_debugging, instance, popups}`: `sessions` the media sessions (`package, state, position_ms, updated_ms, speed, title, subtitle, description`), null without notification access; `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
 | `GET /api/apps` | `{apps: [{package, activity, name}]}`: the launcher's apps |
@@ -55,7 +55,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `POST /api/input` | `{id}`: switches to an input, through the TV's own input app (`409` without the overlay permission) |
 | `POST /api/client` | `{integration_version, adb}`: Home Assistant says which integration it is and whether it also uses ADB, for the app's screen |
 | `GET /api/inputs` | `{inputs: [{id, name}]}`: HDMI and other external inputs, by their names on the TV |
-| `GET /api/rules` | `{hidden_apps: [package], blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}`: `hidden_apps` are left out of Home Assistant (its app list, its buttons) |
+| `GET /api/rules` | `{hidden_apps: [package], hidden_inputs: [input id], blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}`: `hidden_apps` and `hidden_inputs` are left out of Home Assistant (its app list and buttons, its sources and Input) |
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules, and every event stream gets them (`rules`) |
 | `POST /api/notify` | shows a notification; see below |
 | `POST /api/play` | Plays media; see below |

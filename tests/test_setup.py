@@ -2136,3 +2136,19 @@ async def test_home_assistant_urls_are_signed_for_the_tv(
     await sent(image="/media/local/doorbell_snapshot.jpg", duration="0", tag="door")
     kept = entry.runtime_data._live["door"]["payload"]["image_url"]
     assert kept == "http://192.168.1.2:8123/media/local/doorbell_snapshot.jpg"
+
+
+async def test_an_input_left_out_on_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Its Home Assistant switch off: out of the sources and the Input picker."""
+    entry = await _paired(hass, client, web)
+    hdmi2 = next(i for i in entry.runtime_data.data.state.inputs if i.label == "HDMI 2")
+    entry.runtime_data._async_handle_event(
+        {"type": "rules", **RULES, "hidden_inputs": [hdmi2.id]}
+    )
+    await hass.async_block_till_done()
+    sources = hass.states.get("media_player.lott_s_tv").attributes["source_list"]
+    assert "HDMI 2" not in sources and "Xbox" in sources
+    picker = hass.states.get("select.lott_s_tv_input")
+    assert picker.attributes["options"] == ["Xbox", "HDMI 3"]
