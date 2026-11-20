@@ -88,6 +88,7 @@ POSITIONS = [
 NOTIFY_SCHEMA = {
     vol.Optional("message"): cv.string,
     vol.Optional("title"): cv.string,
+    vol.Optional("icon"): cv.string,
     vol.Optional("image"): cv.string,
     vol.Optional("video"): cv.string,
     vol.Optional("camera_entity"): cv.entity_domain("camera"),
@@ -361,6 +362,11 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             )
             if key in kwargs
         }
+        if icon := kwargs.get("icon"):
+            # mdi:<name>, or an image (a URL or a Home Assistant path)
+            payload["icon"] = (
+                icon if icon.startswith("mdi:") else self._home_assistant_url(icon)
+            )
         if image := kwargs.get("image"):
             payload["image_url"] = self._home_assistant_url(image)
         if video := kwargs.get("video"):

@@ -198,6 +198,10 @@
           "name": "Title",
           "description": "The heading over it."
         },
+        "icon": {
+          "name": "Icon",
+          "description": "The badge's icon: a Home Assistant icon (mdi:doorbell), or an image URL or path. Raineworks' logo if not set."
+        },
         "image": {
           "name": "Image",
           "description": "An image URL, or a Home Assistant path (/local/…, /api/…)."

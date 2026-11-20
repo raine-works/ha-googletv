@@ -45,6 +45,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | Field | Default | |
 | :--- | :--- | :--- |
 | `title`, `message` | | Text; at least one of these, `image_url` or `video_url` |
+| `icon` | | The badge: `mdi:<name>` (Material Design Icons 7.4.47, bundled) or an http(s) image URL; the logo if not set |
 | `image_url` | | An image (http/https), shown on the pop-up and in the panel |
 | `video_url` | | A video or live stream (http/https, HLS `.m3u8`, rtsp), played on the pop-up: a doorbell camera |
 | `mode` | `popup` | `popup` over what's on screen, `panel` (the notification panel only), or `both` |

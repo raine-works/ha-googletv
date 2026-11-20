@@ -154,6 +154,7 @@ apps and HDMI inputs alike, or in the TV's notification panel.
 | Field | |
 | :--- | :--- |
 | `message`, `title` | The text |
+| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Raineworks logo if not set, tinted by `color` |
 | `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`) |
 | `camera_entity` | A camera's live stream (`camera_view: live`, the default) or snapshot: who's at the door |
 | `video` | A video or live stream URL (HLS, RTSP, MP4) |
@@ -173,6 +174,7 @@ target:
 data:
   title: Front door
   message: Someone's at the door
+  icon: mdi:doorbell
   camera_entity: camera.front_door
   position: bottom_right
   duration: 30

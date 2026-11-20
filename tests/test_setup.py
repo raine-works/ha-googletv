@@ -830,6 +830,7 @@ async def test_the_notify_action(
         {
             "entity_id": "media_player.lott_s_tv",
             "title": "Doorbell",
+            "icon": "mdi:doorbell",
             "image": "/local/doorbell.jpg",
             "position": "bottom_right",
             "duration": 12,
@@ -840,6 +841,7 @@ async def test_the_notify_action(
     )
     call = _bridge_calls(web, "/api/notify")[-1]
     assert call[2]["image_url"] == "http://192.168.1.2:8123/local/doorbell.jpg"
+    assert call[2]["icon"] == "mdi:doorbell"
     assert (call[2]["position"], call[2]["duration"], call[2]["size"]) == (
         "bottom_right",
         12,

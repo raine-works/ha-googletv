@@ -17,6 +17,8 @@ data class NotificationRequest(
     val ignoreRules: Boolean,
     val whenBlocked: String?,
     val tag: String?,
+    // "mdi:<name>", or an image URL, in place of the logo
+    val icon: String? = null,
     val contextApp: String?,
     val contextInput: String?,
 ) {
@@ -78,6 +80,12 @@ data class NotificationRequest(
                     "image_url and video_url must be http(s) or rtsp URLs"
                 }
             }
+            val icon = text("icon")
+            require(
+                icon == null ||
+                    Regex("^mdi:[a-z0-9-]+$").matches(icon) ||
+                    Regex("^https?://\\S+$", RegexOption.IGNORE_CASE).matches(icon),
+            ) { "icon must be mdi:<name> or an http(s) image URL" }
             val context = json.optJSONObject("context")
             return NotificationRequest(
                 title = title,
@@ -93,6 +101,7 @@ data class NotificationRequest(
                 ignoreRules = json.optBoolean("ignore_rules", false),
                 whenBlocked = whenBlocked,
                 tag = text("tag"),
+                icon = icon,
                 contextApp = context?.optString("app", "")?.takeIf { it.isNotBlank() },
                 contextInput = context?.optString("input", "")?.takeIf { it.isNotBlank() },
             )

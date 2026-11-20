@@ -46,12 +46,17 @@ class Overlay private constructor(private val context: Context) {
     private var nextTag = 0
 
     fun show(request: NotificationRequest) {
-        val imageUrl = request.imageUrl
-        if (imageUrl != null && request.videoUrl == null) {
-            Images.load(imageUrl, 1280) { bitmap -> add(request, bitmap) }
-        } else {
-            main.post { add(request, null) }
+        // An image icon first, then the image, then the card
+        val icon = request.icon?.takeUnless { Icons.isMdi(it) }
+        val withImage = { iconBitmap: Bitmap? ->
+            val imageUrl = request.imageUrl
+            if (imageUrl != null && request.videoUrl == null) {
+                Images.load(imageUrl, 1280) { bitmap -> add(request, bitmap, iconBitmap) }
+            } else {
+                main.post { add(request, null, iconBitmap) }
+            }
         }
+        if (icon != null) Images.load(icon, 128) { bitmap -> withImage(bitmap) } else withImage(null)
     }
 
     fun showPairingCode(code: String) {
@@ -90,21 +95,28 @@ class Overlay private constructor(private val context: Context) {
         main.post { cards.entries.toList().forEach { remove(it.key, it.value, animate = true) } }
     }
 
-    private fun add(request: NotificationRequest, image: Bitmap?) {
+    private fun add(request: NotificationRequest, image: Bitmap?, iconBitmap: Bitmap?) {
         if (!Settings.canDrawOverlays(context)) return
-        val card = if (request.size == "compact") compactCard(request, image) else fullCard(request, image)
+        val card = if (request.size == "compact") {
+            compactCard(request, image, iconBitmap)
+        } else {
+            fullCard(request, image, iconBitmap)
+        }
         val tag = request.tag ?: "notification-${nextTag++}"
         attach(tag, request.position, card.first, card.second, request.durationS)
     }
 
     /** A one-line pill: the logo (or the image, small), the title and message. */
-    private fun compactCard(request: NotificationRequest, image: Bitmap?): Pair<View, ExoPlayer?> {
+    private fun compactCard(request: NotificationRequest, image: Bitmap?, iconBitmap: Bitmap?): Pair<View, ExoPlayer?> {
         val pill = cardLayout(LinearLayout.LayoutParams.WRAP_CONTENT, request.color, pill = true).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(16), dp(8))
         }
-        pill.addView(badge(request.color, image, 24), LinearLayout.LayoutParams(dp(24), dp(24)))
+        pill.addView(
+            badge(request.color, iconBitmap ?: image, request.icon, 24),
+            LinearLayout.LayoutParams(dp(24), dp(24)),
+        )
         val line = listOfNotNull(request.title, request.message).joinToString("  ·  ")
         pill.addView(
             text(line.ifEmpty { context.getString(R.string.app_name) }, 13f, Theme.medium(context), Theme.FOREGROUND, 1).apply {
@@ -116,7 +128,7 @@ class Overlay private constructor(private val context: Context) {
     }
 
     /** A card: the image or video on top, then the logo, title and message, then time left. */
-    private fun fullCard(request: NotificationRequest, image: Bitmap?): Pair<View, ExoPlayer?> {
+    private fun fullCard(request: NotificationRequest, image: Bitmap?, iconBitmap: Bitmap?): Pair<View, ExoPlayer?> {
         val width = dp(
             when (request.size) {
                 "medium" -> 340
@@ -154,7 +166,7 @@ class Overlay private constructor(private val context: Context) {
             }
             val badgeSize = (22 * scale).toInt()
             row.addView(
-                badge(request.color, null, badgeSize),
+                badge(request.color, iconBitmap, request.icon, badgeSize),
                 LinearLayout.LayoutParams(dp(badgeSize), dp(badgeSize)).apply { topMargin = dp(1) },
             )
             val texts = LinearLayout(context).apply {
@@ -188,8 +200,11 @@ class Overlay private constructor(private val context: Context) {
         return card to player
     }
 
-    /** The logo in a soft circle (tinted with the notification's color), or a small image. */
-    private fun badge(color: Int?, image: Bitmap?, sizeDp: Int): View {
+    /**
+     * The badge in a soft circle (tinted by the notification's color): an
+     * image, a Home Assistant icon ("mdi:doorbell"), else the logo.
+     */
+    private fun badge(color: Int?, image: Bitmap?, icon: String?, sizeDp: Int): View {
         if (image != null) {
             return ImageView(context).apply {
                 setImageBitmap(image)
@@ -202,15 +217,28 @@ class Overlay private constructor(private val context: Context) {
             }
         }
         val tint = color ?: Theme.FOREGROUND
+        val circle = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Theme.withAlpha(tint, 28))
+        }
+        val glyph = icon?.takeIf { Icons.isMdi(it) }?.let { Icons.glyph(context, it) }
+        if (glyph != null) {
+            return TextView(context).apply {
+                text = glyph
+                typeface = Icons.typeface(context)
+                setTextColor(tint)
+                setTextSize(TypedValue.COMPLEX_UNIT_DIP, sizeDp * 0.62f)
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                background = circle
+            }
+        }
         return ImageView(context).apply {
             setImageResource(R.drawable.logo_white)
             imageTintList = android.content.res.ColorStateList.valueOf(tint)
             val pad = dp(sizeDp) / 8
             setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Theme.withAlpha(tint, 28))
-            }
+            background = circle
         }
     }
 

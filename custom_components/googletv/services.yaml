@@ -13,6 +13,10 @@ notify:
       example: "Doorbell"
       selector:
         text:
+    icon:
+      example: "mdi:doorbell"
+      selector:
+        icon:
     image:
       example: "/local/doorbell.jpg"
       selector:
