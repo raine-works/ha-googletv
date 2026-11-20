@@ -1,0 +1,6 @@
+# Home Assistant tests (config flow, setup), with Home Assistant itself. The TV
+# is mocked, but the integration imports adb-shell as it loads.
+pytest
+pytest-asyncio
+pytest-homeassistant-custom-component
+adb-shell[async]==0.4.4

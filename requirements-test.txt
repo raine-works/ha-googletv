@@ -1,0 +1,4 @@
+# Lint and the parser unit tests: no Home Assistant needed.
+pytest
+pytest-asyncio
+ruff

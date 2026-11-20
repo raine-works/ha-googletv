@@ -1,0 +1,44 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a Google TV",
+        "description": "On the TV, turn on Settings → System → Developer options → USB debugging (and Network or Wireless debugging where it's a separate switch). When you submit, the TV shows \"Allow USB debugging?\": tick Always allow and choose Allow. This waits up to a minute for it.",
+        "data": {
+          "host": "Address",
+          "port": "Port",
+          "name": "Name"
+        },
+        "data_description": {
+          "host": "The TV's IP address or host name.",
+          "port": "The TV's ADB port, 5555 unless you changed it.",
+          "name": "Optional. The TV's maker and model when empty."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect {name}",
+        "description": "{name} no longer trusts Home Assistant (debugging was turned off and on, or the TV was reset). Make sure USB debugging is on, submit, then tick Always allow and choose Allow on the TV."
+      }
+    },
+    "error": {
+      "cannot_connect": "Can't reach the TV. Check its address and that network debugging is on.",
+      "not_authorized": "The TV didn't allow the connection. Submit again and accept the prompt on the TV within a minute.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This TV is already set up.",
+      "reauth_successful": "Reconnected."
+    }
+  },
+  "exceptions": {
+    "command_failed": {
+      "message": "The TV didn't take the command: {error}"
+    },
+    "unknown_source": {
+      "message": "The TV has no app or input called {source}."
+    },
+    "unsupported_media_type": {
+      "message": "Google TV plays an app, an input or a url, not {media_type}."
+    }
+  }
+}
