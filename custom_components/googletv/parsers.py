@@ -8,7 +8,7 @@ needs comes back from one shell command (``POLL_COMMAND``), split into
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import re
 from urllib.parse import unquote
 
@@ -48,6 +48,9 @@ POLL_COMMAND = "; ".join(
         "settings get secure tv_input_custom_labels",
         "echo @@hidden",
         "settings get secure tv_input_hidden_inputs",
+        "echo @@cec",
+        # The devices HDMI-CEC knows: each one's name ("PS5") and port
+        "dumpsys hdmi_control | grep 'CEC: logical_address'",
     ]
 )
 
@@ -153,6 +156,73 @@ class App:
 
 
 @dataclass(frozen=True)
+class InputKind:
+    """What an input is, and its icon."""
+
+    key: str
+    icon: str
+
+
+HDMI_INPUT = InputKind("hdmi", "mdi:video-input-hdmi")
+
+# Matched in order against an input's name on the TV, then its device's CEC
+# name; a name matching none is an HDMI input. "Switch" alone is Nintendo's,
+# "HDMI switch" isn't.
+INPUT_KINDS: tuple[tuple[InputKind, re.Pattern[str]], ...] = tuple(
+    (InputKind(key, icon), re.compile(pattern, re.IGNORECASE))
+    for key, icon, pattern in (
+        ("xbox", "mdi:microsoft-xbox", r"xbox"),
+        (
+            "playstation",
+            "mdi:sony-playstation",
+            r"playstation|\bps ?[1-5]\b|\bps ?vita\b|\bpsx\b",
+        ),
+        ("nintendo_switch", "mdi:nintendo-switch", r"nintendo|^switch\b|\bswitch ?2\b"),
+        ("nintendo_wii", "mdi:nintendo-wii", r"\bwii\b|\bwii ?u\b"),
+        ("steam", "mdi:steam", r"steam"),
+        ("apple_tv", "mdi:apple", r"apple ?tv"),
+        ("laptop", "mdi:laptop", r"laptop|macbook|notebook"),
+        (
+            "computer",
+            "mdi:desktop-tower-monitor",
+            r"\bpc\b|computer|desktop|\bmac\b|imac|mac mini|gaming rig|htpc",
+        ),
+        (
+            "streamer",
+            "mdi:television-box",
+            r"chromecast|google tv|fire ?tv|fire ?stick|roku|shield|streamer"
+            r"|android tv|\bonn\b",
+        ),
+        (
+            "cable",
+            "mdi:set-top-box",
+            r"cable|satellite|\bdish\b|directv|xfinity|spectrum|tivo|set.?top"
+            r"|\bstb\b|\bbox\b",
+        ),
+        ("disc", "mdi:disc-player", r"blu.?ray|\bdvd\b|\bdisc\b"),
+        (
+            "audio",
+            "mdi:soundbar",
+            r"sound ?bar|receiver|\bavr\b|sonos|denon|marantz|yamaha|\bamp\b",
+        ),
+        ("camera", "mdi:camera", r"camera|camcorder|gopro"),
+        ("console", "mdi:controller", r"\bgame|console|retro|arcade|\bsnes\b|\bnes\b"),
+    )
+)
+
+
+def input_kind(*names: str | None) -> InputKind:
+    """The kind of the first name that matches one, else an HDMI input."""
+    for name in names:
+        if not name:
+            continue
+        for kind, pattern in INPUT_KINDS:
+            if pattern.search(name):
+                return kind
+    return HDMI_INPUT
+
+
+@dataclass(frozen=True)
 class TvInput:
     """One of the TV's HDMI inputs."""
 
@@ -160,6 +230,23 @@ class TvInput:
     port: int
     # The name given to it on the TV ("Xbox"), else "HDMI <port>"
     label: str
+    # The name its device gives itself over HDMI-CEC ("PS5"), if it does
+    device: str | None = None
+
+    @property
+    def named(self) -> bool:
+        """Named on the TV (not just "HDMI <port>")."""
+        return self.label != f"HDMI {self.port}"
+
+    @property
+    def kind(self) -> InputKind:
+        """What's on it: by its name on the TV, else by its CEC name."""
+        return input_kind(self.label if self.named else None, self.device)
+
+    @property
+    def icon(self) -> str:
+        """Its icon (an Xbox's, a PlayStation's…, else an HDMI port)."""
+        return self.kind.icon
 
 
 @dataclass(frozen=True)
@@ -408,6 +495,29 @@ def input_on_screen(inputs: list[TvInput], current: str | None) -> TvInput | Non
     return None
 
 
+def parse_cec(text: str) -> dict[int, str]:
+    """The name each HDMI-CEC device gives itself, by the port it's on.
+
+    Lines like ``CEC: logical_address: 0x04 device_type: 4 … display_name:
+    PS5 power_status: 0 physical_address: 0x2000 port_id: 2``; the TV itself
+    (physical address 0.0.0.0) is left out.
+    """
+    devices: dict[int, str] = {}
+    for line in text.splitlines():
+        match = re.search(
+            r"display_name: (.*?) power_status: .*?"
+            r"physical_address: 0x([0-9a-fA-F]{4})(?:.*?port_id: (\d+))?",
+            line,
+        )
+        if not match or match.group(2) == "0000":
+            continue
+        name = match.group(1).strip()
+        port = int(match.group(3) or 0) or int(match.group(2)[0], 16)
+        if name and port and port not in devices:
+            devices[port] = name
+    return devices
+
+
 def parse_state(raw: str) -> TvState:
     """A TV's state from ``POLL_COMMAND``'s output."""
     sections = split_sections(raw)
@@ -418,6 +528,8 @@ def parse_state(raw: str) -> TvState:
         sections.get("labels", ""),
         sections.get("hidden", ""),
     )
+    cec = parse_cec(sections.get("cec", ""))
+    inputs = [replace(i, device=cec.get(i.port)) for i in inputs]
     app = front[0] if front else None
     shown = input_on_screen(inputs, current)
     # A session left from an input the TV has since left (an app in front that

@@ -111,6 +111,12 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         )
 
     @property
+    def icon(self) -> str | None:
+        """The input's icon while one is on screen (an Xbox's…)."""
+        state = self._state
+        return state.input.icon if state.awake and state.input else None
+
+    @property
     def source_list(self) -> list[str]:
         """The launcher's apps, then the HDMI inputs."""
         return [a.name for a in self.coordinator.data.apps] + [
@@ -188,7 +194,15 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
                 for a in self.coordinator.data.apps
             ],
             "inputs": [
-                {"id": i.id, "port": i.port, "name": i.label} for i in state.inputs
+                {
+                    "id": i.id,
+                    "port": i.port,
+                    "name": i.label,
+                    "icon": i.icon,
+                    "kind": i.kind.key,
+                    "device": i.device,
+                }
+                for i in state.inputs
             ],
             "input": state.input.id if state.awake and state.input else None,
             "media_app": state.now_playing.package

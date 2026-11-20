@@ -147,6 +147,16 @@ async def test_the_tv_on_its_xbox_input(
     tv_input = hass.states.get("select.lott_s_tv_input")
     assert tv_input.state == "Xbox"
     assert tv_input.attributes["options"] == ["Xbox", "HDMI 2", "HDMI 3"]
+    # On the Xbox: its icon, on the select and the TV
+    assert tv_input.attributes["icon"] == "mdi:microsoft-xbox"
+    assert tv.attributes["icon"] == "mdi:microsoft-xbox"
+    assert tv_input.attributes["inputs"][1] == {
+        "name": "HDMI 2",
+        "port": 2,
+        "icon": "mdi:video-input-hdmi",
+        "kind": "hdmi",
+        "device": None,
+    }
 
 
 async def test_a_button_per_app_named_and_pictured(

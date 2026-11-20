@@ -39,6 +39,30 @@ Each TV is a device with:
 **Input** (`select.<tv>_input`): the HDMI inputs by their names on the TV,
 showing the one on screen; pick one to switch to it (the TV wakes first).
 
+Each input gets an icon for what's on it, from its name on the TV ("Xbox",
+"PS5", "Switch", "Apple TV", "Cable box"…), else from the name its device
+gives itself over HDMI-CEC; anything else is an HDMI port. The Input select
+and the media player take the icon of the input on screen, and both list
+every input's `icon`, `kind` and CEC `device` in their attributes.
+
+| Kind | Matches | Icon |
+| :--- | :--- | :--- |
+| `xbox` | Xbox | `mdi:microsoft-xbox` |
+| `playstation` | PlayStation, PS4, PS5 | `mdi:sony-playstation` |
+| `nintendo_switch` | Nintendo, Switch, Switch 2 | `mdi:nintendo-switch` |
+| `nintendo_wii` | Wii, Wii U | `mdi:nintendo-wii` |
+| `steam` | Steam, Steam Deck | `mdi:steam` |
+| `apple_tv` | Apple TV | `mdi:apple` |
+| `laptop` | Laptop, MacBook | `mdi:laptop` |
+| `computer` | PC, Computer, Mac | `mdi:desktop-tower-monitor` |
+| `streamer` | Chromecast, Fire TV, Roku, Shield | `mdi:television-box` |
+| `cable` | Cable, Satellite, TiVo, Box | `mdi:set-top-box` |
+| `disc` | Blu-ray, DVD | `mdi:disc-player` |
+| `audio` | Soundbar, Receiver, Sonos | `mdi:soundbar` |
+| `camera` | Camera, GoPro | `mdi:camera` |
+| `console` | Game, Console, Retro | `mdi:controller` |
+| `hdmi` | anything else | `mdi:video-input-hdmi` |
+
 **Remote keys** (`button.<tv>_home`, …): Home, Back, Up, Down, Left, Right,
 OK, Play/pause, Volume up, Volume down, Mute and Settings, a button each.
 

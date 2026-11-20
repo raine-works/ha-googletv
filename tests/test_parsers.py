@@ -337,3 +337,72 @@ def test_named_playback_states() -> None:
     )
     assert [s.state for s in sessions] == [7, PLAYBACK_PLAYING]
     assert sessions[1].playing and sessions[1].title == "Wednesday"
+
+
+def test_input_kinds() -> None:
+    from googletv_parsers import input_kind
+
+    for name, key in (
+        ("Xbox", "xbox"),
+        ("Xbox Series X", "xbox"),
+        ("PS5", "playstation"),
+        ("PlayStation 4", "playstation"),
+        ("Switch", "nintendo_switch"),
+        ("NintendoSwitch", "nintendo_switch"),
+        ("Switch 2", "nintendo_switch"),
+        ("Wii U", "nintendo_wii"),
+        ("Steam Deck", "steam"),
+        ("Apple TV", "apple_tv"),
+        ("Gaming PC", "computer"),
+        ("MacBook", "laptop"),
+        ("Fire TV Stick", "streamer"),
+        ("SHIELD", "streamer"),
+        ("Cable box", "cable"),
+        ("Blu-ray", "disc"),
+        ("Sonos Arc", "audio"),
+        ("Retro console", "console"),
+        ("HDMI switch", "hdmi"),
+        ("Living room", "hdmi"),
+    ):
+        assert input_kind(name).key == key, name
+    # The name on the TV first, then the device's own
+    assert input_kind("Living room", "PS5").key == "playstation"
+    assert input_kind(None, None).icon == "mdi:video-input-hdmi"
+
+
+# The Sony's CEC lines, verbatim (only itself, the TV), and a console's line
+# in the same format
+SONY_CEC = (
+    "    mDeviceInfo: CEC: logical_address: 0x00 device_type: 0 cec_version: 5"
+    " vendor_id: 524358 display_name: TV power_status: 0"
+    " physical_address: 0x0000 port_id: 0\n"
+    "    CEC: logical_address: 0x00 device_type: 0 cec_version: 5"
+    " vendor_id: 524358 display_name: TV power_status: 0"
+    " physical_address: 0x0000 port_id: 0\n"
+)
+CONSOLE_CEC = (
+    "    CEC: logical_address: 0x04 device_type: 4 cec_version: 5"
+    " vendor_id: 1234 display_name: PS5 power_status: 1"
+    " physical_address: 0x2000 port_id: 2\n"
+)
+
+
+def test_cec_devices() -> None:
+    from googletv_parsers import parse_cec
+
+    assert parse_cec(SONY_CEC) == {}
+    assert parse_cec(SONY_CEC + CONSOLE_CEC) == {2: "PS5"}
+
+
+def test_an_unnamed_input_known_by_its_cec_name() -> None:
+    state = parse_state(LOTTS_TCL_POLL + "\n@@cec\n" + CONSOLE_CEC)
+    xbox, hdmi2, hdmi3 = state.inputs
+    # Named on the TV
+    assert (xbox.label, xbox.icon, xbox.device) == ("Xbox", "mdi:microsoft-xbox", None)
+    # Unnamed, but its device says what it is; its name stays "HDMI 2"
+    assert (hdmi2.label, hdmi2.device, hdmi2.kind.key) == (
+        "HDMI 2",
+        "PS5",
+        "playstation",
+    )
+    assert hdmi3.icon == "mdi:video-input-hdmi"

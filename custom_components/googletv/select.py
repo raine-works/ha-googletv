@@ -47,6 +47,30 @@ class GoogleTvInputSelect(GoogleTvEntity, SelectEntity):
         return [i.label for i in self._state.inputs]
 
     @property
+    def icon(self) -> str:
+        """The icon of the input on screen (an Xbox's…), else an HDMI port's."""
+        state = self._state
+        if state.awake and state.input:
+            return state.input.icon
+        return "mdi:video-input-hdmi"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Each input's icon, kind and CEC device, for dashboards."""
+        return {
+            "inputs": [
+                {
+                    "name": i.label,
+                    "port": i.port,
+                    "icon": i.icon,
+                    "kind": i.kind.key,
+                    "device": i.device,
+                }
+                for i in self._state.inputs
+            ]
+        }
+
+    @property
     def current_option(self) -> str | None:
         """The input on screen; none while an app is (or the TV is off)."""
         state = self._state
