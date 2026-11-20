@@ -17,7 +17,7 @@ CONF_ONLINE_LOOKUPS = "online_lookups"
 # needs its MACs then
 CONF_PROPS = "props"
 
-# The Raineworks TV Bridge app's token, from pairing with it over ADB
+# The TV app's token, from pairing with it over ADB
 CONF_BRIDGE_TOKEN = "bridge_token"
 # Install the app once the TV is set up (asked when it's added)
 CONF_INSTALL_BRIDGE = "install_tv_app"

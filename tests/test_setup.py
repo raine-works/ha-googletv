@@ -723,7 +723,7 @@ async def test_a_pause_shows_from_the_quick_read(
     assert hass.states.get("media_player.lott_s_tv").state == "paused"
 
 
-# Raineworks TV Bridge
+# The TV app
 
 BRIDGE = "http://10.0.0.5:8721"
 BRIDGE_APP = App(

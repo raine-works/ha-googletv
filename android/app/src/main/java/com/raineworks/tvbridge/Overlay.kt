@@ -82,8 +82,8 @@ class Overlay private constructor(private val context: Context) {
                 setPadding(dp(28), dp(24), dp(28), dp(24))
             }
             card.addView(
-                ImageView(context).apply { setImageResource(R.drawable.logo_white) },
-                LinearLayout.LayoutParams(dp(44), dp(44)).apply { bottomMargin = dp(14) },
+                ImageView(context).apply { setImageResource(R.drawable.logo_gtv) },
+                LinearLayout.LayoutParams(dp(52), dp(52)).apply { bottomMargin = dp(12) },
             )
             card.addView(text(context.getString(R.string.pairing_title), 18f, Theme.semibold(context), Theme.FOREGROUND, 2))
             card.addView(
@@ -305,7 +305,8 @@ class Overlay private constructor(private val context: Context) {
 
     /**
      * The badge in a soft circle (tinted by the notification's color): an
-     * image, a Home Assistant icon ("mdi:doorbell"), else the logo.
+     * image, a Home Assistant icon ("mdi:doorbell"), else the Google TV logo
+     * in its own colors.
      */
     private fun badge(color: Int?, image: Bitmap?, icon: String?, sizeDp: Int): View {
         if (image != null) {
@@ -337,9 +338,8 @@ class Overlay private constructor(private val context: Context) {
             }
         }
         return ImageView(context).apply {
-            setImageResource(R.drawable.logo_white)
-            imageTintList = android.content.res.ColorStateList.valueOf(tint)
-            val pad = dp(sizeDp) / 8
+            setImageResource(R.drawable.logo_gtv)
+            val pad = dp(sizeDp) / 5
             setPadding(pad, pad, pad, pad)
             background = circle
         }
@@ -507,7 +507,7 @@ class Overlay private constructor(private val context: Context) {
             // TVs crop their edges (overscan): keep clear of them
             x = if (position == "center" || position == "top" || position == "bottom") 0 else dp(EDGE_DP)
             y = if (position == "center") 0 else dp(EDGE_DP)
-            title = "Raineworks TV Bridge"
+            title = "Google TV by Raineworks"
         }
         container.gravity = if (position.endsWith("right")) Gravity.END else Gravity.START
         return try {

@@ -14,7 +14,7 @@
           "host": "The TV's IP address or host name.",
           "port": "The TV's ADB port, 5555 unless you changed it.",
           "name": "Optional. The TV's maker and model when empty.",
-          "install_tv_app": "Raineworks TV Bridge: Home Assistant's notifications on the TV. Installed over ADB once the TV is added."
+          "install_tv_app": "Google TV by Raineworks on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
         }
       },
       "reauth_confirm": {
@@ -32,7 +32,7 @@
           "install_tv_app": "Install the TV app"
         },
         "data_description": {
-          "install_tv_app": "Raineworks TV Bridge: Home Assistant's notifications on the TV. Installed over ADB once the TV is added."
+          "install_tv_app": "Google TV by Raineworks on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
         }
       },
       "reconfigure": {
@@ -187,10 +187,10 @@
       "message": "The TV is off its network and Home Assistant doesn't know its network address (MAC) to wake it. Turn on its network standby (Sony: Remote start) so it stays reachable."
     },
     "bridge_not_paired": {
-      "message": "Raineworks TV Bridge isn't installed and paired on this TV. Install it with the Install Raineworks TV Bridge action (googletv.install_tv_bridge)."
+      "message": "The TV app (Google TV by Raineworks) isn't installed and paired on this TV. Install it with the Install the TV app action (googletv.install_tv_bridge)."
     },
     "bridge_download_failed": {
-      "message": "Couldn't download Raineworks TV Bridge: {error}"
+      "message": "Couldn't download the TV app: {error}"
     },
     "unknown_camera": {
       "message": "There's no camera {entity_id}."
@@ -205,7 +205,7 @@
   "services": {
     "notify": {
       "name": "Show a notification",
-      "description": "Shows a notification on the TV through Raineworks TV Bridge: a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
+      "description": "Shows a notification on the TV through its app (Google TV by Raineworks): a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
       "fields": {
         "message": {
           "name": "Message",
@@ -217,7 +217,7 @@
         },
         "icon": {
           "name": "Icon",
-          "description": "The badge's icon: a Home Assistant icon (mdi:doorbell), or an image URL or path. Raineworks' logo if not set."
+          "description": "The badge's icon: a Home Assistant icon (mdi:doorbell), or an image URL or path. The Google TV logo if not set."
         },
         "image": {
           "name": "Image",
@@ -314,8 +314,8 @@
       }
     },
     "install_tv_bridge": {
-      "name": "Install Raineworks TV Bridge",
-      "description": "Installs or updates Raineworks TV Bridge on the TV over ADB, allows its pop-ups, and pairs with it.",
+      "name": "Install the TV app",
+      "description": "Installs or updates the TV app (Google TV by Raineworks) over ADB, allows its pop-ups, and pairs with it.",
       "fields": {
         "development": {
           "name": "Development build",

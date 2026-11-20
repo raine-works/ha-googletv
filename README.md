@@ -1,10 +1,12 @@
-# Google TV for Home Assistant
+# Google TV by Raineworks
 
 An **unofficial** [Home Assistant](https://www.home-assistant.io/) integration for
-Google TV and Android TV, from [raine-works](https://github.com/raine-works): power,
+Google TV and Android TV, from [Raineworks](https://github.com/raine-works): power,
 apps, HDMI inputs, volume, what's playing and a remote, all over one local
 connection (ADB network debugging). No Android TV Remote, Google Cast or ADB
-integrations to combine, and no helpers to make.
+integrations to combine, and no helpers to make. And a TV app of its own, for
+Home Assistant's notifications on the TV: live ones that stay up while the
+door's open, cameras, progress bars.
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg?style=for-the-badge)](LICENSE)
@@ -137,14 +139,14 @@ a second; every 5 seconds the full read adds the app, volume and inputs (and
 at once when the screen turns on or off, or after a command). Its app list and
 diagnostics every 10 minutes.
 
-### Notifications: Raineworks TV Bridge
+### Notifications: the TV app
 
-**Raineworks TV Bridge** is this project's TV app (`android/`): Home
+**Google TV by Raineworks** has a TV app too (`android/`): Home
 Assistant's notifications on the TV, as pop-ups over whatever's on screen,
 apps and HDMI inputs alike, or in the TV's notification panel.
 
 * **Installed when you add the TV** (**Install the TV app**, ticked by
-  default), or later with the **Install Raineworks TV Bridge** action
+  default), or later with the **Install the TV app** action
   (`googletv.install_tv_bridge`) on the TV's media player. Either way Home
   Assistant downloads the app from the latest release, installs it over ADB,
   allows its pop-ups (which many TVs have no settings screen for) and pairs
@@ -156,7 +158,7 @@ apps and HDMI inputs alike, or in the TV's notification panel.
 | Field | |
 | :--- | :--- |
 | `message`, `title` | The text |
-| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Raineworks logo if not set, tinted by `color` |
+| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Google TV logo if not set |
 | `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`) |
 | `camera_entity` | A camera's live stream (`camera_view: live`, the default) or snapshot: who's at the door |
 | `video` | A video or live stream URL (HLS, RTSP, MP4) |
@@ -262,7 +264,7 @@ playing, so the integration looks the rest up:
 
 None of them needs an account or a key. To keep everything on your network,
 turn off **Look up app icons and artwork online** in the TV's options
-(Settings → Devices & services → Google TV → Configure).
+(Settings → Devices & services → Google TV by Raineworks → Configure).
 
 ## Setting up a TV
 
@@ -278,7 +280,7 @@ turn off **Look up app icons and artwork online** in the TV's options
    themselves: one with network debugging on shows up under Settings →
    Devices & services → **Discovered**. Choose **Add**, leave **Install the
    TV app** ticked (for notifications), then **Submit**. (Or add it by hand:
-   Add integration → **Google TV**, with the TV's address and port 5555.)
+   Add integration → **Google TV by Raineworks**, with the TV's address and port 5555.)
 5. **Accept the prompt on the TV.** "Allow USB debugging?" appears with Home
    Assistant's key: tick **Always allow from this computer** and choose
    **Allow**. The setup waits up to a minute for it.

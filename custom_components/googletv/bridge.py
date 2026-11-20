@@ -1,4 +1,4 @@
-"""Raineworks TV Bridge: the TV app's local API (see protocol/README.md).
+"""The TV app (Google TV by Raineworks): its local API (see protocol/README.md).
 
 The app shows Home Assistant's notifications on the TV: pop-ups over whatever
 is on screen (apps and HDMI inputs) with text, an image or a video, or in the
@@ -70,9 +70,7 @@ class BridgeClient:
                     raise BridgeError(reply.get("error", f"HTTP {response.status}"))
                 return reply
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-            raise BridgeError(
-                f"Can't reach Raineworks TV Bridge on {self.host}: {err}"
-            ) from err
+            raise BridgeError(f"Can't reach the TV app on {self.host}: {err}") from err
 
     async def async_info(self) -> dict[str, Any]:
         """Who the app is (no token needed)."""

@@ -242,7 +242,13 @@ class MainActivity : Activity() {
                 steps,
                 2,
                 getString(R.string.setup_debugging_title),
-                getString(if (developer) R.string.setup_debugging_text else R.string.setup_developer_text),
+                getString(
+                    when {
+                        on == true -> R.string.setup_debugging_done
+                        developer -> R.string.setup_debugging_text
+                        else -> R.string.setup_developer_text
+                    },
+                ),
                 when (on) {
                     null -> null
                     true -> getString(R.string.setup_on) to Theme.SUCCESS
@@ -321,14 +327,14 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, dp(24))
         }
         row.addView(
-            ImageView(this).apply { setImageResource(R.drawable.logo_white) },
-            LinearLayout.LayoutParams(dp(48), dp(48)),
+            ImageView(this).apply { setImageResource(R.drawable.logo_gtv) },
+            LinearLayout.LayoutParams(dp(52), dp(52)),
         )
         val titles = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), 0, 0, 0)
         }
-        titles.addView(text(getString(R.string.app_name), 26f, Theme.semibold(this), Theme.FOREGROUND))
+        titles.addView(text(getString(R.string.header_title), 26f, Theme.semibold(this), Theme.FOREGROUND))
         titles.addView(text(getString(R.string.app_maker, BuildConfig.VERSION_NAME), 13f, Theme.regular(this), Theme.MUTED_FOREGROUND))
         row.addView(titles, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val paired = prefs.tokens.isNotEmpty()
