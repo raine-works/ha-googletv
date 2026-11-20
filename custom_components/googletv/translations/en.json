@@ -37,6 +37,31 @@
     },
     "flow_title": "{name}"
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Google TV options",
+        "data": {
+          "online_lookups": "Look up app icons and artwork online"
+        },
+        "data_description": {
+          "online_lookups": "Names and icons of the TV's apps from Google Play, and covers and posters for what's playing from iTunes and TVmaze. Off keeps everything on your network."
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "app": {
+        "name": "App"
+      }
+    },
+    "select": {
+      "input": {
+        "name": "Input"
+      }
+    }
+  },
   "exceptions": {
     "command_failed": {
       "message": "The TV didn't take the command: {error}"

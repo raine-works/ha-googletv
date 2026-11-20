@@ -8,6 +8,10 @@ DOMAIN = "googletv"
 
 DEFAULT_PORT = 5555
 
+# Option: look up apps' names and icons (Google Play) and artwork for what's
+# playing (iTunes, TVmaze). On by default; off keeps everything on the LAN.
+CONF_ONLINE_LOOKUPS = "online_lookups"
+
 # The RSA key Home Assistant signs in to every TV with, kept in its storage
 # folder. Each TV trusts it once ("Allow USB debugging?", Always allow).
 ADB_KEY_FILE = "googletv_adbkey"

@@ -322,3 +322,18 @@ def test_a_real_poll() -> None:
     assert bluetooth.title is None and not bluetooth.active
     # On the Xbox with Spotify only paused behind it: nothing playing
     assert state.now_playing is None
+
+
+def test_named_playback_states() -> None:
+    # Newer builds name the state: "state=ERROR(7)", "state=PLAYING(3)"
+    sessions = parse_sessions(
+        "package=com.android.bluetooth\n"
+        "state=PlaybackState {state=ERROR(7), position=0, buffered position=0,"
+        " speed=0.0, updated=19286, actions=0, error=Bluetooth audio disconnected}\n"
+        "package=com.netflix.ninja\nactive=true\n"
+        "state=PlaybackState {state=PLAYING(3), position=1000, speed=1.0,"
+        " updated=5000, actions=0}\n"
+        "metadata: size=3, description=Wednesday, Season 1, null\n"
+    )
+    assert [s.state for s in sessions] == [7, PLAYBACK_PLAYING]
+    assert sessions[1].playing and sessions[1].title == "Wednesday"

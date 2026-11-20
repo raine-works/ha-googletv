@@ -153,6 +153,18 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         return MediaType.MUSIC if playing.package in MUSIC_APPS else MediaType.VIDEO
 
     @property
+    def media_image_url(self) -> str | None:
+        """What's playing's cover or poster, else its app's icon."""
+        state = self._state
+        if not state.awake or state.input:
+            return None
+        if self.coordinator.data.artwork:
+            return self.coordinator.data.artwork
+        playing = state.now_playing
+        app = self._app(playing.package if playing else state.app)
+        return app.icon if app else None
+
+    @property
     def media_position(self) -> int | None:
         """Seconds into what's playing, at the last poll."""
         playing = self._state.now_playing if self._state.awake else None
@@ -172,7 +184,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         state = self._state
         return {
             "apps": [
-                {"package": a.package, "name": a.name}
+                {"package": a.package, "name": a.name, "icon": a.icon}
                 for a in self.coordinator.data.apps
             ],
             "inputs": [
@@ -241,7 +253,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         """Open an app or switch to an input, by name."""
         tv_input = self._input(source)
         if tv_input:
-            await self._run(self.coordinator.client.async_select_input(tv_input.id))
+            await self.coordinator.async_select_input(tv_input.id)
             return
         app = next((a for a in self.coordinator.data.apps if a.name == source), None)
         if app is None:
@@ -250,9 +262,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
                 translation_key="unknown_source",
                 translation_placeholders={"source": source},
             )
-        await self._run(
-            self.coordinator.client.async_launch_app(app.package, app.activity)
-        )
+        await self.coordinator.async_open_app(app)
 
     def _input(self, name_or_id: str) -> TvInput | None:
         return next(
@@ -265,14 +275,12 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         """Open an app (``app``: a package), an input (``input``) or a ``url``."""
         client = self.coordinator.client
         if media_type == MEDIA_TYPE_APP:
-            app = self._app(media_id)
-            await self._run(
-                client.async_launch_app(media_id, app.activity if app else None)
-            )
+            app = self._app(media_id) or App(media_id, "", media_id)
+            await self.coordinator.async_open_app(app)
         elif media_type == MEDIA_TYPE_INPUT:
             tv_input = self._input(media_id)
-            await self._run(
-                client.async_select_input(tv_input.id if tv_input else media_id)
+            await self.coordinator.async_select_input(
+                tv_input.id if tv_input else media_id
             )
         elif media_type in (MediaType.URL, "url"):
             await self._run(client.async_open_url(media_id))

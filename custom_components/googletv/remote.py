@@ -32,6 +32,7 @@ class GoogleTvRemote(GoogleTvEntity, RemoteEntity):
     """Sends a TV's remote keys (``remote.send_command``: DPAD_UP, BACK, HOME…)."""
 
     _attr_name = None
+    _attr_translation_key = "remote"
 
     def __init__(self, coordinator: GoogleTvCoordinator) -> None:
         """Initialize the remote."""

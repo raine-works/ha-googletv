@@ -148,6 +148,8 @@ class App:
     package: str
     activity: str
     name: str
+    # Its Play Store icon, when the integration has looked it up
+    icon: str | None = None
 
 
 @dataclass(frozen=True)
@@ -307,7 +309,8 @@ def parse_sessions(text: str) -> list[MediaSession]:
             fields["active"] = line.split("=", 1)[1].strip() == "true"
         elif line.startswith("state=PlaybackState"):
             for key, pattern, cast in (
-                ("state", r"\{state=(\d+)", int),
+                # "state=3", or by name on newer builds: "state=ERROR(7)"
+                ("state", r"\{state=(?:[A-Z_]+\()?(\d+)", int),
                 ("position", r"position=(-?\d+)", int),
                 ("updated", r"updated=(-?\d+)", int),
                 ("speed", r"speed=([\d.]+)", float),

@@ -21,7 +21,7 @@ integrations to combine, and no helpers to make.
 
 ## What you get
 
-Each TV is one device with two entities:
+Each TV is one device with:
 
 **Media player** (`media_player.<tv>`, device class TV)
 
@@ -29,11 +29,20 @@ Each TV is one device with two entities:
 | :--- | :--- |
 | State | `off` (asleep), `playing` / `paused` (what the front app reports), else `on` |
 | Sources | Every app in the TV's launcher, then its HDMI inputs, by the names given to them on the TV ("Xbox"; "HDMI 2" when unnamed). `source` is the input on screen, else the app in front. A device on HDMI-CEC's own input counts as its port's input. |
-| Now playing | Title, artist or show, position, from the TV's media sessions (Netflix, YouTube, Spotify, Plex…), with no Cast needed |
+| Now playing | Title, artist or show, position, from the TV's media sessions (Netflix, YouTube TV, Spotify, Plex…), with no Cast needed |
+| Artwork | A song's cover (iTunes) or a show's poster (TVmaze), else the app's icon |
 | Volume | The TV's media volume as a level (set, step, mute) |
 | Controls | Turn on / off, play, pause, stop, next, previous, select source |
 | `play_media` | `media_content_type: app` with a package (`com.netflix.ninja`), `input` with an input id, or `url` with a link the TV opens |
-| Attributes | `app_id`, `app_name`, `apps` (package and name), `inputs` (id, port, name), `input`, `media_app` |
+| Attributes | `app_id`, `app_name`, `apps` (package, name and icon), `inputs` (id, port, name), `input`, `media_app` |
+
+**Input** (`select.<tv>_input`): the HDMI inputs by their names on the TV,
+showing the one on screen; pick one to switch to it (the TV wakes first).
+
+**A button per app** (`button.<tv>_netflix`, …): named and pictured from the
+app's Google Play listing; press to open it (the TV wakes first). An app
+installed later gets its button on its own; an uninstalled one goes
+unavailable.
 
 **Remote** (`remote.<tv>`): `remote.send_command` with any key: `HOME`, `BACK`,
 `DPAD_UP` / `DOWN` / `LEFT` / `RIGHT` / `CENTER`, `VOLUME_UP`, `MEDIA_PLAY_PAUSE`,
@@ -45,6 +54,22 @@ Hulu since the Play Store's 2026 update) open here.
 
 The TV is read every 5 seconds with a single shell command; its app list every
 10 minutes.
+
+### Online lookups
+
+The TV gives only an app's package, and only the title and artist of what's
+playing, so the integration looks the rest up:
+
+* **App names and icons** from each app's Google Play listing, kept in
+  `.storage/googletv.apps` and read again monthly. An app that isn't on Google
+  Play (a TV maker's own) keeps its package as its name.
+* **Artwork**: a song's cover from the iTunes Search API, matched by title and
+  artist; a show's poster from TVmaze, matched by its exact name (YouTube TV
+  reports the show). Movies and YouTube videos show the app's icon.
+
+None of them needs an account or a key. To keep everything on your network,
+turn off **Look up app icons and artwork online** in the TV's options
+(Settings → Devices & services → Google TV → Configure).
 
 ## Setting up a TV
 

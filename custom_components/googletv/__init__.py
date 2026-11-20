@@ -8,10 +8,16 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.storage import STORAGE_DIR
 
 from .adb import GoogleTvAuthError, GoogleTvClient, GoogleTvError, load_signer
-from .const import ADB_KEY_FILE
+from .const import ADB_KEY_FILE, CONF_ONLINE_LOOKUPS
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator
+from .online import get_lookups
 
-PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER, Platform.REMOTE]
+PLATFORMS: list[Platform] = [
+    Platform.BUTTON,
+    Platform.MEDIA_PLAYER,
+    Platform.REMOTE,
+    Platform.SELECT,
+]
 
 
 async def async_get_client(hass: HomeAssistant, host: str, port: int) -> GoogleTvClient:
@@ -34,12 +40,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
     except GoogleTvError as err:
         raise ConfigEntryNotReady(str(err)) from err
 
-    coordinator = GoogleTvCoordinator(hass, entry, client, props)
+    lookups = None
+    if entry.options.get(CONF_ONLINE_LOOKUPS, True):
+        lookups = get_lookups(hass)
+        await lookups.async_load()
+    coordinator = GoogleTvCoordinator(hass, entry, client, props, lookups)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
+
+
+async def _async_options_updated(
+    hass: HomeAssistant, entry: GoogleTvConfigEntry
+) -> None:
+    """Set the TV up again with its new options."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> bool:

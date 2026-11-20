@@ -33,9 +33,13 @@ try:  # noqa: SIM105
 except ImportError:
     pass
 
-# parsers.py imports nothing from the package, so it loads on its own
-_spec = importlib.util.spec_from_file_location("googletv_parsers", _BASE / "parsers.py")
-assert _spec and _spec.loader
-_parsers = importlib.util.module_from_spec(_spec)
-sys.modules["googletv_parsers"] = _parsers
-_spec.loader.exec_module(_parsers)
+# parsers.py and lookups.py import nothing from the package or Home Assistant,
+# so they load on their own
+for _name in ("parsers", "lookups"):
+    _spec = importlib.util.spec_from_file_location(
+        f"googletv_{_name}", _BASE / f"{_name}.py"
+    )
+    assert _spec and _spec.loader
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules[f"googletv_{_name}"] = _module
+    _spec.loader.exec_module(_module)

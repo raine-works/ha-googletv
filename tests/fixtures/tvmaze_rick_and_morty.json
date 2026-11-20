@@ -1,0 +1,39 @@
+[
+ {
+  "score": 1.4080663,
+  "show": {
+   "name": "Rick and Morty",
+   "image": {
+    "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/626/1566363.jpg",
+    "original": "https://static.tvmaze.com/uploads/images/original_untouched/626/1566363.jpg"
+   }
+  }
+ },
+ {
+  "score": 1.2329149,
+  "show": {
+   "name": "Rick and Morty Specials",
+   "image": null
+  }
+ },
+ {
+  "score": 1.1178201,
+  "show": {
+   "name": "Rick and Morty: The Anime",
+   "image": {
+    "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/531/1329296.jpg",
+    "original": "https://static.tvmaze.com/uploads/images/original_untouched/531/1329296.jpg"
+   }
+  }
+ },
+ {
+  "score": 1.012162,
+  "show": {
+   "name": "Rick and Morty: The Non-Canonical Adventures",
+   "image": {
+    "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/348/871668.jpg",
+    "original": "https://static.tvmaze.com/uploads/images/original_untouched/348/871668.jpg"
+   }
+  }
+ }
+]

@@ -1,0 +1,19 @@
+{
+  "entity": {
+    "button": {
+      "app": {
+        "default": "mdi:application-outline"
+      }
+    },
+    "remote": {
+      "remote": {
+        "default": "mdi:remote-tv"
+      }
+    },
+    "select": {
+      "input": {
+        "default": "mdi:video-input-hdmi"
+      }
+    }
+  }
+}

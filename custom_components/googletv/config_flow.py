@@ -19,8 +19,15 @@ import contextlib
 import logging
 from typing import Any
 
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    SOURCE_REAUTH,
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import format_mac
 import voluptuous as vol
 
@@ -31,7 +38,7 @@ except ImportError:  # Home Assistant before 2025.1
 
 from . import async_get_client
 from .adb import GoogleTvAuthError, GoogleTvError
-from .const import DEFAULT_PORT, DOMAIN
+from .const import CONF_ONLINE_LOOKUPS, DEFAULT_PORT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,6 +80,12 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
     """Add a Google TV by its address."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> GoogleTvOptionsFlow:
+        """The TV's options."""
+        return GoogleTvOptionsFlow()
 
     def __init__(self) -> None:
         """Start a flow."""
@@ -211,3 +224,21 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
             or host
         )
         return self.async_create_entry(title=title, data=data)
+
+
+class GoogleTvOptionsFlow(OptionsFlow):
+    """Whether the TV looks up app icons and artwork online."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the options."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+        current = self.config_entry.options.get(CONF_ONLINE_LOOKUPS, True)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_ONLINE_LOOKUPS, default=current): bool}
+            ),
+        )

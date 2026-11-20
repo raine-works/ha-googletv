@@ -245,3 +245,20 @@ async def test_without_an_address_a_known_host_is_skipped(hass: HomeAssistant) -
         )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_options_turn_lookups_off(hass: HomeAssistant) -> None:
+    from custom_components.googletv.const import CONF_ONLINE_LOOKUPS
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=TV_ID, data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555}
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    with _patch_setup():
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_ONLINE_LOOKUPS: False}
+        )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options == {CONF_ONLINE_LOOKUPS: False}
