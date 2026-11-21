@@ -174,8 +174,9 @@ dashboards working; before production, check on real hardware (a Chromecast
 with Google TV or Google TV Streamer, and a Sony or TCL TV):
 
 * A camera **over WebRTC** on the doorbell pop-up: live within a second or
-  so (the TV's hardware H.264 decoder), its snapshot until then, and HLS
-  if it doesn't start.
+  so, its snapshot until then, and HLS if it doesn't start. Also **with a
+  show playing** (YouTube TV, Netflix): on MediaTek TVs the show holds the
+  one hardware H.265 decoder, and HLS and clips fall back to software.
 * Whether **Settings shows** Display over other apps, Notification access
   and Usage access for the app (the app's Permissions section opens each).
   Where a TV hides one, the app-alone setup loses what it gives; ADB

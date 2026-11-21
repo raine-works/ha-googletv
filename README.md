@@ -26,11 +26,16 @@ Remote, Google Cast and ADB integrations together, and a few things none of them
 * **Know what it's doing**: an Activity sensor (`off`, `home`, `app`,
   `playing`, `paused`, `input`, `screensaver`) to drive your automations.
 * **Notifications on the TV**, over whatever's on, HDMI inputs included:
-  text, an image, a live camera, a progress bar, **buttons you answer with
-  the remote**. **Live notifications** stay up while something's true (the
-  front door is open) and update in place.
-* **Events from the TV**: a button pressed, a notification dismissed, media
-  played or closed, as they happen, to trigger automations on.
+  text, an image, a clip (a UniFi Protect doorbell's), a **live camera
+  over WebRTC in about a second**, a progress bar, **buttons you answer
+  with the remote**. **Live notifications** stay up while something's true
+  (the front door is open) and update in place.
+* **Events from the TV**: a button pressed, a notification dismissed (or
+  something on it that didn't load), media played or closed, an app
+  installed, as they happen, to trigger automations on.
+* **Choose on the TV** which apps and inputs Home Assistant shows, and
+  which ones notifications pop up over; or from Home Assistant: they stay
+  in step.
 * **A media target, in place of Google Cast**: Home Assistant's media
   browser, text-to-speech and cameras play on the TV. Announcements are
   spoken *over* your show, which ducks, instead of stopping it.
@@ -38,7 +43,8 @@ Remote, Google Cast and ADB integrations together, and a few things none of them
   signed in by itself.
 * **Simple setup, either way**: install the TV app and choose **Allow** on
   the TV, with no developer mode; or turn on network debugging and Home
-  Assistant installs the app itself. Nothing to type.
+  Assistant installs the app itself. Nothing to type, and nothing to look
+  after: over ADB, the TV app is kept at the integration's version.
 
 Everything stays on your network, except optional lookups of app icons and
 artwork ([Privacy](#privacy-and-security)).
@@ -316,10 +322,14 @@ on Home Assistant's event bus, with the TV's `device_id`:
 | `notification_failed` | `tag`, `media` (`image`, `icon`, `video`, `webrtc`), `reason` | Something on a notification didn't load on the TV (a camera over WebRTC then falls back to HLS). Also logged as a warning, and on the event entity as **Couldn't load** |
 | `player` | `state` (`opened`, `playing`, `paused`, `closed`), `kind`, `title` | Home Assistant's media on the TV |
 | `dashboard` | `state` (`opened`, `closed`), `url` | A dashboard on the TV |
+| `state` | `change` (`screen`, `volume`) | The screen turned on or off, or the volume changed (the TV is read again at once) |
+| `apps` | `change` (`installed`, `uninstalled`, `changed`), `package` | An app was installed or uninstalled (the app list and buttons follow at once) |
+| `rules` | `hidden_apps`, `hidden_inputs`, `blocked_apps`, `blocked_inputs`, … | A switch was flipped in the TV app's Apps section (Home Assistant follows) |
 
 Each TV also has a **Notification events** entity
-(`event.<tv>_notification_events`): `action` (with `action` and `tag`) or
-`dismissed` (with `by` and `tag`).
+(`event.<tv>_notification_events`): `action` (with `action` and `tag`),
+`dismissed` (with `by` and `tag`) or `failed` (with `media`, `reason` and
+`tag`).
 
 **Buttons on notifications**: give `googletv.notify` up to three `actions`.
 The card takes the remote's focus while it's up, so the remote moves
