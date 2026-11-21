@@ -27,9 +27,10 @@ Remote, Google Cast and ADB integrations together, and a few things none of them
   `playing`, `paused`, `input`, `screensaver`) to drive your automations.
 * **Notifications on the TV**, over whatever's on, HDMI inputs included:
   text, an image, a clip (a UniFi Protect doorbell's), a **live camera
-  over WebRTC in about a second**, a progress bar, **buttons you answer
-  with the remote**. **Live notifications** stay up while something's true
-  (the front door is open) and update in place.
+  over WebRTC in about a second** (an H.264 one; others over HLS), a
+  progress bar, **buttons you answer with the remote**. **Live
+  notifications** stay up while something's true (the front door is
+  open) and update in place.
 * **Events from the TV**: a button pressed, a notification dismissed (or
   something on it that didn't load), media played or closed, an app
   installed, as they happen, to trigger automations on.
