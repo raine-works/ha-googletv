@@ -176,7 +176,9 @@ class Overlay private constructor(private val context: Context) {
         card.poster = built.poster
         card.texture = texture
         card.mute = request.mute
-        if (live != null && texture != null && request.webrtc?.entityId == card.liveEntity) {
+        if (live != null && texture != null && request.webrtc?.entityId == card.liveEntity &&
+            (request.mute || live.receivesAudio)
+        ) {
             // The same camera: its session goes on, drawn on the new card
             live.attach(texture)
             live.setMute(request.mute)
@@ -593,6 +595,19 @@ class Overlay private constructor(private val context: Context) {
             context,
             androidx.media3.exoplayer.DefaultRenderersFactory(context).setEnableDecoderFallback(true),
         ).build()
+        // Which decoder it got (the hardware one, or software when that's busy)
+        player.addAnalyticsListener(
+            object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                override fun onVideoDecoderInitialized(
+                    eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                    decoderName: String,
+                    initializedTimestampMs: Long,
+                    initializationDurationMs: Long,
+                ) {
+                    Log.i(TAG, "Video decoder for ${url.substringBefore('?')}: $decoderName")
+                }
+            },
+        )
         player.setVideoTextureView(view)
         sound(player, mute)
         player.repeatMode = Player.REPEAT_MODE_ONE

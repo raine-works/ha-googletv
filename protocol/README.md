@@ -82,7 +82,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `actions` | | Up to 3 buttons, `[{action, title}]` (`action`: letters, digits, `_ . : -`; `title`: up to 40 characters). The card takes the remote's focus while it's up: a button pressed is a `notification_action` event, Back a `notification_dismissed` one. The panel copy has them too. 30 seconds on screen when no `duration` is given |
 | `size` | the TV's setting (`small`) | `compact` (a one-line pill; a video plays in a small tile on it), `small`, `medium`, `large` |
 | `color` | | The pop-up's border, a hex color (`#03A9F4`) |
-| `mute` | `true` | A video's sound off |
+| `mute` | `true` | A video's sound off. With `webrtc`, a muted camera receives video only (no audio transceiver, so audio playout never starts); unmuted, it receives audio too, and a card updated from muted to unmuted starts its session again with sound |
 | `tag` | | Sent again, it updates the notification with that tag in place: the same slot, no animation, its video still playing if `video_url` is the same, and no new alert in the panel. A pop-up or panel copy the update no longer goes to comes down. `/api/dismiss` takes it down |
 | `ignore_rules` | `false` | Pop up whatever is on screen |
 | `when_blocked` | the TV's setting | `panel` or `drop`, for a pop-up a rule keeps off the screen |

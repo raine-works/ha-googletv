@@ -272,7 +272,7 @@ are; a live notification is signed afresh each time it's shown again.
 | `actions` | Up to 3 buttons, `[{action: UNLOCK, title: Unlock}, …]`: see [Events from the TV](#events-from-the-tv) |
 | `color` | The pop-up's border (`#03A9F4`) |
 | `mode` | `popup` (over what's on screen), `panel` (the notification panel), `both` |
-| `mute` | A video's sound (off by default) |
+| `mute` | A video's sound (off by default). A camera over WebRTC receives sound only when it's on: muted, it asks for video alone |
 | `tag` | Send again with the same tag to update it in place; dismiss it by its tag |
 | `ignore_rules` | Pop up even where the rules say not to |
 | `when_blocked` | Where a pop-up the rules keep off the screen goes: `panel` or `drop` |
@@ -606,7 +606,8 @@ Settings → System → Network (the local address the TV can reach).
 (MediaTek chips: Sony, TCL, Hisense) have one hardware decoder for H.265,
 and the show you're watching holds it. Live view over WebRTC (the default,
 with go2rtc) copes; for HLS and clips, the TV app falls back to its
-software decoder, which is slower to start. A camera channel in H.264
+software decoder, which is slower to start (the TV app's log says which
+decoder it got: `adb logcat -s TvBridge`). A camera channel in H.264
 avoids it altogether.
 
 **The TV app is behind the integration.** Over ADB it's updated by itself

@@ -62,6 +62,13 @@ class LiveCamera(
     private var texture: TextureView? = null
     private var surface: SurfaceTexture? = null
 
+    /**
+     * Whether it receives the camera's sound: only when it isn't muted. A
+     * muted one asks for video alone, so WebRTC never starts playing audio,
+     * which crashes natively on some TVs (a Sony on 32-bit ARM, Android 12).
+     */
+    val receivesAudio = !mute
+
     private var nextId = 1
     private var offerId = 0
     private var sessionId: String? = null
@@ -313,7 +320,7 @@ class LiveCamera(
         peer = pc
         val receive = RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.RECV_ONLY)
         pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO, receive)
-        pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO, receive)
+        if (receivesAudio) pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO, receive)
         pc.createOffer(
             Sdp("offer") { offer ->
                 pc.setLocalDescription(
@@ -400,8 +407,10 @@ class LiveCamera(
             PeerConnectionFactory.initialize(
                 PeerConnectionFactory.InitializationOptions.builder(context.applicationContext).createInitializationOptions(),
             )
-            // Played as media, never recording (receive only)
+            // Played as media, never recording (receive only); used only when
+            // a camera's sound is asked for (unmuted)
             val audio = JavaAudioDeviceModule.builder(context.applicationContext)
+                .setUseStereoOutput(false)
                 .setAudioAttributes(
                     android.media.AudioAttributes.Builder()
                         .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
