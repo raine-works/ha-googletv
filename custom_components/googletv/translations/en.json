@@ -238,7 +238,8 @@
           "event_type": {
             "state": {
               "action": "Button pressed",
-              "dismissed": "Dismissed"
+              "dismissed": "Dismissed",
+              "failed": "Couldn't load"
             }
           }
         }
@@ -314,7 +315,7 @@
         },
         "camera_view": {
           "name": "Camera view",
-          "description": "The camera's live stream or a snapshot."
+          "description": "Live: WebRTC when the camera offers it (about a second to start), else HLS. HLS only, or a snapshot. The camera's snapshot shows until the video starts, unless an image is given."
         },
         "mode": {
           "name": "Where",
@@ -430,7 +431,8 @@
   "selector": {
     "camera_view": {
       "options": {
-        "live": "Live",
+        "live": "Live (WebRTC when the camera has it)",
+        "hls": "Live (HLS only)",
         "snapshot": "Snapshot"
       }
     },

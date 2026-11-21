@@ -30,14 +30,17 @@ object Events {
         Log.d(TAG, "Event: $line")
     }
 
-    /** A new connection's stream; the oldest goes when there are too many. */
-    fun open(): InputStream {
+    /**
+     * A new connection's stream; the oldest goes when there are too many.
+     * [hasToken]: whether the app has Home Assistant's token (for WebRTC).
+     */
+    fun open(hasToken: Boolean): InputStream {
         while (streams.size >= MAX_STREAMS) streams.firstOrNull()?.let { it.end(); streams.remove(it) }
         return Stream().also {
             streams.add(it)
             it.offer(
                 (JSONObject().put("type", "hello").put("instance", Notifier.instance).put("app_version", BuildConfig.VERSION_NAME).put("build", BuildConfig.GIT_SHA)
-                    .put("features", org.json.JSONArray(ApiServer.FEATURES)).put("time", System.currentTimeMillis()).toString() + "\n").toByteArray(Charsets.UTF_8),
+                    .put("features", org.json.JSONArray(ApiServer.FEATURES)).put("home_assistant_token", hasToken).put("time", System.currentTimeMillis()).toString() + "\n").toByteArray(Charsets.UTF_8),
             )
         }
     }

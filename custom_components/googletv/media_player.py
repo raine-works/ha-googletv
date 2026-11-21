@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Coroutine
 from datetime import datetime
+import logging
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
@@ -19,6 +20,7 @@ from homeassistant.components.media_player import (
     MediaType,
     async_process_play_media_url,
 )
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import (
     HomeAssistant,
     ServiceResponse,
@@ -38,6 +40,8 @@ from .const import DOMAIN
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator, translate_errors
 from .entity import GoogleTvEntity
 from .parsers import MUSIC_APPS, PLAYBACK_PAUSED, App, TvInput, app_name
+
+_LOGGER = logging.getLogger(__name__)
 
 # play_media's types beyond Home Assistant's own: an app by package, an input by id
 MEDIA_TYPE_APP = "app"
@@ -133,7 +137,7 @@ NOTIFY_SCHEMA = {
     vol.Optional("image"): cv.string,
     vol.Optional("video"): cv.string,
     vol.Optional("camera_entity"): cv.entity_domain("camera"),
-    vol.Optional("camera_view", default="live"): vol.In(["live", "snapshot"]),
+    vol.Optional("camera_view", default="live"): vol.In(["live", "hls", "snapshot"]),
     vol.Optional("mode"): vol.In(["popup", "panel", "both"]),
     vol.Optional("position"): vol.In(POSITIONS),
     # 0: until it's dismissed (a live notification)
@@ -419,8 +423,18 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             base = get_url(self.hass)
         return base.rstrip("/") + path
 
-    async def _camera_urls(self, entity_id: str, view: str) -> dict[str, str]:
-        """A camera as a live stream (HLS) or a snapshot the TV can load."""
+    async def _camera_urls(self, entity_id: str, view: str) -> dict[str, Any]:
+        """A camera for the TV: live (WebRTC, HLS behind it), HLS, or a snapshot.
+
+        Its snapshot is an ``image_url`` (the poster while it starts): the
+        caller's image wins over it. An unavailable camera gives nothing.
+        """
+        from homeassistant.components.camera import (
+            StreamType,
+            async_request_stream,
+            get_camera_from_entity_id,
+        )
+
         state = self.hass.states.get(entity_id)
         if state is None:
             raise ServiceValidationError(
@@ -428,20 +442,47 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
                 translation_key="unknown_camera",
                 translation_placeholders={"entity_id": entity_id},
             )
-        token = state.attributes.get("access_token", "")
-        snapshot = self._home_assistant_url(
-            f"/api/camera_proxy/{entity_id}?token={token}"
-        )
-        if view == "live":
-            from homeassistant.components.camera import async_request_stream
-
+        token = state.attributes.get("access_token")
+        if state.state == STATE_UNAVAILABLE or not token:
+            # Its snapshot would be a broken image: the rest of the card shows
+            _LOGGER.warning(
+                "camera_entity %s is unavailable: its picture isn't shown", entity_id
+            )
+            return {}
+        urls: dict[str, Any] = {
+            "image_url": self._home_assistant_url(
+                f"/api/camera_proxy/{entity_id}?token={token}"
+            )
+        }
+        if view == "snapshot":
+            return urls
+        try:
+            camera = get_camera_from_entity_id(self.hass, entity_id)
+        except HomeAssistantError:
+            return urls
+        types = camera.camera_capabilities.frontend_stream_types
+        if view == "live" and StreamType.WEB_RTC in types:
+            urls["webrtc"] = {
+                "entity_id": entity_id,
+                "ws_url": self._websocket_url(),
+                "ice_servers": camera.async_get_webrtc_client_configuration()
+                .configuration.to_dict()
+                .get("iceServers", []),
+            }
+        if StreamType.HLS in types:
+            # The stream (or, with WebRTC, what it falls back to)
             try:
                 stream = await async_request_stream(self.hass, entity_id, fmt="hls")
             except HomeAssistantError:
                 # No stream (a still-only camera): its snapshot
-                return {"image_url": snapshot}
-            return {"video_url": self._home_assistant_url(stream)}
-        return {"image_url": snapshot}
+                return urls
+            urls["video_url"] = self._home_assistant_url(stream)
+        return urls
+
+    def _websocket_url(self) -> str:
+        """Home Assistant's websocket, as the TV reaches it."""
+        base = self._home_assistant_url("/api/websocket")
+        return "ws" + base.removeprefix("http")
 
     async def async_tv_notify(self, **kwargs: Any) -> ServiceResponse:
         """Show a notification on the TV (googletv.notify)."""
@@ -475,7 +516,11 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         if "progress" in kwargs:
             payload["progress"] = round(kwargs["progress"])
         if camera := kwargs.get("camera_entity"):
-            payload.update(await self._camera_urls(camera, kwargs["camera_view"]))
+            urls = await self._camera_urls(camera, kwargs["camera_view"])
+            if "image_url" in payload:
+                # The caller's image (a doorbell's snapshot) over the camera's
+                urls.pop("image_url", None)
+            payload.update(urls)
         if not any(
             k in payload for k in ("message", "title", "image_url", "video_url")
         ):

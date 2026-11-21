@@ -34,6 +34,7 @@ notify:
         select:
           options:
             - live
+            - hls
             - snapshot
           translation_key: camera_view
     mode:

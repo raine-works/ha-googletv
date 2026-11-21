@@ -26,6 +26,8 @@ data class NotificationRequest(
     val actions: List<Action> = emptyList(),
     val contextApp: String?,
     val contextInput: String?,
+    // A camera live over WebRTC, signalled through Home Assistant: videoUrl (HLS) is its fallback
+    val webrtc: WebRtc? = null,
 ) {
     val popup: Boolean get() = mode == MODE_POPUP || mode == MODE_BOTH
     val panel: Boolean get() = mode == MODE_PANEL || mode == MODE_BOTH
@@ -33,6 +35,11 @@ data class NotificationRequest(
 
     /** A button on the notification: [id] goes to Home Assistant when it's pressed. */
     data class Action(val id: String, val title: String)
+
+    /** A camera to open over WebRTC: its entity, Home Assistant's websocket, the ICE servers. */
+    data class WebRtc(val entityId: String, val wsUrl: String, val iceServers: List<IceServer>)
+
+    data class IceServer(val urls: List<String>, val username: String?, val credential: String?)
 
     companion object {
         const val MODE_POPUP = "popup"
@@ -62,7 +69,8 @@ data class NotificationRequest(
             val message = text("message")
             val imageUrl = text("image_url")
             val videoUrl = text("video_url")
-            require(title != null || message != null || imageUrl != null || videoUrl != null) {
+            val webrtc = json.optJSONObject("webrtc")?.let { parseWebRtc(it) }
+            require(title != null || message != null || imageUrl != null || videoUrl != null || webrtc != null) {
                 "Nothing to show: give a title, message, image_url or video_url"
             }
             val mode = text("mode") ?: MODE_POPUP
@@ -134,7 +142,29 @@ data class NotificationRequest(
                 actions = actions,
                 contextApp = context?.optString("app", "")?.takeIf { it.isNotBlank() },
                 contextInput = context?.optString("input", "")?.takeIf { it.isNotBlank() },
+                webrtc = webrtc,
             )
+        }
+
+        private fun parseWebRtc(json: JSONObject): WebRtc {
+            val entityId = json.optString("entity_id")
+            require(Regex("^camera\\.[a-z0-9_]+$").matches(entityId)) { "webrtc.entity_id must be a camera" }
+            val wsUrl = json.optString("ws_url")
+            require(Regex("^wss?://\\S+$", RegexOption.IGNORE_CASE).matches(wsUrl)) { "webrtc.ws_url must be a ws(s) URL" }
+            val servers = json.optJSONArray("ice_servers")
+            val iceServers = (0 until (servers?.length() ?: 0)).mapNotNull { i ->
+                val server = servers!!.optJSONObject(i) ?: return@mapNotNull null
+                // urls: one, or a list, as in RTCIceServer
+                val urls = server.optJSONArray("urls")?.let { list -> (0 until list.length()).map { list.getString(it) } }
+                    ?: server.optString("urls").takeIf { it.isNotBlank() }?.let { listOf(it) }
+                    ?: return@mapNotNull null
+                IceServer(
+                    urls,
+                    server.optString("username").takeIf { it.isNotBlank() },
+                    server.optString("credential").takeIf { it.isNotBlank() },
+                )
+            }
+            return WebRtc(entityId, wsUrl, iceServers)
         }
     }
 }

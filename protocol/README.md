@@ -43,7 +43,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 
 | Endpoint | Returns |
 | :--- | :--- |
-| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`, `hidden_inputs`), `installer` the package that installed it (`com.android.vending`: Google Play) or null |
+| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`, `hidden_inputs`, `webrtc`), `installer` the package that installed it (`com.android.vending`: Google Play) or null, `home_assistant_token` whether it has Home Assistant's token for WebRTC (`POST /api/home_assistant`) |
 | `GET /api/events` | What happens on the TV, as it happens: see [Events](#events) |
 | `GET /api/state` | `{screen_on, foreground_app, uptime_ms, volume: {level, max, muted}, sessions, overlay_permission, usage_access, notification_access, network_debugging, instance, popups}`: `sessions` the media sessions (`package, state, position_ms, updated_ms, speed, title, subtitle, description`), null without notification access; `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
 | `GET /api/apps` | `{apps: [{package, activity, name}]}`: the launcher's apps |
@@ -59,6 +59,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `POST /api/rules` | the same fields (any of them) to change; returns the rules, and every event stream gets them (`rules`) |
 | `POST /api/notify` | shows a notification; see below |
 | `POST /api/play` | Plays media; see below |
+| `POST /api/home_assistant` | `{token}`: the TV's own Home Assistant user's long-lived token, kept, to sign in to Home Assistant's websocket and open cameras over WebRTC. Sent once; again when a camera reports `no_token` or `auth_invalid` |
 | `POST /api/dashboard` | `{url, token}`: a Home Assistant dashboard full screen, signed in with `token` (the frontend's external auth, as Home Assistant's phone apps do). It stays on `url`'s address (scheme, host, port): links elsewhere aren't followed, and the token is given only to a page from there. It closes on Back from its first page, or when another app comes to the front. A page that can't load (an untrusted certificate) shows why |
 | `POST /api/stop` | Closes the player and the dashboard, and stops announcing |
 | `POST /api/dismiss` | `{tag}` takes that notification down, from the screen and the panel; no tag takes them all down (but a pairing code) |
@@ -73,6 +74,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `icon` | | The badge: `mdi:<name>` (Material Design Icons 7.4.47, bundled) or an http(s) image URL; the logo if not set |
 | `image_url` | | An image (http/https only), shown on the pop-up and in the panel; with `video_url`, the video's poster until its first frame |
 | `video_url` | | A video or live stream (http/https, HLS `.m3u8`, rtsp), played on the pop-up: a doorbell camera. A stream (HLS, rtsp) plays as it comes; anything else is a clip, downloaded whole first (up to 3 tries; a response that ends short is kept when it's a complete MP4), then looped from the file, which goes when the pop-up does |
+| `webrtc` | | `{entity_id, ws_url, ice_servers}`: a camera to open over WebRTC, live in about a second. The app signs in to Home Assistant's websocket (`ws_url`) with its token (`POST /api/home_assistant`), sends `camera/webrtc/offer` (receive-only video and audio), trades candidates with `camera/webrtc/candidate` on that subscription, and ends it with `unsubscribe_events` when the card comes down. `ice_servers` as in `RTCIceServer` (`urls`, `username`, `credential`). The image shows until the first frame; no frame within 4 seconds, or an error, and `video_url` (HLS) plays instead. A card updated by its `tag` with the same camera keeps its session |
 | `mode` | `popup` | `popup` over what's on screen, `panel` (the notification panel only), or `both` |
 | `position` | the TV's setting (`top_right`) | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right` |
 | `duration` | 8 (20 with a video) | Seconds on screen, 1 to 600; `0` until it's dismissed (in the panel, it can't be swiped away) |
@@ -130,12 +132,13 @@ a stream that stops reading loses its oldest events.
 
 | `type` | Fields | When |
 | :--- | :--- | :--- |
-| `hello` | `instance`, `app_version`, `build`, `features` | First, on connecting. A new `instance`: the app restarted |
+| `hello` | `instance`, `app_version`, `build`, `features`, `home_assistant_token` | First, on connecting. A new `instance`: the app restarted; `home_assistant_token` false: give it the token again (its data was cleared) |
 | `rules` | the rules, as `GET /api/rules` | They changed, on the TV's screen or through the API |
 | `apps` | `change` (`installed`, `uninstalled`, `changed`), `package` | An app was installed, uninstalled or changed: worth reading `/api/apps` again |
 | `state` | `change` (`screen`, `volume`) | The screen turned on or off, or the volume changed: worth reading the state again |
 | `ping` | | Every 15 seconds with nothing else: the connection's alive |
 | `notification_action` | `tag`, `action` | A notification's button was pressed (on a pop-up or in the panel); the notification comes down |
 | `notification_dismissed` | `tag`, `by` | A tagged notification came down on the TV: `by` is `remote` (Back on a card with buttons) or `timeout` |
+| `notification_failed` | `tag`, `media` (`image`, `icon`, `video`, `webrtc`), `reason` | Something on a notification didn't load: an image or icon, a clip or stream (`video`), or a camera over WebRTC (`reason` `no_token`, `auth_invalid`, `timeout`, …; it falls back to `video_url`) |
 | `player` | `state` (`opened`, `playing`, `paused`, `closed`), `kind`, `title` | The full-screen player |
 | `dashboard` | `state` (`opened`, `closed`), `url` | The dashboard view |

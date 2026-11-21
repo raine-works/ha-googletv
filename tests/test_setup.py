@@ -2152,3 +2152,215 @@ async def test_an_input_left_out_on_the_tv(
     assert "HDMI 2" not in sources and "Xbox" in sources
     picker = hass.states.get("select.lott_s_tv_input")
     assert picker.attributes["options"] == ["Xbox", "HDMI 3"]
+
+
+# Cameras: live over WebRTC (HLS behind it), the caller's image first
+
+
+def _webrtc_app(web: AiohttpClientMocker, has_token: bool = False) -> None:
+    """A TV app that opens cameras over WebRTC (registered first: it answers)."""
+    web.get(
+        f"{BRIDGE}/api/info",
+        json={
+            "api": 1,
+            "app_version": VERSION,
+            "build": "abc1234",
+            "paired": True,
+            "features": ["events", "hidden_apps", "webrtc"],
+            "installer": None,
+            "home_assistant_token": has_token,
+        },
+    )
+    web.post(f"{BRIDGE}/api/home_assistant", json={"ok": True})
+
+
+def _camera(hass: HomeAssistant, types: set, state: str = "idle"):
+    """camera.door, offering ``types`` of streams; patches for its object."""
+    from unittest.mock import MagicMock
+
+    from homeassistant.components.camera import CameraCapabilities
+    from homeassistant.components.camera.webrtc import WebRTCClientConfiguration
+    from webrtc_models import RTCConfiguration, RTCIceServer
+
+    attributes = {"access_token": "c4m"} if state != "unavailable" else {}
+    hass.states.async_set("camera.door", state, attributes)
+    camera = MagicMock()
+    camera.camera_capabilities = CameraCapabilities(types)
+    camera.async_get_webrtc_client_configuration.return_value = (
+        WebRTCClientConfiguration(
+            configuration=RTCConfiguration(
+                ice_servers=[RTCIceServer(urls="stun:stun.example.com:3478")]
+            )
+        )
+    )
+    return (
+        patch(
+            "homeassistant.components.camera.get_camera_from_entity_id",
+            return_value=camera,
+        ),
+        patch(
+            "homeassistant.components.camera.async_request_stream",
+            AsyncMock(return_value="/api/hls/s7r/master_playlist.m3u8"),
+        ),
+    )
+
+
+async def _notify_camera(hass: HomeAssistant, patches, **fields) -> None:
+    with patches[0], patches[1]:
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {
+                "entity_id": "media_player.lott_s_tv",
+                "title": "Front door",
+                "camera_entity": "camera.door",
+                **fields,
+            },
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_a_camera_live_over_webrtc(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """WebRTC, with HLS to fall back to and the snapshot as its poster; the
+    TV's user's token given to the app once."""
+    from homeassistant.components.camera import StreamType
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    await hass.auth.async_create_user("Lott")
+    _webrtc_app(web)
+    await _paired(hass, client, web)
+    patches = _camera(hass, {StreamType.WEB_RTC, StreamType.HLS})
+    for _ in range(2):
+        await _notify_camera(hass, patches)
+    sent = _bridge_calls(web, "/api/notify")[-1][2]
+    assert sent["webrtc"] == {
+        "entity_id": "camera.door",
+        "ws_url": "ws://192.168.1.2:8123/api/websocket",
+        "ice_servers": [{"urls": "stun:stun.example.com:3478"}],
+    }
+    assert sent["video_url"] == (
+        "http://192.168.1.2:8123/api/hls/s7r/master_playlist.m3u8"
+    )
+    assert sent["image_url"].startswith(
+        "http://192.168.1.2:8123/api/camera_proxy/camera.door?token=c4m"
+    )
+    # The token, once (not with every notification)
+    tokens = _bridge_calls(web, "/api/home_assistant")
+    assert len(tokens) == 1 and len(tokens[0][2]["token"]) > 20
+
+
+async def test_a_cameras_poster_is_the_callers_image(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.components.camera import StreamType
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    await hass.auth.async_create_user("Lott")
+    _webrtc_app(web, has_token=True)
+    await _paired(hass, client, web)
+    await _notify_camera(
+        hass,
+        _camera(hass, {StreamType.WEB_RTC, StreamType.HLS}),
+        image="/media/local/doorbell_snapshot.jpg",
+    )
+    sent = _bridge_calls(web, "/api/notify")[-1][2]
+    assert _signed_by(sent["image_url"])["path"] == "/media/local/doorbell_snapshot.jpg"
+    assert "webrtc" in sent
+    assert not _bridge_calls(web, "/api/home_assistant")
+
+
+async def test_an_unavailable_camera_keeps_the_callers_image(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker, caplog
+) -> None:
+    """No broken snapshot over it: the image and the text show."""
+    from homeassistant.components.camera import StreamType
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    _webrtc_app(web, has_token=True)
+    await _paired(hass, client, web)
+    await _notify_camera(
+        hass,
+        _camera(hass, {StreamType.WEB_RTC}, state="unavailable"),
+        image="/media/local/doorbell_snapshot.jpg",
+    )
+    sent = _bridge_calls(web, "/api/notify")[-1][2]
+    assert "/media/local/doorbell_snapshot.jpg" in sent["image_url"]
+    assert "webrtc" not in sent and "video_url" not in sent
+    assert "camera_entity camera.door is unavailable" in caplog.text
+
+
+async def test_a_camera_over_hls_only(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """camera_view hls: as before WebRTC, though the camera has it."""
+    from homeassistant.components.camera import StreamType
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    _webrtc_app(web, has_token=True)
+    await _paired(hass, client, web)
+    await _notify_camera(
+        hass, _camera(hass, {StreamType.WEB_RTC, StreamType.HLS}), camera_view="hls"
+    )
+    sent = _bridge_calls(web, "/api/notify")[-1][2]
+    assert "webrtc" not in sent and sent["video_url"].endswith(".m3u8")
+
+
+async def test_a_tv_app_without_webrtc_gets_hls(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from homeassistant.components.camera import StreamType
+
+    hass.config.internal_url = "http://192.168.1.2:8123"
+    await _paired(hass, client, web)
+    await _notify_camera(hass, _camera(hass, {StreamType.WEB_RTC, StreamType.HLS}))
+    sent = _bridge_calls(web, "/api/notify")[-1][2]
+    assert "webrtc" not in sent and sent["video_url"].endswith(".m3u8")
+
+
+async def test_a_notification_that_failed_on_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker, caplog
+) -> None:
+    """In Home Assistant's log and on the event entity; a refused token is
+    given again."""
+    entry = await _paired(hass, client, web)
+    coordinator = entry.runtime_data
+    coordinator._bridge_has_token = True
+    coordinator._async_handle_event(
+        {
+            "type": "notification_failed",
+            "tag": "door",
+            "media": "webrtc",
+            "reason": "auth_invalid",
+        }
+    )
+    await hass.async_block_till_done()
+    assert "couldn't show a notification's webrtc (tag door): auth_invalid" in (
+        caplog.text
+    )
+    assert coordinator._bridge_has_token is False
+    event = hass.states.get("event.lott_s_tv_notification_events")
+    assert event.attributes["event_type"] == "failed"
+    assert event.attributes["media"] == "webrtc"
+
+
+async def test_a_tv_app_that_lost_its_token_says_so_on_hello(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Its data cleared: the next camera gives it the token again."""
+    _webrtc_app(web, has_token=True)
+    entry = await _paired(hass, client, web)
+    coordinator = entry.runtime_data
+    assert coordinator._bridge_has_token is True
+    coordinator._async_handle_event(
+        {
+            "type": "hello",
+            "instance": "run-2",
+            "features": ["events", "webrtc"],
+            "home_assistant_token": False,
+        }
+    )
+    await hass.async_block_till_done()
+    assert coordinator._bridge_has_token is False

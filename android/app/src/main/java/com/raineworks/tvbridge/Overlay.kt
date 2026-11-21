@@ -52,6 +52,11 @@ class Overlay private constructor(private val context: Context) {
         // The image over the video until its first frame
         var poster: View? = null,
         var rendered: Boolean = false,
+        // A camera over WebRTC (else, or after it fails, [player] plays videoUrl)
+        var live: LiveCamera? = null,
+        var liveEntity: String? = null,
+        var texture: TextureView? = null,
+        var mute: Boolean = true,
     )
 
     /** A card's view, the surface its video plays on, and the image over it until it does. */
@@ -77,12 +82,18 @@ class Overlay private constructor(private val context: Context) {
             // With a video too, the image is its poster until it plays
             val imageUrl = request.imageUrl
             if (imageUrl != null) {
-                Images.load(imageUrl, 1280) { bitmap -> add(request, ticket, bitmap, iconBitmap) }
+                Images.load(imageUrl, 1280, failed = { failed(request.tag, "image", it) }) { bitmap ->
+                    add(request, ticket, bitmap, iconBitmap)
+                }
             } else {
                 main.post { add(request, ticket, null, iconBitmap) }
             }
         }
-        if (icon != null) Images.load(icon, 128) { bitmap -> withImage(bitmap) } else withImage(null)
+        if (icon != null) {
+            Images.load(icon, 128, failed = { failed(request.tag, "icon", it) }) { bitmap -> withImage(bitmap) }
+        } else {
+            withImage(null)
+        }
     }
 
     fun showPairingCode(code: String) {
@@ -139,11 +150,13 @@ class Overlay private constructor(private val context: Context) {
             update(tag, existing, built, request)
         } else {
             existing?.let { remove(tag, it, animate = false) }
-            val player = built.texture?.let { startVideo(tag, request.videoUrl!!, it, request.mute) }
-            attach(tag, request.position, built.view, player, request.videoUrl, request.durationS, request.persistent)
+            attach(tag, request.position, built.view, null, request.videoUrl, request.durationS, request.persistent)
             cards[tag]?.let {
                 it.poster = built.poster
+                it.texture = built.texture
+                it.mute = request.mute
                 it.actionable = request.actions.isNotEmpty()
+                play(tag, it, request)
                 layout(request.position)
             }
         }
@@ -158,20 +171,26 @@ class Overlay private constructor(private val context: Context) {
         container.removeViewAt(index)
         container.addView(built.view, index, cardParams())
         val player = card.player
+        val live = card.live
         val texture = built.texture
-        if (player != null && texture != null && card.videoUrl == request.videoUrl) {
+        card.poster = built.poster
+        card.texture = texture
+        card.mute = request.mute
+        if (live != null && texture != null && request.webrtc?.entityId == card.liveEntity) {
+            // The same camera: its session goes on, drawn on the new card
+            live.attach(texture)
+            live.setMute(request.mute)
+            if (card.rendered) built.poster?.visibility = View.GONE
+        } else if (live == null && player != null && texture != null && card.videoUrl == request.videoUrl) {
             player.setVideoTextureView(texture)
             sound(player, request.mute)
             // Playing already: no poster over it
             if (card.rendered) built.poster?.visibility = View.GONE
         } else {
-            player?.release()
-            card.clip?.delete()
-            card.clip = null
-            card.rendered = false
-            card.player = texture?.let { startVideo(tag, request.videoUrl!!, it, request.mute) }
+            stopVideo(card)
+            card.videoUrl = request.videoUrl
+            play(tag, card, request)
         }
-        card.poster = built.poster
         card.view = built.view
         card.videoUrl = request.videoUrl
         card.pinned = request.persistent
@@ -192,7 +211,7 @@ class Overlay private constructor(private val context: Context) {
         }
         var texture: TextureView? = null
         var poster: View? = null
-        if (request.videoUrl != null) {
+        if (request.videoUrl != null || request.webrtc != null) {
             // Live video: a small rounded 16:9 tile where the logo goes
             // Concentric corners: the card's radius is the tile's plus the gap
             val gap = 6
@@ -266,7 +285,7 @@ class Overlay private constructor(private val context: Context) {
         val card = cardLayout(width, request.color, pill = false)
         var texture: TextureView? = null
         var poster: View? = null
-        if (request.videoUrl != null) {
+        if (request.videoUrl != null || request.webrtc != null) {
             val frame = android.widget.FrameLayout(context)
             texture = TextureView(context)
             frame.addView(texture, android.widget.FrameLayout.LayoutParams(width, width * 9 / 16))
@@ -489,6 +508,71 @@ class Overlay private constructor(private val context: Context) {
         )
     }
 
+    /**
+     * The card's video: a camera over WebRTC when Home Assistant offers one
+     * (and has given the app its token), falling back to videoUrl (HLS)
+     * if it doesn't start; else videoUrl.
+     */
+    private fun play(tag: String, card: Card, request: NotificationRequest) {
+        val texture = card.texture ?: return
+        val camera = request.webrtc
+        val token = Prefs(context).homeAssistantToken
+        if (camera != null && token.isNotEmpty()) {
+            card.liveEntity = camera.entityId
+            card.live = LiveCamera(
+                context, camera, token, request.mute,
+                object : LiveCamera.Listener {
+                    override fun onFirstFrame() {
+                        if (cards[tag] === card) posterOut(card)
+                    }
+
+                    override fun onFailed(reason: String) {
+                        if (cards[tag] !== card || card.live == null) return
+                        card.live = null
+                        failed(tag, "webrtc", reason)
+                        // HLS instead: slower to start, but there
+                        val url = card.videoUrl
+                        val view = card.texture
+                        if (url != null && view != null) card.player = startVideo(tag, url, view, card.mute)
+                    }
+                },
+            ).also { it.start(texture) }
+            return
+        }
+        if (camera != null) failed(tag, "webrtc", "no_token")
+        request.videoUrl?.let { card.player = startVideo(tag, it, texture, request.mute) }
+    }
+
+    /** The card's video stopped, its session closed, its clip deleted. */
+    private fun stopVideo(card: Card) {
+        card.player?.release()
+        card.player = null
+        card.live?.close()
+        card.live = null
+        card.liveEntity = null
+        card.clip?.delete()
+        card.clip = null
+        card.rendered = false
+    }
+
+    /** The poster fades once the video has a frame. */
+    private fun posterOut(card: Card) {
+        card.rendered = true
+        card.poster?.animate()?.alpha(0f)?.setDuration(ANIMATION_MS)
+            ?.withEndAction { card.poster?.visibility = View.GONE }?.start()
+    }
+
+    /** An image or video that didn't load, for Home Assistant (notification_failed). */
+    private fun failed(tag: String?, media: String, reason: String) {
+        Events.emit(
+            "notification_failed",
+            JSONObject()
+                .put("tag", tag?.takeUnless { it.startsWith(AUTO_TAG) } ?: JSONObject.NULL)
+                .put("media", media)
+                .put("reason", reason.take(200)),
+        )
+    }
+
     /** The image a video shows until its first frame. */
     private fun posterView(image: Bitmap): View =
         ImageView(context).apply {
@@ -510,13 +594,11 @@ class Overlay private constructor(private val context: Context) {
             object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     Log.w(TAG, "Couldn't play ${url.substringBefore('?')}: ${error.errorCodeName}")
+                    failed(tag, "video", error.errorCodeName)
                 }
 
                 override fun onRenderedFirstFrame() {
-                    val card = cards.values.firstOrNull { it.player === player } ?: return
-                    card.rendered = true
-                    card.poster?.animate()?.alpha(0f)?.setDuration(ANIMATION_MS)
-                        ?.withEndAction { card.poster?.visibility = View.GONE }?.start()
+                    cards.values.firstOrNull { it.player === player }?.let { posterOut(it) }
                 }
             },
         )
@@ -531,7 +613,10 @@ class Overlay private constructor(private val context: Context) {
         } else {
             Clips.fetch(context, url) { file ->
                 val card = cards[tag]
-                if (file == null) return@fetch
+                if (file == null) {
+                    if (card?.player === player) failed(tag, "video", "download failed")
+                    return@fetch
+                }
                 if (card == null || card.player !== player) {
                     // Down, or another video, before it arrived
                     file.delete()
@@ -605,8 +690,7 @@ class Overlay private constructor(private val context: Context) {
         cards.remove(tag)
         card.hide?.let { main.removeCallbacks(it) }
         val finish = {
-            card.player?.release()
-            card.clip?.delete()
+            stopVideo(card)
             containers[card.position]?.removeView(card.view)
             layout(card.position)
         }

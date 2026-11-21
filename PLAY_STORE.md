@@ -173,6 +173,9 @@ The emulator has shown setup, pairing, notifications, buttons, media and
 dashboards working; before production, check on real hardware (a Chromecast
 with Google TV or Google TV Streamer, and a Sony or TCL TV):
 
+* A camera **over WebRTC** on the doorbell pop-up: live within a second or
+  so (the TV's hardware H.264 decoder), its snapshot until then, and HLS
+  if it doesn't start.
 * Whether **Settings shows** Display over other apps, Notification access
   and Usage access for the app (the app's Permissions section opens each).
   Where a TV hides one, the app-alone setup loses what it gives; ADB

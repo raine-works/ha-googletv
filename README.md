@@ -256,7 +256,7 @@ the TV, so ones that need a sign-in (media, UniFi Protect clips) load. The
 camera proxy and camera streams carry their own tokens and are sent as they
 are; a live notification is signed afresh each time it's shown again.
 | `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`, `/media/local/snapshot.jpg`). With a `video`, it shows until the video's first frame: a doorbell's snapshot, then its clip |
-| `camera_entity` | A camera's live stream (`camera_view: live`, the default) or a snapshot |
+| `camera_entity` | A camera on the card. `camera_view`: `live` (the default) opens it over WebRTC when the camera offers it (go2rtc, or a camera with WebRTC of its own), live in about a second, with HLS (2 to 5 seconds) when it doesn't or WebRTC fails to start; `hls`, HLS only; `snapshot`, a still. The camera's snapshot shows until the video starts, unless an `image` is given (a doorbell's ring snapshot): yours wins. An unavailable camera adds nothing (a warning in the log), so the rest of the card still shows |
 | `video` | A video or live stream URL (HLS, RTSP, MP4), or a Home Assistant path (a UniFi Protect clip, `/api/unifiprotect/video/…`). A clip is downloaded whole, then loops from the TV; a stream plays as it comes |
 | `size` | `compact` (a one-line pill; a camera plays in a small tile on it), `small`, `medium`, `large`; the TV's setting if not given |
 | `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's setting if not given |
@@ -313,6 +313,7 @@ on Home Assistant's event bus, with the TV's `device_id`:
 | :--- | :--- | :--- |
 | `notification_action` | `tag`, `action` | A notification's button was pressed |
 | `notification_dismissed` | `tag`, `by` (`remote`, `timeout`) | A tagged notification came down on the TV: Back, or its time ran out |
+| `notification_failed` | `tag`, `media` (`image`, `icon`, `video`, `webrtc`), `reason` | Something on a notification didn't load on the TV (a camera over WebRTC then falls back to HLS). Also logged as a warning, and on the event entity as **Couldn't load** |
 | `player` | `state` (`opened`, `playing`, `paused`, `closed`), `kind`, `title` | Home Assistant's media on the TV |
 | `dashboard` | `state` (`opened`, `closed`), `url` | A dashboard on the TV |
 
@@ -547,6 +548,11 @@ actions:
   point at Home Assistant are signed for 15 minutes as Home Assistant's
   read-only content user, so the TV can load them without a sign-in of its
   own. A clip is kept on the TV only while its pop-up is up.
+* **Cameras over WebRTC**: the TV app signs in to Home Assistant's
+  websocket as the TV's own user (the one dashboards use, read-only unless
+  you allow control) and asks for the camera there, as Home Assistant's
+  frontend does. Home Assistant gives the app that user's token once; it's
+  kept on the TV, and **Forget all Home Assistant pairings** removes it.
 * **Dashboards** use the TV's own Home Assistant user
   ([above](#media-and-dashboards)), and stay on Home Assistant: a link to
   another site isn't followed, and only Home Assistant's own pages get the

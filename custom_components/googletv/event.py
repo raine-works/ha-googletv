@@ -1,4 +1,4 @@
-"""An event entity per TV: its notifications' buttons pressed, or dismissed.
+"""An event entity per TV: its notifications' buttons pressed, dismissed, or failed.
 
 From the TV app's event stream (googletv_event on the bus has every event).
 """
@@ -14,7 +14,12 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .coordinator import GoogleTvConfigEntry, GoogleTvCoordinator
 from .entity import GoogleTvEntity
 
-EVENT_TYPES = {"notification_action": "action", "notification_dismissed": "dismissed"}
+EVENT_TYPES = {
+    "notification_action": "action",
+    "notification_dismissed": "dismissed",
+    # Its image, icon, clip or camera didn't load on the TV
+    "notification_failed": "failed",
+}
 
 
 async def async_setup_entry(
@@ -53,7 +58,8 @@ class GoogleTvNotificationEvent(GoogleTvEntity, EventEntity):
         attributes: dict[str, Any] = {"tag": event.get("tag")}
         if "action" in event:
             attributes["action"] = event["action"]
-        if "by" in event:
-            attributes["by"] = event["by"]
+        for key in ("by", "media", "reason"):
+            if key in event:
+                attributes[key] = event[key]
         self._trigger_event(EVENT_TYPES[event["type"]], attributes)
         self.async_write_ha_state()

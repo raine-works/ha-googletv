@@ -32,7 +32,11 @@ on). It sends that Home Assistant, over your local network:
   storage and memory.
 
 It receives from that Home Assistant the notifications, media and dashboards
-to show, and commands (open an app, change the volume, play or pause).
+to show, and commands (open an app, change the volume, play or pause). To
+show a camera live it signs in to that Home Assistant's websocket as the
+TV's own Home Assistant user and asks for the camera's stream, as Home
+Assistant's own app does; the video comes straight from your camera (or
+Home Assistant's go2rtc) over your network.
 Images, videos and dashboards are loaded from the addresses Home Assistant
 gives, usually Home Assistant itself. A video clip is downloaded to the
 app's cache while its notification is up, and deleted when it comes down.
@@ -45,7 +49,8 @@ pairing carries a token only your Home Assistant has.
 
 The app keeps the tokens of the Home Assistant it's paired with, your
 settings (pop-ups' size and position, which apps and inputs they show over,
-which apps Home Assistant leaves out), and the version of the integration
+which apps and inputs Home Assistant leaves out), the TV's own Home
+Assistant user's token (for cameras), and the version of the integration
 Home Assistant last reported. Clearing the app's data removes them all;
 **Forget all Home Assistant pairings**, in its About section, removes the
 tokens.

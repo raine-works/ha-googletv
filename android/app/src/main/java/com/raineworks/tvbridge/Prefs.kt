@@ -38,13 +38,22 @@ class Prefs(context: Context) {
     }
 
     fun forgetAll() {
-        prefs.edit().remove(KEY_TOKENS).apply()
+        prefs.edit().remove(KEY_TOKENS).remove(KEY_HA_TOKEN).apply()
     }
 
     /** The integration's version, as Home Assistant last said. */
     var clientVersion: String
         get() = prefs.getString(KEY_CLIENT_VERSION, "")!!
         set(value) = prefs.edit().putString(KEY_CLIENT_VERSION, value).apply()
+
+    /**
+     * The TV's own Home Assistant user's token (read-only unless allowed
+     * more), which the app signs in to Home Assistant's websocket with to
+     * open a camera over WebRTC. Home Assistant gives it once.
+     */
+    var homeAssistantToken: String
+        get() = prefs.getString(KEY_HA_TOKEN, "")!!
+        set(value) = prefs.edit().putString(KEY_HA_TOKEN, value).apply()
 
     /** Home Assistant also reaches the TV over ADB (its extra features). */
     var clientAdb: Boolean
@@ -101,6 +110,7 @@ class Prefs(context: Context) {
         private val LOCK = Any()
         private const val KEY_CLIENT_VERSION = "client_version"
         private const val KEY_CLIENT_ADB = "client_adb"
+        private const val KEY_HA_TOKEN = "home_assistant_token"
         const val WHEN_BLOCKED_PANEL = "panel"
         const val WHEN_BLOCKED_DROP = "drop"
         private const val KEY_TOKENS = "tokens"

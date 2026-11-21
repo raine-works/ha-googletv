@@ -14,16 +14,24 @@ object Images {
     private val main = Handler(Looper.getMainLooper())
     private const val MAX_BYTES = 15 * 1024 * 1024
 
-    /** Loads [url], no bigger than [maxSide] px, then calls [done] on the main thread (null on failure). */
-    fun load(url: String, maxSide: Int, done: (Bitmap?) -> Unit) {
+    /**
+     * Loads [url], no bigger than [maxSide] px, then calls [done] on the main
+     * thread (null on failure, [failed] told why first).
+     */
+    fun load(url: String, maxSide: Int, failed: ((String) -> Unit)? = null, done: (Bitmap?) -> Unit) {
         pool.execute {
+            var reason: String? = null
             val bitmap = try {
-                decode(download(url), maxSide)
+                decode(download(url), maxSide) ?: null.also { reason = "not an image" }
             } catch (e: Exception) {
-                android.util.Log.w("TvBridge", "Couldn't load image $url: $e")
+                reason = e.message ?: e.toString()
                 null
             }
-            main.post { done(bitmap) }
+            if (reason != null) android.util.Log.w("TvBridge", "Couldn't load image ${url.substringBefore('?')}: $reason")
+            main.post {
+                reason?.let { failed?.invoke(it) }
+                done(bitmap)
+            }
         }
     }
 

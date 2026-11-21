@@ -245,6 +245,10 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self._update_tried: str | None = None
         # Who installed the app (Google Play updates its own)
         self._bridge_installer: str | None = None
+        # What the app can do (its info's features), and whether it has the
+        # TV user's token for cameras over WebRTC
+        self._bridge_features: set[str] = set()
+        self._bridge_has_token = False
 
     async def _async_update_data(self) -> GoogleTvData:
         """Read the TV (fully every few seconds, quickly between), and its apps."""
@@ -354,7 +358,14 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         await self._async_after_bridge_info(info)
 
     async def _async_after_bridge_info(self, info: dict[str, Any]) -> None:
-        """Its rules (an app that has them), and an update if it's old."""
+        """What it can do and has, its rules, and an update if it's old.
+
+        From its info, or its hello when the event stream connects.
+        """
+        if "features" in info:
+            self._bridge_features = set(info["features"] or [])
+        if "home_assistant_token" in info:
+            self._bridge_has_token = bool(info["home_assistant_token"])
         if "hidden_apps" in (info.get("features") or []):
             await self._async_sync_rules()
         await self._async_update_bridge_if_old(info)
@@ -785,7 +796,20 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             elif instance != self._bridge_instance:
                 self._live_checked_at = None
             return
-        if kind in ("notification_action", "notification_dismissed"):
+        if kind == "notification_failed":
+            _LOGGER.warning(
+                "%s couldn't show a notification's %s (tag %s): %s",
+                self.config_entry.title,
+                event.get("media"),
+                event.get("tag"),
+                event.get("reason"),
+            )
+            if event.get("reason") in ("no_token", "auth_invalid"):
+                # Given again with the next camera
+                self._bridge_has_token = False
+            for listener in list(self._event_listeners):
+                listener(event)
+        elif kind in ("notification_action", "notification_dismissed"):
             # Down on the TV: a live one isn't shown again
             if (tag := event.get("tag")) in self._live:
                 self._forget_live(tag)
@@ -886,6 +910,9 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             if state.input:
                 context["input"] = state.input.id
             payload = {"context": context, **payload}
+        if "webrtc" in payload and not await self._async_webrtc_ready():
+            # HLS, as before: the app can't open it itself
+            payload = {k: v for k, v in payload.items() if k != "webrtc"}
         try:
             reply = await self.bridge.async_notify(self._signed(payload))
         except BridgeAuthError as err:
@@ -904,6 +931,21 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if self._bridge_instance is None:
             self._bridge_instance = reply.get("instance")
         return reply
+
+    async def _async_webrtc_ready(self) -> bool:
+        """Whether the app can open a camera over WebRTC: it gets the token once."""
+        if "webrtc" not in self._bridge_features:
+            return False
+        if self._bridge_has_token:
+            return True
+        try:
+            token = await self._async_dashboard_token()
+            await self.bridge.async_home_assistant_token(token)
+        except (HomeAssistantError, BridgeError) as err:
+            _LOGGER.warning("Can't give the TV app its token for WebRTC: %s", err)
+            return False
+        self._bridge_has_token = True
+        return True
 
     def _signed(self, payload: dict[str, Any]) -> dict[str, Any]:
         """The payload with its Home Assistant URLs signed, for the TV to load.

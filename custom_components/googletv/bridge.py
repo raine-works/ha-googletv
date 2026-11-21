@@ -133,6 +133,10 @@ class BridgeClient:
             {"integration_version": integration_version, "adb": adb},
         )
 
+    async def async_home_assistant_token(self, token: str) -> None:
+        """Give the app the TV's own user's token (for cameras over WebRTC)."""
+        await self._request("POST", "/api/home_assistant", {"token": token})
+
     async def async_info(self) -> dict[str, Any]:
         """Who the app is (no token needed)."""
         return await self._request("GET", "/api/info")

@@ -29,6 +29,9 @@ android {
         versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
         versionName = integrationVersion
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
+        // TVs are ARM: WebRTC's native code for those only (on anything else
+        // a camera falls back to HLS)
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
     }
 
     // A Google Play build (`./gradlew bundleRelease -Pplay`) is signed with the
@@ -98,6 +101,9 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     // The setup screen's QR code
     implementation("com.google.zxing:core:3.5.3")
+    // Cameras live over WebRTC, signalled on Home Assistant's websocket
+    implementation("io.getstream:stream-webrtc-android:1.3.10")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

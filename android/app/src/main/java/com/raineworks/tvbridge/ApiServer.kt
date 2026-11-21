@@ -99,8 +99,15 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 prefs.clientAdb = body.optBoolean("adb", false)
                 ok()
             }
+            method == Method.POST && path == "/api/home_assistant" -> {
+                // The TV's own user's token, for cameras over WebRTC
+                val token = body(session).getString("token").trim()
+                require(token.length in 20..4096 && !token.contains(Regex("\\s"))) { "Not a token" }
+                prefs.homeAssistantToken = token
+                ok()
+            }
             method == Method.GET && path == "/api/events" ->
-                newChunkedResponse(Response.Status.OK, "application/x-ndjson", Events.open())
+                newChunkedResponse(Response.Status.OK, "application/x-ndjson", Events.open(prefs.homeAssistantToken.isNotEmpty()))
             method == Method.GET && path == "/api/apps" -> json(JSONObject().put("apps", apps()))
             method == Method.GET && path == "/api/inputs" -> json(JSONObject().put("inputs", inputs()))
             method == Method.GET && path == "/api/rules" -> json(prefs.rules())
@@ -179,6 +186,8 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         .put("model", Build.MODEL)
         .put("android", Build.VERSION.RELEASE)
         .put("paired", prefs.tokens.isNotEmpty())
+        // Has Home Assistant's token for WebRTC (not the token itself: this is open)
+        .put("home_assistant_token", prefs.homeAssistantToken.isNotEmpty())
         .put("build", BuildConfig.GIT_SHA)
         // The TV's id (Android ID, as its mDNS announcement says): Home Assistant's unique id for it
         .put("id", android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID))
@@ -246,7 +255,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     companion object {
         const val API_VERSION = 1
-        val FEATURES = listOf("events", "confirm_pairing", "device", "hidden_apps", "hidden_inputs")
+        val FEATURES = listOf("events", "confirm_pairing", "device", "hidden_apps", "hidden_inputs", "webrtc")
         const val PORT = 8721
         private const val MAX_BODY = 64 * 1024
         private const val TAG = "TvBridge"
