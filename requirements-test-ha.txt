@@ -4,3 +4,5 @@ pytest
 pytest-asyncio
 pytest-homeassistant-custom-component
 adb-shell[async]==0.4.4
+# Home Assistant's camera component (its requirement), for the camera tests
+PyTurboJPEG==1.8.0
