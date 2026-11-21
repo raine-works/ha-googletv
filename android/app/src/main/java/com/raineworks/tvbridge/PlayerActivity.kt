@@ -126,7 +126,11 @@ class PlayerActivity : Activity() {
             }
             return
         }
-        val exo = ExoPlayer.Builder(this)
+        // A decoder the TV won't open (busy, or out of resources): the next one
+        val exo = ExoPlayer.Builder(
+            this,
+            androidx.media3.exoplayer.DefaultRenderersFactory(this).setEnableDecoderFallback(true),
+        )
             // Media's audio focus: another app's media pauses it, an announcement ducks it
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()

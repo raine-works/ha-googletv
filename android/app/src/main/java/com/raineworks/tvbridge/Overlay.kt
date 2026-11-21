@@ -585,8 +585,14 @@ class Overlay private constructor(private val context: Context) {
      * comes; a clip downloaded whole first, then played from the file on a
      * loop (the poster, if any, showing meanwhile).
      */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun startVideo(tag: String, url: String, view: TextureView, mute: Boolean): ExoPlayer {
-        val player = ExoPlayer.Builder(context).build()
+        // A decoder the TV won't open (its one HEVC decoder busy with the show,
+        // on MediaTek TVs): the next one, in software, instead
+        val player = ExoPlayer.Builder(
+            context,
+            androidx.media3.exoplayer.DefaultRenderersFactory(context).setEnableDecoderFallback(true),
+        ).build()
         player.setVideoTextureView(view)
         sound(player, mute)
         player.repeatMode = Player.REPEAT_MODE_ONE

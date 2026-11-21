@@ -592,6 +592,13 @@ Assistant allows it when it installs the app).
 its own links for the TV, but needs to know its address: set it in
 Settings → System → Network (the local address the TV can reach).
 
+**A camera doesn't play while you're watching something.** Many TVs
+(MediaTek chips: Sony, TCL, Hisense) have one hardware decoder for H.265,
+and the show you're watching holds it. Live view over WebRTC (the default,
+with go2rtc) copes; for HLS and clips, the TV app falls back to its
+software decoder, which is slower to start. A camera channel in H.264
+avoids it altogether.
+
 **The TV app is behind the integration.** Over ADB it's updated by itself
 when Home Assistant next reads the TV; `googletv.install_tv_bridge` does it
 now. Through the app alone, a repair says so: update it where it came from.

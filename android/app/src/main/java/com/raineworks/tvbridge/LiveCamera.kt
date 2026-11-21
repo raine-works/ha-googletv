@@ -136,15 +136,45 @@ class LiveCamera(
         renderer.createEglSurface(st)
     }
 
-    /** Lets go of the view; [then] once the renderer has (another player may draw on it after). */
+    /**
+     * Lets go of the view; [then] once the renderer has (another player may
+     * draw on it after).
+     *
+     * Until the renderer has let go, the view mustn't release its surface:
+     * the card coming down destroys it at once, and drawing on a released
+     * surface (a frame on WebRTC's render thread) crashes the app. So the
+     * view's listener keeps it, and it's released after.
+     */
     private fun detach(then: () -> Unit = {}) {
-        texture?.surfaceTextureListener = null
+        val view = texture
+        val st = surface
         texture = null
-        if (surface != null) {
-            surface = null
-            renderer.releaseEglSurface { main.post(then) }
-        } else {
+        surface = null
+        if (st == null) {
+            view?.surfaceTextureListener = null
             then()
+            return
+        }
+        var released = false
+        var destroyed = false
+        view?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(s: SurfaceTexture, width: Int, height: Int) = Unit
+            override fun onSurfaceTextureSizeChanged(s: SurfaceTexture, width: Int, height: Int) = Unit
+            override fun onSurfaceTextureUpdated(s: SurfaceTexture) = Unit
+            override fun onSurfaceTextureDestroyed(s: SurfaceTexture): Boolean {
+                if (s !== st) return true
+                destroyed = true
+                // Kept until the renderer has let go, then released here
+                if (released) st.release()
+                return false
+            }
+        }
+        renderer.releaseEglSurface {
+            main.post {
+                released = true
+                if (destroyed) st.release()
+                then()
+            }
         }
     }
 
