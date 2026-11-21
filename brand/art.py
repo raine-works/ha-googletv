@@ -1,8 +1,11 @@
 """Raineworks TV's artwork: the raineworks mark, Google TV's icon in its corner.
 
-Draws every icon and banner (the integration's brand icon, the TV app's
-launcher icon, banner, logo and status-bar icon, Google Play's graphics) from
-the mark's geometry (raineworks' blocks/brand) and brand/google-tv.png.
+Draws every icon and banner (the TV app's launcher icon, banner, logo and
+status-bar icon, Google Play's graphics) from the mark's geometry (raineworks'
+blocks/brand) and brand/google-tv.png. The integration's brand icon, what Home
+Assistant and its Marketplace show, is Google TV's icon alone: the integration
+is for Google TV (Google TV is a trademark of Google LLC; this project isn't
+affiliated with or endorsed by Google), and the TV app keeps the raineworks mark.
 Run it from the repo root with Pillow: ``python brand/art.py``.
 """
 
@@ -143,9 +146,20 @@ def save(img: Image.Image, path: Path, opaque: bool = False) -> None:
     print(path.relative_to(ROOT))
 
 
-# Home Assistant's brand icon (its integrations page): the logo on a rounded tile
+def google_tv_icon(size: int, width: float = 0.82) -> Image.Image:
+    """Google TV's icon centered on a transparent square, `width` of its side."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    w = round(size * width)
+    h = round(GOOGLE_TV.height * w / GOOGLE_TV.width)
+    img.alpha_composite(
+        GOOGLE_TV.resize((w, h), Image.LANCZOS), ((size - w) // 2, (size - h) // 2)
+    )
+    return img
+
+
+# Home Assistant's brand icon (its integrations page, the Marketplace): Google TV's icon
 for px, name in ((256, "icon.png"), (512, "icon@2x.png")):
-    save(tile(px, 0.15, 0.22), ROOT / f"custom_components/googletv/brand/{name}")
+    save(google_tv_icon(px), ROOT / f"custom_components/googletv/brand/{name}")
 # The TV app: launcher icon, banner (320 x 180 dp), in-app logo, status-bar icon
 save(tile(192, 0.17, 0.0), RES / "drawable-xhdpi/icon.png", opaque=True)
 save(lockup((640, 360), 132, 48, 20), RES / "drawable-xhdpi/banner.png", opaque=True)

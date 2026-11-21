@@ -1,4 +1,6 @@
-<img src="custom_components/googletv/brand/icon@2x.png" alt="Raineworks TV" width="96">
+<p align="center">
+  <img src="android/play/icon-512.png" alt="Raineworks TV" width="128">
+</p>
 
 # Raineworks TV
 
@@ -16,7 +18,8 @@ Remote, Google Cast and ADB integrations together, and a few things none of them
 <a href="https://buymeacoffee.com/raineworks"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 
 > This project is not affiliated with, authorized, or endorsed by Google. Google
-> TV and Android TV are trademarks of Google LLC.
+> TV and Android TV are trademarks of Google LLC; the integration's icon in Home
+> Assistant is Google TV's, to say what it's for. The TV app is Raineworks TV's own.
 
 ## What it does
 
