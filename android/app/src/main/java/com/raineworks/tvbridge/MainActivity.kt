@@ -651,7 +651,7 @@ class MainActivity : Activity() {
 
     /**
      * Setting up, while Home Assistant isn't paired: a QR code to the
-     * integration in HACS, then adding the TV in Home Assistant, which asks
+     * integration in the Home Assistant Marketplace, then adding the TV in Home Assistant, which asks
      * here to connect.
      */
     private fun setupCard() {
@@ -665,7 +665,7 @@ class MainActivity : Activity() {
             }
             row.addView(
                 ImageView(this).apply {
-                    setImageBitmap(Qr.bitmap(Qr.HACS_URL, dp(152)))
+                    setImageBitmap(Qr.bitmap(Qr.MARKETPLACE_URL, dp(152)))
                     background = Theme.surface(this@MainActivity, Color.WHITE, 12, Color.WHITE)
                     setPadding(dp(10), dp(10), dp(10), dp(10))
                     contentDescription = getString(R.string.setup_qr)
@@ -678,7 +678,7 @@ class MainActivity : Activity() {
                 clipChildren = false
                 clipToPadding = false
             }
-            step(steps, 1, getString(R.string.setup_hacs_title), getString(R.string.setup_hacs_text))
+            step(steps, 1, getString(R.string.setup_marketplace_title), getString(R.string.setup_marketplace_text))
             step(steps, 2, getString(R.string.setup_add_title), getString(R.string.setup_add_text))
             row.addView(steps, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             body.addView(row)

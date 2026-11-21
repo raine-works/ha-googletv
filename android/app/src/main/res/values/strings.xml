@@ -38,9 +38,9 @@
 
     <string name="setup_title">Set up with Home Assistant</string>
     <string name="setup_subtitle">No code to type, no developer options</string>
-    <string name="setup_qr">QR code: Raineworks TV in HACS</string>
-    <string name="setup_hacs_title">Add the integration</string>
-    <string name="setup_hacs_text">Scan with your phone to open Raineworks TV in HACS. Download it, then restart Home Assistant.</string>
+    <string name="setup_qr">QR code: Raineworks TV in the Home Assistant Marketplace</string>
+    <string name="setup_marketplace_title">Add the integration</string>
+    <string name="setup_marketplace_text">Scan with your phone to open Raineworks TV in the Marketplace. Download it, then restart Home Assistant.</string>
     <string name="setup_debugging_title">Turn on network debugging</string>
     <string name="setup_debugging_text">In Developer options, turn on USB debugging, and Network debugging where it\'s a separate switch.</string>
     <string name="setup_open_settings">Open settings</string>

@@ -9,9 +9,9 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 
 /** QR codes for the setup screen: dark modules on white, as phones read best. */
 object Qr {
-    /** Where the QR code leads: the integration in HACS, in your own Home Assistant. */
-    const val HACS_URL =
-        "https://my.home-assistant.io/redirect/hacs_repository/?owner=raine-works&repository=ha-googletv&category=integration"
+    /** Where the QR code leads: the integration in the Home Assistant Marketplace, in your own Home Assistant. */
+    const val MARKETPLACE_URL =
+        "https://my.home-assistant.io/redirect/marketplace_repository/?owner=raine-works&repository=ha-googletv&category=integration"
 
     fun bitmap(text: String, sizePx: Int): Bitmap {
         val matrix = QRCodeWriter().encode(

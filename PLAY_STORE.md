@@ -94,7 +94,7 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
 > notifications may pop up over.
 >
 > Setup takes a minute: add the Raineworks TV integration to Home
-> Assistant (from HACS), and choose Allow on the TV when it asks. No
+> Assistant (from the Home Assistant Marketplace), and choose Allow on the TV when it asks. No
 > developer options, no codes. For the remote's keys, turning the TV off
 > and knowing its HDMI input, turn on network debugging; the app shows how.
 >

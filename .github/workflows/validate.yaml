@@ -1,4 +1,4 @@
-# Validates the integration against Home Assistant (hassfest) and HACS rules.
+# Validates the integration against Home Assistant (hassfest) and the Marketplace's (HACS) rules.
 name: "Validate"
 
 on:
