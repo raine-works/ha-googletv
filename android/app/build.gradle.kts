@@ -57,9 +57,11 @@ android {
     if (play) {
         signingConfigs.create("upload") {
             storeFile = file(System.getenv("UPLOAD_KEYSTORE") ?: error("UPLOAD_KEYSTORE isn't set"))
-            storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("UPLOAD_KEY_ALIAS") ?: "upload"
-            keyPassword = System.getenv("UPLOAD_KEY_PASSWORD") ?: System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+            // GitHub Actions passes a secret that isn't set as an empty string, so empty counts as unset
+            fun env(name: String) = System.getenv(name)?.takeIf { it.isNotEmpty() }
+            storePassword = env("UPLOAD_KEYSTORE_PASSWORD")
+            keyAlias = env("UPLOAD_KEY_ALIAS") ?: "upload"
+            keyPassword = env("UPLOAD_KEY_PASSWORD") ?: env("UPLOAD_KEYSTORE_PASSWORD")
         }
     }
 
