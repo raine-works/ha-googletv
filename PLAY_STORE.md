@@ -174,7 +174,8 @@ dashboards working; before production, check on real hardware (a Chromecast
 with Google TV or Google TV Streamer, and a Sony or TCL TV):
 
 * A camera **over WebRTC** on the doorbell pop-up: live within a second or
-  so, its snapshot until then, and HLS if it doesn't start. Also **with a
+  so with an H.264 camera, its snapshot until then; an H.265 one is
+  refused over WebRTC and plays over HLS (checked on a Sony BRAVIA VH2). Also **with a
   show playing** (YouTube TV, Netflix): on MediaTek TVs the show holds the
   one hardware H.265 decoder, and HLS and clips fall back to software.
 * Whether **Settings shows** Display over other apps, Notification access

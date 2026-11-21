@@ -272,17 +272,19 @@ class Overlay private constructor(private val context: Context) {
      * then its progress, or the time it has left.
      */
     private fun fullCard(request: NotificationRequest, tag: String, image: Bitmap?, iconBitmap: Bitmap?): Built {
+        // Small is a step up from the compact pill, not a leap: narrower, its
+        // text and spacing a little smaller
         val width = dp(
             when (request.size) {
                 "medium" -> 340
                 "large" -> 440
-                else -> 280
+                else -> 232
             },
         )
         val scale = when (request.size) {
             "medium" -> 1.08f
             "large" -> 1.22f
-            else -> 1f
+            else -> 0.9f
         }
         val card = cardLayout(width, request.color, pill = false)
         var texture: TextureView? = null

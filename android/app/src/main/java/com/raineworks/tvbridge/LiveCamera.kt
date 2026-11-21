@@ -319,7 +319,14 @@ class LiveCamera(
         val pc = factory.createPeerConnection(config, observer) ?: return fail("no peer connection")
         peer = pc
         val receive = RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.RECV_ONLY)
-        pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO, receive)
+        val video = pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO, receive)
+        // No H.265: this WebRTC build crashes natively setting up an H.265
+        // receiver (a Sony on 32-bit ARM, as go2rtc sent it), and the TV's one
+        // hardware H.265 decoder is usually the show's. A camera that sends
+        // only H.265 is refused ("codecs not matched") and plays over HLS, on
+        // the TV's software decoder; an H.264 one is live in under a second.
+        val codecs = factory.getRtpReceiverCapabilities(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO).codecs
+        video.setCodecPreferences(codecs.filter { it.name != "H265" })
         if (receivesAudio) pc.addTransceiver(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO, receive)
         pc.createOffer(
             Sdp("offer") { offer ->
@@ -407,6 +414,8 @@ class LiveCamera(
             PeerConnectionFactory.initialize(
                 PeerConnectionFactory.InitializationOptions.builder(context.applicationContext).createInitializationOptions(),
             )
+            // WebRTC's own warnings and errors in the log (adb logcat), for a camera that won't play
+            org.webrtc.Logging.enableLogToDebugOutput(org.webrtc.Logging.Severity.LS_WARNING)
             // Played as media, never recording (receive only); used only when
             // a camera's sound is asked for (unmuted)
             val audio = JavaAudioDeviceModule.builder(context.applicationContext)

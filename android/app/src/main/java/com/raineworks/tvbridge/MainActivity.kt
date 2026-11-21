@@ -62,6 +62,8 @@ class MainActivity : Activity() {
     private var shown: String? = null
     // The pairing request last shown: a new one brings Home forward
     private var requestShown: String? = null
+    // Building the content: focus the rail gets meanwhile isn't the remote's
+    private var rebuilding = false
 
     private enum class Section(val icon: String, val title: Int, val subtitle: Int) {
         HOME("mdi:home-assistant", R.string.nav_home, R.string.home_subtitle),
@@ -278,8 +280,12 @@ class MainActivity : Activity() {
                 addState(intArrayOf(android.R.attr.state_activated), fill(Theme.MUTED))
                 addState(intArrayOf(), fill(Color.TRANSPARENT))
             }
-            // Landing on a section shows it, as the TV's settings do
-            setOnFocusChangeListener { _, focused -> if (focused && section != target) select(target) }
+            // Landing on a section shows it, as the TV's settings do; not focus
+            // Android hands the rail while the content's being built again (the
+            // control that had it gone), which would switch to Home
+            setOnFocusChangeListener { _, focused ->
+                if (focused && !rebuilding && section != target) select(target)
+            }
             setOnClickListener { content.getFocusables(View.FOCUS_DOWN).firstOrNull()?.requestFocus() }
         }
         item.addView(
@@ -317,6 +323,15 @@ class MainActivity : Activity() {
     // The content: the section's title over its cards
 
     private fun build() {
+        rebuilding = true
+        try {
+            buildContent()
+        } finally {
+            rebuilding = false
+        }
+    }
+
+    private fun buildContent() {
         // Where the remote was in the content, by its place among the focusable controls
         val focusedIndex = content.getFocusables(View.FOCUS_DOWN).indexOf(currentFocus)
         val request = Pairing.request?.takeIf { it.answer == null }

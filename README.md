@@ -262,9 +262,9 @@ the TV, so ones that need a sign-in (media, UniFi Protect clips) load. The
 camera proxy and camera streams carry their own tokens and are sent as they
 are; a live notification is signed afresh each time it's shown again.
 | `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`, `/media/local/snapshot.jpg`). With a `video`, it shows until the video's first frame: a doorbell's snapshot, then its clip |
-| `camera_entity` | A camera on the card. `camera_view`: `live` (the default) opens it over WebRTC when the camera offers it (go2rtc, or a camera with WebRTC of its own), live in about a second, with HLS (2 to 5 seconds) when it doesn't or WebRTC fails to start; `hls`, HLS only; `snapshot`, a still. The camera's snapshot shows until the video starts, unless an `image` is given (a doorbell's ring snapshot): yours wins. An unavailable camera adds nothing (a warning in the log), so the rest of the card still shows |
+| `camera_entity` | A camera on the card. `camera_view`: `live` (the default) opens it over WebRTC when the camera offers it (go2rtc, or a camera with WebRTC of its own) and sends H.264 (not H.265), live in about a second, with HLS (2 to 5 seconds) when it doesn't or WebRTC fails to start; `hls`, HLS only; `snapshot`, a still. The camera's snapshot shows until the video starts, unless an `image` is given (a doorbell's ring snapshot): yours wins. An unavailable camera adds nothing (a warning in the log), so the rest of the card still shows |
 | `video` | A video or live stream URL (HLS, RTSP, MP4), or a Home Assistant path (a UniFi Protect clip, `/api/unifiprotect/video/…`). A clip is downloaded whole, then loops from the TV; a stream plays as it comes |
-| `size` | `compact` (a one-line pill; a camera plays in a small tile on it), `small`, `medium`, `large`; the TV's setting if not given |
+| `size` | `compact` (a one-line pill; a camera plays in a small tile on it), `small` (a card 232 dp wide, its text a little smaller), `medium` (340 dp), `large` (440 dp); the TV's setting if not given |
 | `position` | `top_left`, `top`, `top_right`, `center`, `bottom_left`, `bottom`, `bottom_right`; the TV's setting if not given |
 | `duration` | Seconds on screen (8, or 20 with a video); `0` keeps it up until it's dismissed |
 | `until_entity`, `until_state` | Keep it up until this entity changes, or reaches `until_state`: a [live notification](#live-notifications) |
@@ -602,13 +602,16 @@ Assistant allows it when it installs the app).
 its own links for the TV, but needs to know its address: set it in
 Settings → System → Network (the local address the TV can reach).
 
-**A camera doesn't play while you're watching something.** Many TVs
-(MediaTek chips: Sony, TCL, Hisense) have one hardware decoder for H.265,
-and the show you're watching holds it. Live view over WebRTC (the default,
-with go2rtc) copes; for HLS and clips, the TV app falls back to its
-software decoder, which is slower to start (the TV app's log says which
-decoder it got: `adb logcat -s TvBridge`). A camera channel in H.264
-avoids it altogether.
+**A camera takes seconds to go live, not one.** WebRTC (live in under a
+second) needs the camera's stream in H.264: an H.265 camera (UniFi
+Protect's "Enhanced encoding", many 4K cameras) is refused over WebRTC
+("codecs not matched" in the TV's log) and plays over HLS instead, a few
+seconds later. Many TVs (MediaTek chips: Sony, TCL, Hisense) have one
+hardware H.265 decoder, which the show you're watching holds; the TV app
+then decodes in software (its log says which decoder it got:
+`adb logcat -s TvBridge`). For live in a second, give the camera an H.264
+stream: turn off Enhanced encoding in UniFi Protect, or have go2rtc
+transcode it.
 
 **The TV app is behind the integration.** Over ADB it's updated by itself
 when Home Assistant next reads the TV; `googletv.install_tv_bridge` does it
