@@ -1452,6 +1452,19 @@ async def test_browsing_shows_what_the_tv_plays(
     assert not keep(item("application/pdf"))
 
 
+async def test_the_tv_app_isnt_listed_as_an_app(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    # The TV app's own list leaves it out: so does Home Assistant's
+    entry = await _paired(hass, client, web)
+    assert entry.runtime_data.data.bridge_installed
+    state = hass.states.get("media_player.lott_s_tv")
+    assert "TV Bridge" not in state.attributes["source_list"]
+    assert all(
+        app["package"] != "com.raineworks.tvbridge" for app in state.attributes["apps"]
+    )
+
+
 async def test_stop_closes_home_assistants_media(
     hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
 ) -> None:

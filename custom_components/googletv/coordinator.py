@@ -1310,6 +1310,9 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
     def _named_apps(self) -> list[App]:
         apps = []
         for app in self._launcher_apps:
+            # The TV app itself isn't one to open, and its own list leaves it out
+            if app.package == BRIDGE_PACKAGE:
+                continue
             listing = self.lookups.listing(app.package) if self.lookups else None
             if listing:
                 # A name the integration knows wins; the package is no name
