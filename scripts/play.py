@@ -299,6 +299,33 @@ def listing(args: argparse.Namespace) -> None:
         raise
 
 
+def status(args: argparse.Namespace) -> None:
+    """What Play has now, read only: every track's releases and the listing's images."""
+    edit = Edit()
+    try:
+        for track in call("GET", f"{edit.url}/tracks").get("tracks", []):
+            releases = track.get("releases", [])
+            shown = "; ".join(
+                f"{r.get('name', '?')} ({', '.join(r.get('versionCodes', []))}) {r.get('status')}"
+                + (
+                    f" {round(r['userFraction'] * 100)}%"
+                    if r.get("userFraction")
+                    else ""
+                )
+                for r in releases
+            )
+            print(f"track {track['track']}: {shown or 'nothing'}")
+        for item in call("GET", f"{edit.url}/listings").get("listings", []):
+            language = item["language"]
+            counts = []
+            for image_type in (*IMAGES, *NOT_LISTED):
+                images = call("GET", f"{edit.url}/listings/{language}/{image_type}")
+                counts.append(f"{image_type} {len(images.get('images', []))}")
+            print(f"listing {language}: {item.get('title')!r}; {', '.join(counts)}")
+    finally:
+        edit.abandon()
+
+
 def data_safety(args: argparse.Namespace) -> None:
     # The Data safety form, as the Play Console's own CSV export
     call(
