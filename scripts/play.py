@@ -42,10 +42,9 @@ IMAGES = {
     "featureGraphic": "feature-graphic-1024x500.png",
     "tvBanner": "tv-banner-1280x720.png",
     "tvScreenshots": "screenshots",
-    # The default listing asks for phone screenshots even for a TV-only app:
-    # the same ones (1920 x 1080, which Play takes for phones too)
-    "phoneScreenshots": "screenshots",
 }
+# Never on the listing: the app is for TVs only, not phones or tablets
+NOT_LISTED = ("phoneScreenshots", "sevenInchScreenshots", "tenInchScreenshots")
 # A listing's text: Play's field → the file in listing/<language>/
 TEXTS = {
     "title": "title.txt",
@@ -292,6 +291,8 @@ def listing(args: argparse.Namespace) -> None:
                         content_type=kind,
                     )
                 print(f"{language}: {image_type} ({len(files)})")
+            for image_type in NOT_LISTED:
+                call("DELETE", f"{edit.url}/listings/{language}/{image_type}")
         edit.commit()
     except BaseException:
         edit.abandon()
