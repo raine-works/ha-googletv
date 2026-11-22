@@ -3,6 +3,7 @@
     <string name="app_name">Raineworks TV</string>
     <string name="app_tagline">for Home Assistant</string>
     <string name="version_line">Version %1$s</string>
+    <string name="ip_line">IP address %1$s</string>
     <string name="service_channel">Bridge service</string>
     <string name="service_text">Ready for Home Assistant on port %1$d</string>
     <string name="notification_channel">Home Assistant</string>
@@ -127,6 +128,7 @@
     <string name="about_version">Version</string>
     <string name="about_build">Build</string>
     <string name="about_device">TV</string>
+    <string name="about_ip">IP address</string>
     <string name="about_privacy">Everything stays on your network: the app talks only to your Home Assistant.</string>
     <string name="about_disclaimer">Made by Raineworks. Google TV is a trademark of Google LLC; this app isn\'t made or endorsed by Google.</string>
     <string name="pairing_section">Pairing</string>

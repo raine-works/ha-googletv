@@ -14,6 +14,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -121,6 +122,10 @@ class MainActivity : Activity() {
         scroll = ScrollView(this).apply {
             isFillViewport = true
             isVerticalScrollBarEnabled = false
+            // A section with nothing to select (Home once set up) still takes
+            // the remote, so Up and Down scroll it
+            isFocusable = true
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             addView(content)
         }
         root.addView(scroll, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
@@ -150,11 +155,11 @@ class MainActivity : Activity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focus = currentFocus
-            val inContent = focus != null && isInside(focus, content)
+            val inContent = focus != null && isInside(focus, scroll)
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (inContent) {
                     val next = focus!!.focusSearch(View.FOCUS_LEFT)
-                    if (next == null || !isInside(next, content)) {
+                    if (next == null || !isInside(next, scroll)) {
                         navItems[section]?.requestFocus()
                         return true
                     }
@@ -165,12 +170,17 @@ class MainActivity : Activity() {
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (focus != null && isInside(focus, nav)) {
-                    content.getFocusables(View.FOCUS_DOWN).firstOrNull()?.requestFocus()
+                    enterContent()
                     return true
                 }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** Into the content: its first control, else the content itself, to scroll. */
+    private fun enterContent() {
+        content.getFocusables(View.FOCUS_DOWN).firstOrNull()?.requestFocus() ?: scroll.requestFocus()
     }
 
     private fun isInside(view: View, parent: ViewGroup): Boolean {
@@ -253,8 +263,13 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT),
         )
         railStatus.addView(
-            text(getString(R.string.version_line, BuildConfig.VERSION_NAME), 11f, Theme.regular(this), Theme.MUTED_FOREGROUND).apply {
+            text(getString(R.string.ip_line, ipAddress() ?: "?"), 11f, Theme.regular(this), Theme.MUTED_FOREGROUND).apply {
                 setPadding(dp(2), dp(10), 0, 0)
+            },
+        )
+        railStatus.addView(
+            text(getString(R.string.version_line, BuildConfig.VERSION_NAME), 11f, Theme.regular(this), Theme.MUTED_FOREGROUND).apply {
+                setPadding(dp(2), dp(4), 0, 0)
             },
         )
     }
@@ -286,7 +301,7 @@ class MainActivity : Activity() {
             setOnFocusChangeListener { _, focused ->
                 if (focused && !rebuilding && section != target) select(target)
             }
-            setOnClickListener { content.getFocusables(View.FOCUS_DOWN).firstOrNull()?.requestFocus() }
+            setOnClickListener { enterContent() }
         }
         item.addView(
             TextView(this).apply {
@@ -637,6 +652,7 @@ class MainActivity : Activity() {
             row(it, getString(R.string.about_version), BuildConfig.VERSION_NAME)
             row(it, getString(R.string.about_build), BuildConfig.GIT_SHA)
             row(it, getString(R.string.about_device), TvInfo.deviceName(this))
+            row(it, getString(R.string.about_ip), ipAddress() ?: "?")
             muted(it, getString(R.string.about_privacy))
             muted(it, getString(R.string.about_disclaimer))
         }
@@ -1181,14 +1197,23 @@ class MainActivity : Activity() {
         private const val COLUMN_DP = 128
     }
 
-    /** The TV's address on the network, for the status card. */
-    private fun ipAddress(): String? = try {
-        NetworkInterface.getNetworkInterfaces().toList()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { it is Inet4Address }?.hostAddress
-    } catch (e: java.net.SocketException) {
-        null
+    /**
+     * The TV's IP address: the network it's on (Wi-Fi or Ethernet), else the
+     * first interface up with an IPv4 address.
+     */
+    private fun ipAddress(): String? {
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        connectivity?.activeNetwork?.let { connectivity.getLinkProperties(it) }
+            ?.linkAddresses?.map { it.address }?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
+            ?.let { return it.hostAddress }
+        return try {
+            NetworkInterface.getNetworkInterfaces().toList()
+                .filter { it.isUp && !it.isLoopback && !it.isVirtual }
+                .flatMap { it.inetAddresses.toList() }
+                .firstOrNull { it is Inet4Address }?.hostAddress
+        } catch (e: java.net.SocketException) {
+            null
+        }
     }
 
     /** The dashboards' switch: a bar with the controls' radius, filled when on. */
