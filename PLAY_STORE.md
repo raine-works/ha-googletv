@@ -55,16 +55,27 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
 8. **A Play release for every GitHub release** (after the first release):
    the Release workflow starts the Google Play workflow for each release it
    publishes, which builds that tag's bundle and, with a service account,
-   uploads it. Set up the service account once:
-   1. Google Cloud console: a project (any), **enable the Google Play Android
-      Developer API**, then IAM → Service accounts → create one (no roles
-      needed) → Keys → Add key → JSON.
-   2. Play Console → **Users and permissions** → Invite new users → the
+   uploads it. It signs in to Google without a key (Workload Identity
+   Federation: GitHub's OIDC token for the run is exchanged for the service
+   account's), so there's no key to keep, and Workspace organizations, which
+   forbid service account keys by default, work too. Set up once (done for
+   this repository: project `raineworks-play`, service account
+   `play-upload@raineworks-play.iam.gserviceaccount.com`):
+   1. Google Cloud: a project; enable the **Google Play Android Developer
+      API**, IAM Service Account Credentials and Security Token Service APIs;
+      a service account (no roles).
+   2. A workload identity pool with an OIDC provider for
+      `https://token.actions.githubusercontent.com`, mapping
+      `attribute.repository=assertion.repository`, its condition
+      `assertion.repository == 'raine-works/ha-googletv'`; then give
+      `principalSet://iam.googleapis.com/projects/<number>/locations/global/workloadIdentityPools/<pool>/attribute.repository/raine-works/ha-googletv`
+      **Workload Identity User** on the service account.
+   3. Play Console → **Users and permissions** → Invite new users → the
       service account's email → App permissions: Raineworks TV, with
       **Release to testing tracks** (and **Release to production** for
       production) → Invite.
-   3. GitHub: the JSON key's contents as the `PLAY_SERVICE_ACCOUNT_JSON`
-      secret.
+   4. GitHub variables: `PLAY_SERVICE_ACCOUNT` (its email) and
+      `PLAY_WORKLOAD_IDENTITY_PROVIDER` (the provider's full name).
    Releases then land on the `PLAY_TRACK` variable's track (internal when
    unset) as drafts. Once the app is published, set `PLAY_RELEASE_STATUS` to
    `completed` to roll them out without promoting each by hand; `alpha` is

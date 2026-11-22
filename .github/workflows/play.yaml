@@ -10,9 +10,15 @@
 #   UPLOAD_KEYSTORE_PASSWORD  its password (and the key's, unless:)
 #   UPLOAD_KEY_PASSWORD       the key's password, if it differs
 #   UPLOAD_KEY_ALIAS          the key's alias, if not "upload"
-#   PLAY_SERVICE_ACCOUNT_JSON a Play Console service account (to upload)
 #
-# Variables (same page, Variables tab), optional:
+# Variables (same page, Variables tab). To upload, keyless: GitHub's OIDC token
+# is exchanged for the service account's (Workload Identity Federation), so
+# there's no key to keep (PLAY_STORE.md):
+#   PLAY_SERVICE_ACCOUNT      the service account's email, invited in the Play
+#                             Console with release permissions
+#   PLAY_WORKLOAD_IDENTITY_PROVIDER  projects/<number>/locations/global/
+#                             workloadIdentityPools/<pool>/providers/<provider>
+# Optional:
 #   PLAY_TRACK                the track: internal (default), alpha (closed
 #                             testing), beta (open testing) or production
 #   PLAY_RELEASE_STATUS       draft (default: Play requires it until the app
@@ -28,6 +34,8 @@ on:
 
 permissions:
   contents: read
+  # Signing in to Google Cloud without a key (Workload Identity Federation)
+  id-token: write
 
 jobs:
   bundle:
@@ -35,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAS_KEY: ${{ secrets.UPLOAD_KEYSTORE_BASE64 != '' }}
-      HAS_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+      HAS_PLAY: ${{ vars.PLAY_SERVICE_ACCOUNT != '' && vars.PLAY_WORKLOAD_IDENTITY_PROVIDER != '' }}
     defaults:
       run:
         working-directory: android
@@ -79,11 +87,19 @@ jobs:
           name: google-tv-by-raineworks-play
           path: android/app/build/outputs/bundle/release/app-release.aab
 
-      - name: Upload to the internal testing track
+      - name: Sign in to Google Cloud as the Play service account
+        id: google
+        if: env.HAS_KEY == 'true' && env.HAS_PLAY == 'true'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+
+      - name: Upload to Google Play
         if: env.HAS_KEY == 'true' && env.HAS_PLAY == 'true'
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          serviceAccountJson: ${{ steps.google.outputs.credentials_file_path }}
           packageName: com.raineworks.tvbridge
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: ${{ vars.PLAY_TRACK || 'internal' }}
