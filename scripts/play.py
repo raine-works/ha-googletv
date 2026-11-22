@@ -43,8 +43,12 @@ IMAGES = {
     "tvBanner": "tv-banner-1280x720.png",
     "tvScreenshots": "screenshots",
 }
-# Never on the listing: the app is for TVs only, not phones or tablets
-NOT_LISTED = ("phoneScreenshots", "sevenInchScreenshots", "tenInchScreenshots")
+# Google requires phone screenshots on every store listing, a TV-only app's
+# too, so the first two TV screenshots fill that slot; the app still can't be
+# installed on a phone (its manifest requires a TV)
+PHONE_SCREENSHOTS = ("phoneScreenshots", "screenshots", 2)
+# Never on the listing: tablets
+NOT_LISTED = ("sevenInchScreenshots", "tenInchScreenshots")
 # A listing's text: Play's field → the file in listing/<language>/
 TEXTS = {
     "title": "title.txt",
@@ -291,6 +295,18 @@ def listing(args: argparse.Namespace) -> None:
                         content_type=kind,
                     )
                 print(f"{language}: {image_type} ({len(files)})")
+            image_type, name, count = PHONE_SCREENSHOTS
+            files = sorted((root / name).glob("*.png"))[:count]
+            if files:
+                call("DELETE", f"{edit.url}/listings/{language}/{image_type}")
+                for file in files:
+                    call(
+                        "POST",
+                        f"{edit.upload_url}/listings/{language}/{image_type}?uploadType=media",
+                        data=file.read_bytes(),
+                        content_type="image/png",
+                    )
+                print(f"{language}: {image_type} ({len(files)}, required by Play)")
             for image_type in NOT_LISTED:
                 call("DELETE", f"{edit.url}/listings/{language}/{image_type}")
         edit.commit()
@@ -319,7 +335,7 @@ def status(args: argparse.Namespace) -> None:
         for item in call("GET", f"{edit.url}/listings").get("listings", []):
             language = item["language"]
             counts = []
-            for image_type in (*IMAGES, *NOT_LISTED):
+            for image_type in (*IMAGES, PHONE_SCREENSHOTS[0], *NOT_LISTED):
                 images = call("GET", f"{edit.url}/listings/{language}/{image_type}")
                 counts.append(f"{image_type} {len(images.get('images', []))}")
             print(f"listing {language}: {item.get('title')!r}; {', '.join(counts)}")
