@@ -184,46 +184,81 @@ def status_for(status: str, rollout: int) -> tuple[str, float | None]:
     return status, None
 
 
+def is_draft_app(err: PlayError) -> bool:
+    """Play's refusal for an app it hasn't approved: drafts only, but on internal."""
+    return "draft app" in str(err).lower()
+
+
+DRAFT_APP_WARNING = (
+    "Google hasn't approved the app yet, so Play takes this release as a draft:"
+    " it goes out with the app's review (Publishing overview → Send for review)"
+)
+
+
 def upload(args: argparse.Namespace) -> None:
+    status, fraction = status_for(args.status, args.rollout)
+    try:
+        code = upload_once(args, status, fraction)
+    except PlayError as err:
+        # An app Google hasn't approved yet takes drafts only (but on internal)
+        if status == "draft" or not is_draft_app(err):
+            raise
+        warn(DRAFT_APP_WARNING)
+        status = "draft"
+        code = upload_once(args, status, None)
+    print(f"Released version code {code} on {args.track} ({status})")
+
+
+def upload_once(args: argparse.Namespace, status: str, fraction: float | None) -> int:
     edit = Edit()
     try:
-        bundle = Path(args.bundle).read_bytes()
         code = call(
             "POST",
             f"{edit.upload_url}/bundles?uploadType=media",
-            data=bundle,
+            data=Path(args.bundle).read_bytes(),
             content_type="application/octet-stream",
         )["versionCode"]
         print(f"Uploaded version code {code}")
-        status, fraction = status_for(args.status, args.rollout)
         notes = release_notes(args.notes)
-        body = {
-            "track": args.track,
-            "releases": [track_release([code], status, fraction, notes, args.name)],
-        }
-        try:
-            call("PUT", f"{edit.url}/tracks/{args.track}", body)
-        except PlayError as err:
-            # An app never published takes draft releases only
-            if status == "draft" or "draft app" not in str(err).lower():
-                raise
-            warn(
-                "The app isn't published yet, so Play takes this release as a draft:"
-                " roll it out in the Play Console"
-            )
-            body["releases"] = [track_release([code], "draft", None, notes, args.name)]
-            call("PUT", f"{edit.url}/tracks/{args.track}", body)
-        edit.commit()
-        print(
-            f"Released version code {code} on {args.track}"
-            f" ({body['releases'][0]['status']})"
+        release = track_release([code], status, fraction, notes, args.name)
+        call(
+            "PUT",
+            f"{edit.url}/tracks/{args.track}",
+            {"track": args.track, "releases": [release]},
         )
+        edit.commit()
+        return code
     except BaseException:
         edit.abandon()
         raise
 
 
 def promote(args: argparse.Namespace) -> None:
+    status, fraction = status_for("completed", args.rollout)
+    try:
+        codes = promote_once(args, status, fraction)
+    except PlayError as err:
+        if not is_draft_app(err):
+            raise
+        warn(DRAFT_APP_WARNING)
+        status, fraction = "draft", None
+        codes = promote_once(args, status, fraction)
+    how = (
+        "as a draft"
+        if status == "draft"
+        else f"for {args.rollout}% of users"
+        if status == "inProgress"
+        else "for everyone"
+    )
+    print(
+        f"Promoted version code {', '.join(map(str, codes))}"
+        f" from {args.source} to {args.target}, {how}"
+    )
+
+
+def promote_once(
+    args: argparse.Namespace, status: str, fraction: float | None
+) -> list[int]:
     edit = Edit()
     try:
         source = call("GET", f"{edit.url}/tracks/{args.source}")
@@ -239,7 +274,6 @@ def promote(args: argparse.Namespace) -> None:
             )
         latest = max(releases, key=lambda r: max(int(c) for c in r["versionCodes"]))
         codes = [int(c) for c in latest["versionCodes"]]
-        status, fraction = status_for("completed", args.rollout)
         release = track_release(
             codes, status, fraction, latest.get("releaseNotes", []), latest.get("name")
         )
@@ -249,11 +283,7 @@ def promote(args: argparse.Namespace) -> None:
             {"track": args.target, "releases": [release]},
         )
         edit.commit()
-        how = f"{args.rollout}% of users" if status == "inProgress" else "everyone"
-        print(
-            f"Promoted version code {', '.join(map(str, codes))}"
-            f" from {args.source} to {args.target}, for {how}"
-        )
+        return codes
     except BaseException:
         edit.abandon()
         raise
