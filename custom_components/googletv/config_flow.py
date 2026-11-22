@@ -196,6 +196,12 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         One the app announced is offered with debugging off too: it says how
         to turn it on.
         """
+        _LOGGER.debug(
+            "Found %s (%s) at %s",
+            discovery_info.name,
+            discovery_info.type,
+            discovery_info.ip_address,
+        )
         if discovery_info.ip_address.version != 4:
             return self.async_abort(reason="not_ipv4_address")
         host = str(discovery_info.ip_address)
@@ -226,9 +232,12 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured(updates={CONF_HOST: host})
             self._app = info
             return await self.async_step_app_confirm()
+        if self._has_app:
+            _LOGGER.debug("The TV app on %s can't pair by Allow: by ADB", host)
         if not await _adb_port_open(host, DEFAULT_PORT):
             if self._has_app:
                 return await self.async_step_enable_debugging()
+            _LOGGER.debug("Not offering %s: its ADB port doesn't answer", host)
             return self.async_abort(reason="adb_off")
         return await self.async_step_zeroconf_confirm()
 

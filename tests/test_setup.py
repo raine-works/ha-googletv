@@ -590,7 +590,13 @@ async def test_diagnostics_download(
     )
 
     entry = await _set_up(hass, client)
+    hass.config_entries.async_update_entry(
+        entry,
+        data={**entry.data, "bridge_token": "T0KEN", "dashboard_token": "D45H"},
+    )
     report = await async_get_config_entry_diagnostics(hass, entry)
+    assert report["entry"]["data"]["bridge_token"] == "**REDACTED**"
+    assert report["entry"]["data"]["dashboard_token"] == "**REDACTED**"
     assert report["entry"]["data"]["host"] == "**REDACTED**"
     assert report["entry"]["unique_id"] == "**REDACTED**"
     assert report["device"]["serial"] == "**REDACTED**"

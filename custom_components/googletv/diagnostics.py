@@ -9,6 +9,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 
+from .const import CONF_BRIDGE_TOKEN, CONF_DASHBOARD_TOKEN, CONF_DASHBOARD_USER
 from .coordinator import GoogleTvConfigEntry
 
 TO_REDACT = {
@@ -19,6 +20,10 @@ TO_REDACT = {
     "unique_id",
     "mac_ethernet",
     "mac_wifi",
+    # What signs in to the TV app and to Home Assistant as the TV
+    CONF_BRIDGE_TOKEN,
+    CONF_DASHBOARD_TOKEN,
+    CONF_DASHBOARD_USER,
 }
 
 

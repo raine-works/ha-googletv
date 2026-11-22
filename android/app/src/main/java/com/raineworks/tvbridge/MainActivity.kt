@@ -666,9 +666,10 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Setting up, while Home Assistant isn't paired: a QR code to the
-     * integration in the Home Assistant Marketplace, then adding the TV in Home Assistant, which asks
-     * here to connect.
+     * Setting up, while Home Assistant isn't paired: two QR codes side by
+     * side, the integration in the Home Assistant Marketplace, then adding
+     * this TV to it (by its IP address, shown there), which asks here to
+     * connect.
      */
     private fun setupCard() {
         card(getString(R.string.setup_title), getString(R.string.setup_subtitle)) { body ->
@@ -679,24 +680,26 @@ class MainActivity : Activity() {
                 clipChildren = false
                 clipToPadding = false
             }
-            row.addView(
-                ImageView(this).apply {
-                    setImageBitmap(Qr.bitmap(Qr.MARKETPLACE_URL, dp(152)))
-                    background = Theme.surface(this@MainActivity, Color.WHITE, 12, Color.WHITE)
-                    setPadding(dp(10), dp(10), dp(10), dp(10))
-                    contentDescription = getString(R.string.setup_qr)
-                },
-                LinearLayout.LayoutParams(dp(172), dp(172)),
-            )
-            val steps = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(24), 0, 0, 0)
-                clipChildren = false
-                clipToPadding = false
+            listOf(
+                Triple(Qr.MARKETPLACE_URL, R.string.setup_qr, R.string.setup_marketplace_title to getString(R.string.setup_marketplace_text)),
+                Triple(Qr.ADD_TV_URL, R.string.setup_add_qr, R.string.setup_add_title to getString(R.string.setup_add_text, ipAddress() ?: "?")),
+            ).forEachIndexed { index, (url, description, step) ->
+                val column = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(if (index == 0) 0 else dp(16), 0, if (index == 0) dp(16) else 0, 0)
+                }
+                column.addView(
+                    ImageView(this).apply {
+                        setImageBitmap(Qr.bitmap(url, dp(132)))
+                        background = Theme.surface(this@MainActivity, Color.WHITE, 12, Color.WHITE)
+                        setPadding(dp(10), dp(10), dp(10), dp(10))
+                        contentDescription = getString(description)
+                    },
+                    LinearLayout.LayoutParams(dp(152), dp(152)).apply { bottomMargin = dp(16) },
+                )
+                step(column, index + 1, getString(step.first), step.second)
+                row.addView(column, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             }
-            step(steps, 1, getString(R.string.setup_marketplace_title), getString(R.string.setup_marketplace_text))
-            step(steps, 2, getString(R.string.setup_add_title), getString(R.string.setup_add_text))
-            row.addView(steps, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             body.addView(row)
         }
     }

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add a Google TV",
-        "description": "On the TV, turn on Settings → System → Developer options → USB debugging (and Network or Wireless debugging where it's a separate switch). When you submit, the TV shows \"Allow USB debugging?\": tick Always allow and choose Allow. This waits up to a minute for it.",
+        "description": "With the Raineworks TV app on the TV, enter the IP address its Home screen shows and submit: the TV asks to connect, and Allow there adds it. Without the app, turn on Settings → System → Developer options → USB debugging on the TV (and Network or Wireless debugging where it's a separate switch); when you submit, the TV shows \"Allow USB debugging?\": tick Always allow and choose Allow. This waits up to a minute for it.",
         "data": {
           "host": "Address",
           "port": "Port",

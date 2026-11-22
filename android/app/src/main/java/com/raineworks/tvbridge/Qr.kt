@@ -13,6 +13,9 @@ object Qr {
     const val MARKETPLACE_URL =
         "https://my.home-assistant.io/redirect/marketplace_repository/?owner=raine-works&repository=ha-googletv&category=integration"
 
+    /** Adding a TV in your Home Assistant, once the integration is in: it asks for this TV's address. */
+    const val ADD_TV_URL = "https://my.home-assistant.io/redirect/config_flow_start/?domain=googletv"
+
     fun bitmap(text: String, sizePx: Int): Bitmap {
         val matrix = QRCodeWriter().encode(
             text,
