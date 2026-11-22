@@ -76,18 +76,38 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
       production) → Invite.
    4. GitHub variables: `PLAY_SERVICE_ACCOUNT` (its email) and
       `PLAY_WORKLOAD_IDENTITY_PROVIDER` (the provider's full name).
-   Releases then land on the `PLAY_TRACK` variable's track (internal when
-   unset) as drafts. Once the app is published, set `PLAY_RELEASE_STATUS` to
-   `completed` to roll them out without promoting each by hand; `alpha` is
-   the closed test, `production` the store. Every release needs a new
-   version: the version code comes from the manifest's version.
+   **What the workflows then do** (`scripts/play.py`, the Play Developer API):
+   - **Google Play** (each GitHub release): uploads the bundle and rolls it
+     out on the `PLAY_TRACK` variable's track (internal when unset), to
+     `PLAY_ROLLOUT` percent of users (100), with What's new written from the
+     release's `feat` / `fix` / `perf` commits. Until the app has been
+     published once, Play takes drafts only: the release is then a draft,
+     with a warning, to roll out in the Console. `PLAY_RELEASE_STATUS=draft`
+     always leaves it there. Every release needs a new version: the version
+     code comes from the manifest's version.
+   - **Promote on Google Play** (Actions → Run workflow): the latest version
+     rolled out on one track, released on another (internal → alpha, the
+     closed test → production), to a percentage of users; run it again at
+     100 to finish a staged rollout.
+   - **Play listing** (when the listing's files change on master, or by
+     hand): the store listing's text and images, below. With
+     `android/play/data-safety.csv` it sends the Data safety form too: fill
+     the form in the Play Console once, **Export to CSV**, and commit the
+     file there; after that, change the answers in the file. Google takes the
+     form only as that CSV.
 9. **Production**: promote the tested release. New personal developer
    accounts must first run a **closed test** with at least 12 testers for 14
    days before production access.
 
 ## Listing
 
-**App name** (30 characters at most): `Raineworks TV`
+The listing's text is in [`android/play/listing/en-US/`](android/play/listing/en-US/)
+(`title.txt`, 30 characters at most; `short-description.txt`, 80;
+`full-description.txt`, 4,000), its images in [`android/play/`](android/play/)
+(`icon-512.png`, `feature-graphic-1024x500.png`, `tv-banner-1280x720.png`,
+`screenshots/` for the TV screenshots, in file-name order). The **Play
+listing** workflow sends them to Play whenever they change on master. Another
+language is another folder (`listing/de-DE/`).
 
 > **Why this name and icon.** Google Play's impersonation policy rejects
 > apps whose name or icon suggests another company made them. The name is
@@ -95,40 +115,6 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
 > small badge for where it runs), and the description and the app's About
 > screen say it isn't Google's. If review still objects to the badge,
 > `brand/art.py` draws every icon: drop the badge there.
-
-**Short description** (80 characters at most):
-
-> Home Assistant on your TV: notifications, cameras, buttons, media, dashboards.
-
-**Full description**:
-
-> Connect your Google TV or Android TV to Home Assistant.
->
-> Notifications from Home Assistant pop up over whatever's on (shows,
-> games, HDMI inputs) with an image or a live camera, a progress bar, and
-> buttons you answer with the remote: Unlock the door without leaving the
-> couch. Live notifications stay up while something's true, like the front
-> door being open, and update as it changes.
->
-> Home Assistant can also play its media on the TV, speak announcements
-> over your show (which turns down, then back up), and show any dashboard
-> full screen. And it knows what the TV is doing: what's playing, the app in
-> front, the volume, as it happens.
->
-> Choose on the TV which apps Home Assistant shows, and which ones
-> notifications may pop up over.
->
-> Setup takes a minute: add the Raineworks TV integration to Home
-> Assistant (from the Home Assistant Marketplace), and choose Allow on the TV when it asks. No
-> developer options, no codes. For the remote's keys, turning the TV off
-> and knowing its HDMI input, turn on network debugging; the app shows how.
->
-> Requires Home Assistant with the Raineworks TV integration
-> (github.com/raine-works/ha-googletv). Everything stays on your network:
-> the app talks only to your Home Assistant.
->
-> Not affiliated with Google. Google TV and Android TV are trademarks of
-> Google LLC.
 
 **Category**: Tools (or House & Home). **Contact**: a support email the
 Console asks for, and the website `https://github.com/raine-works/ha-googletv`.

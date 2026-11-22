@@ -1,0 +1,55 @@
+# Sends the Google Play store listing (scripts/play.py listing): the text in
+# android/play/listing/<language>/ and the images in android/play/ (icon,
+# feature graphic, TV banner, the TV screenshots), whenever they change on
+# master, or by hand. With android/play/data-safety.csv (the Play Console's
+# own Data safety export), the Data safety form too. Needs the same variables
+# as the Google Play workflow. A change to a published app's listing goes to
+# Google for review.
+name: "Play listing"
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "android/play/listing/**"
+      - "android/play/*.png"
+      - "android/play/screenshots/**"
+      - "android/play/data-safety.csv"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Signing in to Google Cloud without a key (Workload Identity Federation)
+  id-token: write
+
+concurrency:
+  group: play-listing
+  cancel-in-progress: false
+
+jobs:
+  listing:
+    name: Store listing
+    runs-on: ubuntu-latest
+    if: vars.PLAY_SERVICE_ACCOUNT != '' && vars.PLAY_WORKLOAD_IDENTITY_PROVIDER != ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Sign in to Google Cloud as the Play service account
+        id: google
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+
+      - name: The listing's text and images
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+        run: python3 scripts/play.py listing
+
+      - name: Data safety
+        if: hashFiles('android/play/data-safety.csv') != ''
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+        run: python3 scripts/play.py data-safety android/play/data-safety.csv

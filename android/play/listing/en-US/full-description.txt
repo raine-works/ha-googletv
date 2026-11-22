@@ -1,0 +1,13 @@
+Connect your Google TV or Android TV to Home Assistant.
+
+Notifications from Home Assistant pop up over whatever's on (shows, games, HDMI inputs) with an image or a live camera, a progress bar, and buttons you answer with the remote: Unlock the door without leaving the couch. Live notifications stay up while something's true, like the front door being open, and update as it changes.
+
+Home Assistant can also play its media on the TV, speak announcements over your show (which turns down, then back up), and show any dashboard full screen. And it knows what the TV is doing: what's playing, the app in front, the volume, as it happens.
+
+Choose on the TV which apps Home Assistant shows, and which ones notifications may pop up over.
+
+Setup takes a minute: add the Raineworks TV integration to Home Assistant (from the Home Assistant Marketplace), and choose Allow on the TV when it asks. No developer options, no codes. For the remote's keys, turning the TV off and knowing its HDMI input, turn on network debugging; the app shows how.
+
+Requires Home Assistant with the Raineworks TV integration (github.com/raine-works/ha-googletv). Everything stays on your network: the app talks only to your Home Assistant.
+
+Not affiliated with Google. Google TV and Android TV are trademarks of Google LLC.

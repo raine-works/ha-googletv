@@ -1,0 +1,50 @@
+# Moves a release between Google Play's tracks (scripts/play.py promote): the
+# latest version rolled out on one track, released on another, to everyone or
+# to a percentage of users (a staged rollout; promote again at 100 to finish
+# it). Actions → Promote on Google Play → Run workflow. Needs the same
+# variables as the Google Play workflow.
+name: "Promote on Google Play"
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "From the track"
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      to:
+        description: "To the track (alpha is the closed test, beta the open test)"
+        type: choice
+        options: [alpha, beta, production, internal]
+        default: alpha
+      rollout:
+        description: "Percent of users (100 for everyone)"
+        type: number
+        default: 100
+
+permissions:
+  contents: read
+  # Signing in to Google Cloud without a key (Workload Identity Federation)
+  id-token: write
+
+jobs:
+  promote:
+    name: ${{ inputs.from }} → ${{ inputs.to }} (${{ inputs.rollout }}%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Sign in to Google Cloud as the Play service account
+        id: google
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+
+      - name: Promote
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+        run: python3 scripts/play.py promote --from "${{ inputs.from }}" --to "${{ inputs.to }}" --rollout "${{ inputs.rollout }}"
