@@ -14,12 +14,17 @@ again, and its entry follows it to a new address.
 A TV with the app (Raineworks TV) announces ``_rwtvbridge._tcp`` too:
 it's offered even with network debugging off, and the flow says how to turn
 it on. Adding a TV without the app offers to install it.
+
+Not every TV's announcement goes out (Android 14 on a TCL registered it and
+never sent it), so adding one by hand first looks for the app itself, on
+Home Assistant's own networks, and lists the TVs it finds by name.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import logging
 from typing import Any
 
@@ -48,7 +53,7 @@ import voluptuous as vol
 
 from . import async_get_client
 from .adb import GoogleTvAuthError, GoogleTvError
-from .bridge import BRIDGE_SERVICE_TYPE, BridgeClient, BridgeError
+from .bridge import BRIDGE_PORT, BRIDGE_SERVICE_TYPE, BridgeClient, BridgeError
 from .const import (
     CONF_BRIDGE_TOKEN,
     CONF_CONNECTION,
@@ -101,6 +106,66 @@ async def _app_info(hass: Any, host: str) -> dict[str, Any] | None:
     return info if "confirm_pairing" in info.get("features", []) else None
 
 
+# Looking for the app on Home Assistant's networks: each address's port, a
+# moment each, so many at once
+SCAN_TIMEOUT_S = 0.6
+SCAN_AT_ONCE = 64
+# A network bigger than this is looked through only around Home Assistant (its /24)
+SCAN_MAX_ADDRESSES = 1024
+# The pick step's way to type an address instead
+MANUAL = "manual"
+
+
+async def _port_open(host: str, port: int, timeout: float) -> bool:
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+    except (OSError, TimeoutError):
+        return False
+    writer.close()
+    with contextlib.suppress(OSError):
+        await writer.wait_closed()
+    return True
+
+
+def _scan_hosts(adapters: list[dict[str, Any]]) -> list[str]:
+    """Every other address on Home Assistant's enabled IPv4 networks."""
+    hosts: set[str] = set()
+    own: set[str] = set()
+    for adapter in adapters:
+        if not adapter.get("enabled"):
+            continue
+        for ip in adapter.get("ipv4", []):
+            address = ipaddress.IPv4Address(ip["address"])
+            if address.is_loopback or address.is_link_local:
+                continue
+            own.add(str(address))
+            prefix = int(ip["network_prefix"])
+            network = ipaddress.IPv4Network(f"{address}/{prefix}", strict=False)
+            if network.num_addresses > SCAN_MAX_ADDRESSES:
+                network = ipaddress.IPv4Network(f"{address}/24", strict=False)
+            hosts.update(str(host) for host in network.hosts())
+    return sorted(hosts - own, key=ipaddress.IPv4Address)
+
+
+async def _find_tvs(hass: Any) -> list[tuple[str, dict[str, Any]]]:
+    """TVs with the app answering on Home Assistant's networks: (address, info)."""
+    from homeassistant.components import network
+
+    hosts = _scan_hosts(await network.async_get_adapters(hass))
+    limit = asyncio.Semaphore(SCAN_AT_ONCE)
+
+    async def probe(host: str) -> tuple[str, dict[str, Any]] | None:
+        async with limit:
+            if not await _port_open(host, BRIDGE_PORT, SCAN_TIMEOUT_S):
+                return None
+        info = await _app_info(hass, host)
+        return (host, info) if info else None
+
+    found = [tv for tv in await asyncio.gather(*map(probe, hosts)) if tv]
+    _LOGGER.debug("Looked through %s addresses: the app on %s", len(hosts), found)
+    return found
+
+
 # The app's mDNS name before 2.0: "Raineworks TV Bridge <the TV's name>"
 OLD_BRIDGE_PREFIX = "Raineworks TV Bridge "
 
@@ -137,8 +202,61 @@ class GoogleTvConfigFlow(ConfigFlow, domain=DOMAIN):
         self._has_app = False
         # The TV app's info, adding the TV through it alone
         self._app: dict[str, Any] = {}
+        # TVs with the app found on the network, by address
+        self._found: dict[str, dict[str, Any]] = {}
 
     async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """TVs with the app that aren't added yet, to pick; else the address form."""
+        if user_input is None and not self._found:
+            configured = {
+                (entry.data.get(CONF_HOST), entry.unique_id)
+                for entry in self._async_current_entries(include_ignore=False)
+            }
+            hosts = {host for host, _ in configured}
+            ids = {unique for _, unique in configured}
+            self._found = {
+                host: info
+                for host, info in await _find_tvs(self.hass)
+                if host not in hosts and info.get("id") not in ids
+            }
+            if self._found:
+                return await self.async_step_pick()
+        return await self.async_step_address(user_input)
+
+    async def async_step_pick(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick a TV the flow found, then Allow on it; or type an address."""
+        if user_input is not None:
+            host = user_input["tv"]
+            if host != MANUAL and (info := self._found.get(host)):
+                self._host, self._app = host, info
+                self._name = info.get("name", "")
+                return await self.async_step_app_confirm()
+            return await self.async_step_address()
+        options = [
+            SelectOptionDict(value=host, label=f"{info.get('name') or host} ({host})")
+            for host, info in self._found.items()
+        ]
+        options.append(SelectOptionDict(value=MANUAL, label="Enter an address"))
+        return self.async_show_form(
+            step_id="pick",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("tv", default=options[0]["value"]): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options,
+                            mode=SelectSelectorMode.LIST,
+                            translation_key="pick",
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_address(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Ask for the TV's address, then connect, waiting for its prompt."""

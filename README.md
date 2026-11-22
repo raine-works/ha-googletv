@@ -67,8 +67,9 @@ artwork ([Privacy and security](docs/privacy-and-security.md)).
    from the Play Store on the TV) and choose **Allow** (no developer mode), or turn on network debugging and
    let Home Assistant install the app over **ADB** (everything, including the
    remote's keys and turning the TV off).
-3. The TV appears under Settings → Devices & services → **Discovered**.
-   Choose **Add**.
+3. Scan the TV app's **Add this TV** QR code (or **Add integration →
+   Raineworks TV**): Home Assistant lists the TVs it finds. Pick yours, then
+   choose **Allow** on the TV.
 
 [Setup](docs/setup.md) has every step, and what each way gives. Requires
 Home Assistant 2025.2 or newer.

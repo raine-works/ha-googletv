@@ -36,8 +36,11 @@ Through the app alone, a repair says when the TV app is behind.
    `https://github.com/raine-works/ha-googletv/releases/latest/download/raineworks-tv-bridge.apk`
    in it (no developer options; Android asks once to let Downloader
    install apps).
-2. **Add the TV.** It appears in Home Assistant under Settings → Devices &
-   services → **Discovered**. Choose **Add**, then **Submit**.
+2. **Add the TV.** Scan the TV app's second QR code (**Add this TV**), or
+   choose **Add integration → Raineworks TV** in Home Assistant: it lists the
+   TVs with the app on its network that aren't added yet. Pick this one and
+   **Submit**. (It may also show under Settings → Devices & services →
+   **Discovered**.)
 3. **Choose Allow on the TV**, when it asks "Allow Home Assistant to
    connect?". No code to type.
 4. **Allow its permissions**, in the TV app's **Permissions** section (its

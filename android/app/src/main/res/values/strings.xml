@@ -48,7 +48,7 @@
     <string name="setup_on">On</string>
     <string name="setup_off">Off</string>
     <string name="setup_add_title">Add this TV</string>
-    <string name="setup_add_text">Then scan this to add a TV, and enter this TV\'s IP address, %1$s. Choose Allow here when the TV asks. Home Assistant may also list it under Settings → Devices &amp; services → Discovered.</string>
+    <string name="setup_add_text">Then scan this to add the TV. Home Assistant lists the TVs it finds: pick this one (%1$s), then choose Allow here when the TV asks.</string>
     <string name="setup_add_qr">QR code: add a TV to Raineworks TV in Home Assistant</string>
 
     <string name="status_title">Connection</string>

@@ -47,6 +47,15 @@ def _no_tv_app():
         yield info
 
 
+@pytest.fixture(autouse=True)
+def _no_tvs_found():
+    """The network search finds nothing, unless a test says so."""
+    with patch(
+        "custom_components.googletv.config_flow._find_tvs", AsyncMock(return_value=[])
+    ) as found:
+        yield found
+
+
 APP_INFO = {
     "api": 1,
     "app_version": "2.3.0",
@@ -540,3 +549,67 @@ async def test_an_app_tv_given_adb(hass: HomeAssistant) -> None:
     assert entry.data["bridge_token"] == "T0KEN"
     assert entry.data["props"]["bluetooth"] == PROPS["bluetooth"]
     assert entry.unique_id == "a1b2c3d4"
+
+
+def test_scan_hosts_covers_home_assistants_networks() -> None:
+    from custom_components.googletv.config_flow import _scan_hosts
+
+    hosts = _scan_hosts(
+        [
+            {"enabled": True, "ipv4": [{"address": "10.0.4.2", "network_prefix": 24}]},
+            # Disabled, and a network too big: only its /24 around the address
+            {
+                "enabled": False,
+                "ipv4": [{"address": "192.168.1.5", "network_prefix": 24}],
+            },
+            {
+                "enabled": True,
+                "ipv4": [{"address": "172.16.3.9", "network_prefix": 16}],
+            },
+        ]
+    )
+    assert "10.0.4.245" in hosts and "10.0.4.2" not in hosts
+    assert not any(host.startswith("192.168.") for host in hosts)
+    assert "172.16.3.1" in hosts and "172.16.4.1" not in hosts
+    assert len(hosts) == 253 + 253
+
+
+async def test_user_picks_a_tv_found_on_the_network(
+    hass: HomeAssistant, _no_tvs_found: AsyncMock
+) -> None:
+    found = {**APP_INFO, "name": "Living Room TV", "id": "c903078b"}
+    _no_tvs_found.return_value = [("10.0.4.245", found), ("10.0.4.14", APP_INFO)]
+    # Lott's TV (the second) is already added: only the Living Room's is offered
+    MockConfigEntry(
+        domain=DOMAIN, unique_id="a1b2c3d4", data={CONF_HOST: "10.0.4.9"}
+    ).add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "pick"
+    options = result["data_schema"].schema["tv"].config["options"]
+    assert [option["value"] for option in options] == ["10.0.4.245", "manual"]
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"tv": "10.0.4.245"}
+    )
+    assert result["step_id"] == "app_confirm"
+    assert result["description_placeholders"] == {
+        "name": "Living Room TV",
+        "host": "10.0.4.245",
+    }
+
+
+async def test_user_types_an_address_instead(
+    hass: HomeAssistant, _no_tvs_found: AsyncMock
+) -> None:
+    _no_tvs_found.return_value = [("10.0.4.245", APP_INFO)]
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"tv": "manual"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"

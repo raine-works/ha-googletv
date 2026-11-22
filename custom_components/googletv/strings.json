@@ -17,6 +17,13 @@
           "install_tv_app": "Raineworks TV on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
         }
       },
+      "pick": {
+        "title": "Add a TV",
+        "description": "These TVs have the Raineworks TV app and aren't in Home Assistant yet. Pick one and submit: the TV asks to connect, and **Allow** there adds it.",
+        "data": {
+          "tv": "TV"
+        }
+      },
       "reauth_confirm": {
         "title": "Reconnect {name}",
         "description": "{name} no longer trusts Home Assistant (debugging was turned off and on, or the TV was reset). Make sure USB debugging is on, submit, then tick Always allow and choose Allow on the TV."
@@ -466,6 +473,11 @@
       "options": {
         "panel": "Notification panel",
         "drop": "Don't show it"
+      }
+    },
+    "pick": {
+      "options": {
+        "manual": "Another TV: enter its address"
       }
     }
   },
