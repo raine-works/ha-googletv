@@ -1,11 +1,12 @@
-"""Raineworks TV's artwork: the raineworks mark, Google TV's icon in its corner.
+"""Raineworks TV's artwork: the raineworks mark in its peach-to-teal gradient.
 
-Draws every icon and banner (the TV app's launcher icon, banner, logo and
-status-bar icon, Google Play's graphics) from the mark's geometry (raineworks'
-blocks/brand) and brand/google-tv.png. The integration's brand icon, what Home
-Assistant and its Marketplace show, is Google TV's icon alone: the integration
-is for Google TV (Google TV is a trademark of Google LLC; this project isn't
-affiliated with or endorsed by Google), and the TV app keeps the raineworks mark.
+Draws every icon and banner of the TV app (launcher icon, banner, logo,
+status-bar icon) and Google Play's graphics from the mark's geometry and
+gradient (raineworks' blocks/brand): Raineworks' own, with nothing of Google's,
+as Google Play's impersonation policy wants. The integration's brand icon, what
+Home Assistant and its Marketplace show, is Google TV's icon
+(brand/google-tv.png): the integration is for Google TV (a trademark of Google
+LLC; this project isn't affiliated with or endorsed by Google).
 Run it from the repo root with Pillow: ``python brand/art.py``.
 """
 
@@ -16,14 +17,21 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "android/app/src/main/res"
 FONTS = RES / "font"
-GOOGLE_TV = Image.open(ROOT / "brand/google-tv.png").convert("RGBA")
+GOOGLE_TV = Image.open(ROOT / "brand/google-tv.png").convert(
+    "RGBA"
+)  # the integration's icon
 GOOGLE_TV = GOOGLE_TV.crop(GOOGLE_TV.getbbox())
 
 BG = (10, 10, 10, 255)
+# raineworks' accent gradient, top left to bottom right across the band the
+# rain lines fill (-17 to 17 in the mark's units): the circle beyond it is the
+# two colours as they are
+PEACH = (234, 154, 126)
+TEAL = (41, 152, 173)
 FG = (250, 250, 250, 255)
 MUTED = (161, 161, 161, 255)
 NAME = "Raineworks TV"
-TAGLINE = "Home Assistant on Google TV"
+TAGLINE = "for Home Assistant"
 # Drawn this many times larger, then scaled down: smooth edges
 SS = 4
 
@@ -71,37 +79,55 @@ def mark(size: int, stroke: float = 4.4, color=FG) -> Image.Image:
     return img.resize((size, size), Image.LANCZOS)
 
 
-def logo(size: int, stroke: float = 4.4, badge: float = 0.46) -> Image.Image:
-    """The mark with Google TV's icon over its top-right, a clear gap around it."""
-    img = mark(size, stroke)
-    bw = round(size * badge)
-    gtv = GOOGLE_TV.resize(
-        (bw, round(GOOGLE_TV.height * bw / GOOGLE_TV.width)), Image.LANCZOS
-    )
-    x, y = size - gtv.width, 0
-    # The gap: the mark cleared a little past the badge's edge
-    gap = max(2, round(size * 0.045))
-    clear = Image.new("L", img.size, 255)
-    ImageDraw.Draw(clear).rounded_rectangle(
-        (x - gap, -gap, size + gap, gtv.height + gap),
-        radius=round(gtv.height * 0.24) + gap,
-        fill=0,
-    )
-    img.putalpha(
-        Image.composite(img.getchannel("A"), Image.new("L", img.size, 0), clear)
-    )
-    img.alpha_composite(gtv, (x, y))
+def gradient_mark(size: int, stroke: float = 4.4) -> Image.Image:
+    """The mark ``size`` across, stroked in raineworks' gradient."""
+    shape = mark(size, stroke).getchannel("A")
+    colors = []
+    for y in range(size):
+        for x in range(size):
+            # Along the diagonal, in the mark's units (it's 96 across, centred)
+            u = (x + 0.5) * 96 / size - 48
+            v = (y + 0.5) * 96 / size - 48
+            t = min(1.0, max(0.0, (u + v + 34) / 68))
+            colors.append(
+                tuple(round(a + (b - a) * t) for a, b in zip(PEACH, TEAL, strict=True))
+            )
+    img = Image.new("RGB", (size, size))
+    img.putdata(colors)
+    img = img.convert("RGBA")
+    img.putalpha(shape)
+    return img
+
+
+def logo(size: int, stroke: float = 4.4) -> Image.Image:
+    """The logo: the mark in its gradient."""
+    return gradient_mark(size, stroke)
+
+
+def glow(size: int) -> Image.Image:
+    """A soft teal light, low in the middle, as Raineworks' integration icons have."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    pixels = []
+    for y in range(size):
+        for x in range(size):
+            d = ((x / size - 0.5) ** 2 + (y / size - 0.66) ** 2) ** 0.5 / 0.55
+            pixels.append((*TEAL, round(255 * 0.28 * max(0.0, 1 - d))))
+    img.putdata(pixels)
     return img
 
 
 def tile(
     size: int, inset: float, radius: float = 0.0, stroke: float = 4.4
 ) -> Image.Image:
-    """The logo on the dark background, rounded by ``radius`` (of the size)."""
+    """The logo on the dark background and its glow, rounded by ``radius``."""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ImageDraw.Draw(img).rounded_rectangle(
-        (0, 0, size - 1, size - 1), radius=round(size * radius), fill=BG
+    shape = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(shape).rounded_rectangle(
+        (0, 0, size - 1, size - 1), radius=round(size * radius), fill=255
     )
+    back = Image.new("RGBA", (size, size), BG)
+    back.alpha_composite(glow(size))
+    img.paste(back, (0, 0), shape)
     inner = round(size * (1 - 2 * inset))
     art = logo(inner, stroke)
     img.alpha_composite(art, ((size - inner) // 2, (size - inner) // 2))

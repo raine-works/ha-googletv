@@ -115,10 +115,11 @@ language is another folder (`listing/de-DE/`).
 
 > **Why this name and icon.** Google Play's impersonation policy rejects
 > apps whose name or icon suggests another company made them. The name is
-> Raineworks', the icon is the Raineworks mark (Google TV's icon only as a
-> small badge for where it runs), and the description and the app's About
-> screen say it isn't Google's. If review still objects to the badge,
-> `brand/art.py` draws every icon: drop the badge there.
+> Raineworks', and every icon, banner and logo in the app and on Play is the
+> raineworks mark in its peach-to-teal gradient, with nothing of Google's
+> (`brand/art.py` draws them; Google TV's icon is only the Home Assistant
+> integration's). The description names Google TV and Android TV only to say
+> what it runs on, and it and the app's About screen say it isn't Google's.
 
 **Category**: Tools (or House & Home). **Contact**: a support email the
 Console asks for, and the website `https://github.com/raine-works/ha-googletv`.

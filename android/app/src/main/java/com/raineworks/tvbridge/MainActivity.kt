@@ -212,7 +212,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        row.addView(Brand.logo(this, 52), LinearLayout.LayoutParams(dp(52), dp(52)))
+        row.addView(Brand.logo(this), LinearLayout.LayoutParams(dp(52), dp(52)))
         val names = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
