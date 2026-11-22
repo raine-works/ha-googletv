@@ -62,8 +62,9 @@ artwork ([Privacy and security](docs/privacy-and-security.md)).
    above, or go to Settings → Marketplace. If it isn't listed, add
    `https://github.com/raine-works/ha-googletv` as a custom repository,
    type **Integration**. Download it and restart Home Assistant.
-2. Connect the TV one of two ways: install the **TV app** on the TV and
-   choose **Allow** (no developer mode), or turn on network debugging and
+2. Connect the TV one of two ways: install the **TV app** on the TV (it's
+   on Google Play as an open beta: [join the beta](https://play.google.com/apps/testing/com.raineworks.tvbridge), then install it
+   from the Play Store on the TV) and choose **Allow** (no developer mode), or turn on network debugging and
    let Home Assistant install the app over **ADB** (everything, including the
    remote's keys and turning the TV off).
 3. The TV appears under Settings → Devices & services → **Discovered**.

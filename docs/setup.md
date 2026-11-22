@@ -29,8 +29,10 @@ Through the app alone, a repair says when the TV app is behind.
 
 1. **Install the TV app** on the TV and open it. Its screen shows the way:
    a QR code that opens the integration in the Home Assistant Marketplace on your phone, then the
-   step below. Google Play is coming; until then, install the Downloader
-   app from Google Play and open
+   step below. It's on Google Play as a beta, open to anyone: join at
+   [https://play.google.com/apps/testing/com.raineworks.tvbridge](https://play.google.com/apps/testing/com.raineworks.tvbridge) with the Google account the TV uses, then install
+   **Raineworks TV** from the Play Store on the TV. Play keeps it up to date. Or, without
+   joining, install the Downloader app from Google Play and open
    `https://github.com/raine-works/ha-googletv/releases/latest/download/raineworks-tv-bridge.apk`
    in it (no developer options; Android asks once to let Downloader
    install apps).
