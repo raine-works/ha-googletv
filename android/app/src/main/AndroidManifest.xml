@@ -22,9 +22,12 @@
     <!-- The TV's HDMI inputs and their names, for the rules -->
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
 
+    <!-- A TV app only: Google Play offers it to Google TV and Android TV devices,
+         never phones or tablets (Home Assistant's own installs over ADB aren't
+         filtered) -->
     <uses-feature
         android:name="android.software.leanback"
-        android:required="false" />
+        android:required="true" />
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
