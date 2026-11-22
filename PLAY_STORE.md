@@ -73,7 +73,11 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
    3. Play Console → **Users and permissions** → Invite new users → the
       service account's email → App permissions: Raineworks TV, with
       **Release to testing tracks** (and **Release to production** for
-      production) → Invite.
+      production), **Manage store presence** (the listing), **Manage policy
+      declarations** (Data safety), and, while the app has never been
+      published, **Edit and delete draft apps**: without it Play refuses to
+      save a draft app's listing ("The caller does not have permission"),
+      though uploading releases works → Invite.
    4. GitHub variables: `PLAY_SERVICE_ACCOUNT` (its email) and
       `PLAY_WORKLOAD_IDENTITY_PROVIDER` (the provider's full name).
    **What the workflows then do** (`scripts/play.py`, the Play Developer API):
