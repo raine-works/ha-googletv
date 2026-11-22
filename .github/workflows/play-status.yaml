@@ -30,4 +30,6 @@ jobs:
       - name: Status
         env:
           PLAY_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
-        run: python3 scripts/play.py status | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          python3 scripts/play.py status | tee -a "$GITHUB_STEP_SUMMARY"

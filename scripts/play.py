@@ -372,6 +372,8 @@ def main() -> int:
     p = commands.add_parser("listing", help="the store listing's text and images")
     p.add_argument("dir", nargs="?", default=str(LISTING))
     p.set_defaults(run=listing)
+    p = commands.add_parser("status", help="what Play has now, read only")
+    p.set_defaults(run=status)
     p = commands.add_parser(
         "data-safety", help="the Data safety form, from the Console's CSV"
     )
