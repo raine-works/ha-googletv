@@ -306,7 +306,8 @@ def status(args: argparse.Namespace) -> None:
         for track in call("GET", f"{edit.url}/tracks").get("tracks", []):
             releases = track.get("releases", [])
             shown = "; ".join(
-                f"{r.get('name', '?')} ({', '.join(r.get('versionCodes', []))}) {r.get('status')}"
+                f"{r.get('name', '?')} ({', '.join(r.get('versionCodes', []))})"
+                f" {r.get('status')}"
                 + (
                     f" {round(r['userFraction'] * 100)}%"
                     if r.get("userFraction")
