@@ -42,6 +42,9 @@ IMAGES = {
     "featureGraphic": "feature-graphic-1024x500.png",
     "tvBanner": "tv-banner-1280x720.png",
     "tvScreenshots": "screenshots",
+    # The default listing asks for phone screenshots even for a TV-only app:
+    # the same ones (1920 x 1080, which Play takes for phones too)
+    "phoneScreenshots": "screenshots",
 }
 # A listing's text: Play's field → the file in listing/<language>/
 TEXTS = {

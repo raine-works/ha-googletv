@@ -1,6 +1,7 @@
 # Sends the Google Play store listing (scripts/play.py listing): the text in
 # android/play/listing/<language>/ and the images in android/play/ (icon,
-# feature graphic, TV banner, the TV screenshots), whenever they change on
+# feature graphic, TV banner, the TV screenshots, also as the phone
+# screenshots the default listing requires), whenever they change on
 # master, or by hand. With android/play/data-safety.csv (the Play Console's
 # own Data safety export), the Data safety form too. Needs the same variables
 # as the Google Play workflow. A change to a published app's listing goes to
