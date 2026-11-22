@@ -16,8 +16,8 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
 * **Graphics**, in `android/play/`: the hi-res icon (512×512), the TV banner
   (1280×720), the feature graphic (1024×500), and TV screenshots
   (1920×1080) in `screenshots/`.
-* **The privacy policy**: [`PRIVACY.md`](PRIVACY.md), at
-  `https://github.com/raine-works/ha-googletv/blob/master/PRIVACY.md`.
+* **The privacy policy**: [`docs/privacy-policy.md`](docs/privacy-policy.md), published at
+  `https://raineworks.com/projects/ha-googletv/docs/privacy-policy` (raineworks.com renders this repository's docs).
 * **The integration** knows a Play install: it doesn't sideload over it
   (Play keeps it up to date).
 

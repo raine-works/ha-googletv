@@ -84,6 +84,7 @@ Home Assistant 2025.2 or newer.
 | [Recipes](docs/recipes.md) | Automations to start from |
 | [Actions](docs/reference/actions.md) | Every action and its fields |
 | [Privacy and security](docs/privacy-and-security.md) | What stays local, lookups, keys and tokens |
+| [Privacy policy](docs/privacy-policy.md) | The TV app's and the integration's privacy policy |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and their fixes |
 | [Development](docs/development.md) | Tests and the TV app |
 

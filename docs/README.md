@@ -9,6 +9,7 @@
 | [Media and dashboards](media-and-dashboards.md) | The TV as a media target, announcements over the show, and dashboards on the TV |
 | [Recipes](recipes.md) | Automations: dim the lights, the doorbell, unlock from the couch, live pills, the cameras |
 | [Privacy and security](privacy-and-security.md) | What stays local, the online lookups, keys, tokens and signed links |
+| [Privacy policy](privacy-policy.md) | The TV app's and the integration's privacy policy: what they send, keep and share |
 | [Troubleshooting](troubleshooting.md) | Standby, reconnecting, notifications that don't show, slow cameras, and more |
 | [Development](development.md) | Running the tests and where the TV app lives |
 
