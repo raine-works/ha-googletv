@@ -52,10 +52,24 @@ is `com.raineworks.tvbridge`, the TV half of Raineworks TV.
    access, ads, content rating, target audience, data safety, government
    apps, financial features, health, and the foreground service
    declaration.
-8. **Uploading from CI** (optional, after the first release): a Google
-   Cloud service account with access to the app in the Play Console (Users
-   and permissions), its JSON key as the `PLAY_SERVICE_ACCOUNT_JSON` secret.
-   Each release then lands in internal testing as a draft to promote.
+8. **A Play release for every GitHub release** (after the first release):
+   the Release workflow starts the Google Play workflow for each release it
+   publishes, which builds that tag's bundle and, with a service account,
+   uploads it. Set up the service account once:
+   1. Google Cloud console: a project (any), **enable the Google Play Android
+      Developer API**, then IAM → Service accounts → create one (no roles
+      needed) → Keys → Add key → JSON.
+   2. Play Console → **Users and permissions** → Invite new users → the
+      service account's email → App permissions: Raineworks TV, with
+      **Release to testing tracks** (and **Release to production** for
+      production) → Invite.
+   3. GitHub: the JSON key's contents as the `PLAY_SERVICE_ACCOUNT_JSON`
+      secret.
+   Releases then land on the `PLAY_TRACK` variable's track (internal when
+   unset) as drafts. Once the app is published, set `PLAY_RELEASE_STATUS` to
+   `completed` to roll them out without promoting each by hand; `alpha` is
+   the closed test, `production` the store. Every release needs a new
+   version: the version code comes from the manifest's version.
 9. **Production**: promote the tested release. New personal developer
    accounts must first run a **closed test** with at least 12 testers for 14
    days before production access.

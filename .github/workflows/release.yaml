@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: write
+  # Starting the Google Play workflow for the new release
+  actions: write
 
 jobs:
   release:
@@ -63,3 +65,11 @@ jobs:
           gh release upload "${{ steps.release.outputs.tag }}" \
             raineworks-tv-bridge.apk raineworks-tv-bridge.apk.sha256 --clobber
           gh release edit "${{ steps.release.outputs.tag }}" --draft=false --latest
+
+      # Google Play gets every release, and only releases: a run started by the
+      # workflow's token is allowed by dispatch (not by release events)
+      - name: Start the Google Play release
+        if: steps.release.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run play.yaml --ref master -f tag="${{ steps.release.outputs.tag }}"

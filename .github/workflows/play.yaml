@@ -1,9 +1,9 @@
 # Builds the TV app for Google Play: an app bundle signed with the private
 # upload key (never the sideload key in the repo), and, given a Play service
 # account, uploads it to the internal testing track as a draft (promoted in
-# the Play Console; a new app's first release is made there). Runs after the
-# Release workflow (a release made with GITHUB_TOKEN triggers no workflow
-# itself), or by hand. Without the secrets it says so and stops.
+# the Play Console; a new app's first release is made there). The Release
+# workflow starts it for each GitHub release it publishes, with its tag; it can
+# also be run by hand for a tag. Without the secrets it says so and stops.
 #
 # Secrets (Settings → Secrets and variables → Actions):
 #   UPLOAD_KEYSTORE_BASE64    the upload keystore (.jks), base64
@@ -11,14 +11,20 @@
 #   UPLOAD_KEY_PASSWORD       the key's password, if it differs
 #   UPLOAD_KEY_ALIAS          the key's alias, if not "upload"
 #   PLAY_SERVICE_ACCOUNT_JSON a Play Console service account (to upload)
+#
+# Variables (same page, Variables tab), optional:
+#   PLAY_TRACK                the track: internal (default), alpha (closed
+#                             testing), beta (open testing) or production
+#   PLAY_RELEASE_STATUS       draft (default: Play requires it until the app
+#                             is published) or completed (rolled out at once)
 name: "Google Play"
 
 on:
-  workflow_run:
-    workflows: ["Release"]
-    types: [completed]
-    branches: [master]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag to build (v2.5.4); master when empty"
+        required: false
 
 permissions:
   contents: read
@@ -27,7 +33,6 @@ jobs:
   bundle:
     name: Signed bundle
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     env:
       HAS_KEY: ${{ secrets.UPLOAD_KEYSTORE_BASE64 != '' }}
       HAS_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
@@ -44,7 +49,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_KEY == 'true'
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.tag || github.sha }}
 
       - uses: actions/setup-java@v6
         if: env.HAS_KEY == 'true'
@@ -81,5 +86,5 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.raineworks.tvbridge
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
-          track: internal
-          status: draft
+          track: ${{ vars.PLAY_TRACK || 'internal' }}
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'draft' }}
