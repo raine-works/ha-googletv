@@ -15,7 +15,15 @@
 #
 # Variables (same page, Variables tab). To upload, keyless: GitHub's OIDC token
 # is exchanged for the service account's (Workload Identity Federation), so
-# there's no key to keep (PLAY_STORE.md):
+# there's no key to keep. Set up in Google Cloud project raineworks-play: the
+# Play Android Developer API, the service account, a workload identity pool
+# (github) with an OIDC provider for token.actions.githubusercontent.com that
+# accepts only assertion.repository == 'raine-works/ha-googletv', and that
+# repository's principalSet given Workload Identity User on the account. In the
+# Play Console (Users and permissions) the account has, for Raineworks TV:
+# Release to production and to testing tracks, Manage store presence, Manage
+# policy declarations, and Edit and delete draft apps (needed for a listing
+# while the app has never been published).
 #   PLAY_SERVICE_ACCOUNT      the service account's email, invited in the Play
 #                             Console with release permissions
 #   PLAY_WORKLOAD_IDENTITY_PROVIDER  projects/<number>/locations/global/
@@ -55,7 +63,7 @@ jobs:
         if: env.HAS_KEY != 'true'
         working-directory: .
         run: |
-          echo "::notice::No UPLOAD_KEYSTORE_BASE64 secret: no Google Play build. See PLAY_STORE.md."
+          echo "::notice::No UPLOAD_KEYSTORE_BASE64 secret: no Google Play build."
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.HAS_KEY == 'true'
