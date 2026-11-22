@@ -12,6 +12,7 @@ from homeassistant.components import media_source
 from homeassistant.components.media_player import (
     ATTR_MEDIA_ANNOUNCE,
     ATTR_MEDIA_EXTRA,
+    DOMAIN as MEDIA_PLAYER_DOMAIN,
     BrowseMedia,
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
@@ -20,15 +21,20 @@ from homeassistant.components.media_player import (
     MediaType,
     async_process_play_media_url,
 )
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ENTITY_ID, ENTITY_MATCH_ALL, STATE_UNAVAILABLE
 from homeassistant.core import (
     HomeAssistant,
     ServiceResponse,
     SupportsResponse,
+    async_get_hass,
     callback,
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import config_validation as cv, entity_platform
+from homeassistant.helpers import (
+    config_validation as cv,
+    entity_platform,
+    entity_registry as er,
+)
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import dt as dt_util
@@ -74,6 +80,38 @@ def _kind(media_type: str) -> str | None:
     return None
 
 
+def _only_our_tvs(data: dict[str, Any]) -> dict[str, Any]:
+    """Refuse an entity named in an action's target that isn't one of our TVs.
+
+    Home Assistant runs an entity service only on the integration's own
+    entities and skips any other it's given without a word, so googletv.notify
+    sent to another integration's media player (Music Assistant's for the same
+    TV, say) did nothing and still succeeded. Targets by area, device or label
+    resolve to our entities alone, and stay as they are.
+    """
+    entity_ids = data.get(ATTR_ENTITY_ID)
+    if not entity_ids or entity_ids == ENTITY_MATCH_ALL:
+        return data
+    registry = er.async_get(async_get_hass())
+    ours = sorted(
+        entry.entity_id
+        for entry in registry.entities.values()
+        if entry.platform == DOMAIN and entry.domain == MEDIA_PLAYER_DOMAIN
+    )
+    others = [entity_id for entity_id in entity_ids if entity_id not in ours]
+    if others:
+        raise vol.Invalid(
+            f"{', '.join(others)} isn't a Raineworks TV: send it to one of"
+            f" its TVs ({', '.join(ours) or 'none set up'})"
+        )
+    return data
+
+
+def _tv_action(schema: dict[Any, Any]) -> vol.All:
+    """An action's schema on our TVs, refusing anything else named."""
+    return vol.All(cv.make_entity_service_schema(schema), _only_our_tvs)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: GoogleTvConfigEntry,
@@ -84,39 +122,45 @@ async def async_setup_entry(
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(
         "notify",
-        NOTIFY_SCHEMA,
+        _tv_action(NOTIFY_SCHEMA),
         "async_tv_notify",
         supports_response=SupportsResponse.OPTIONAL,
     )
     platform.async_register_entity_service(
         "dismiss_notifications",
-        {vol.Optional("tag"): cv.string},
+        _tv_action({vol.Optional("tag"): cv.string}),
         "async_dismiss_notifications",
     )
     platform.async_register_entity_service(
         "set_notification_rules",
-        {
-            vol.Optional("blocked_apps"): vol.All(cv.ensure_list, [cv.string]),
-            vol.Optional("blocked_inputs"): vol.All(cv.ensure_list, [cv.string]),
-            vol.Optional("when_blocked"): vol.In(["panel", "drop"]),
-        },
+        _tv_action(
+            {
+                vol.Optional("blocked_apps"): vol.All(cv.ensure_list, [cv.string]),
+                vol.Optional("blocked_inputs"): vol.All(cv.ensure_list, [cv.string]),
+                vol.Optional("when_blocked"): vol.In(["panel", "drop"]),
+            }
+        ),
         "async_set_notification_rules",
         supports_response=SupportsResponse.OPTIONAL,
     )
     platform.async_register_entity_service(
         "show_dashboard",
-        {
-            vol.Optional("dashboard", default="lovelace"): cv.string,
-            vol.Optional("view"): cv.string,
-        },
+        _tv_action(
+            {
+                vol.Optional("dashboard", default="lovelace"): cv.string,
+                vol.Optional("view"): cv.string,
+            }
+        ),
         "async_show_dashboard",
     )
     platform.async_register_entity_service(
         "install_tv_bridge",
-        {
-            vol.Optional("development", default=False): cv.boolean,
-            vol.Optional("url"): vol.Url(),
-        },
+        _tv_action(
+            {
+                vol.Optional("development", default=False): cv.boolean,
+                vol.Optional("url"): vol.Url(),
+            }
+        ),
         "async_install_tv_bridge",
     )
 

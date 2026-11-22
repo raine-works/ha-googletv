@@ -28,6 +28,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (  # noqa: E
     AiohttpClientMocker,
 )
 from test_parsers import LOTTS_TCL_POLL  # noqa: E402
+import voluptuous as vol  # noqa: E402
 
 from custom_components.googletv.const import (  # noqa: E402
     CONF_ONLINE_LOOKUPS,
@@ -907,6 +908,36 @@ async def test_a_notification_from_the_notify_entity(
         "input": "com.tcl.tvinput/.TvPassThroughService/HW15",
     }
     assert call[3]["Authorization"] == "Bearer T0KEN"
+
+
+async def test_an_action_refuses_another_integrations_player(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """googletv.notify to a media player that isn't one of our TVs says so.
+
+    Home Assistant skips an entity service's other entities without a word,
+    so it used to do nothing and succeed.
+    """
+    await _paired(hass, client, web)
+    hass.states.async_set("media_player.lott_s_tv_cast", "idle")
+    sent = len(_bridge_calls(web, "/api/notify"))
+    with pytest.raises(
+        vol.Invalid, match="media_player.lott_s_tv_cast isn't a Raineworks TV"
+    ):
+        await hass.services.async_call(
+            DOMAIN,
+            "notify",
+            {"entity_id": "media_player.lott_s_tv_cast", "message": "Hello"},
+            blocking=True,
+        )
+    with pytest.raises(vol.Invalid, match="media_player.lott_s_tv"):
+        await hass.services.async_call(
+            DOMAIN,
+            "dismiss_notifications",
+            {"entity_id": ["media_player.lott_s_tv", "media_player.lott_s_tv_cast"]},
+            blocking=True,
+        )
+    assert len(_bridge_calls(web, "/api/notify")) == sent
 
 
 async def test_the_notify_action(
