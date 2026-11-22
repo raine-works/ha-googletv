@@ -31,6 +31,15 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
+    <!-- Implied by the Wi-Fi permissions (the signal, multicast) and the landscape
+         activity, and Google Play would then require them: a TV on Ethernet has no
+         Wi-Fi, and the app works there too -->
+    <uses-feature
+        android:name="android.hardware.wifi"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.screen.landscape"
+        android:required="false" />
 
     <!-- The launcher's apps, for the rules -->
     <queries>
