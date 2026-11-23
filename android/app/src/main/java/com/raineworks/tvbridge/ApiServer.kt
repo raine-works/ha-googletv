@@ -62,7 +62,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 return json(JSONObject().put("token", token))
             }
         }
-        val token = session.headers["authorization"]?.removePrefix("Bearer ")?.trim()
+        val token = Access.bearer(session.headers["authorization"])
         if (!prefs.isPaired(token)) return error(Response.Status.UNAUTHORIZED, "Not paired")
         return when {
             method == Method.GET && path == "/api/state" -> json(state())
