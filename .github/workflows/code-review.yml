@@ -25,7 +25,8 @@ jobs:
       focus: |
         - The network control surface: ADB (one shared key in .storage, over the LAN) and the TV app's HTTP API (pairing code, token on every request, the ten-wrong-codes lockout, protocol/README.md): nothing may be reachable or controllable without pairing or token; input from the TV, the network or services is validated.
         - The TV app's Android permissions (AndroidManifest.xml, e.g. SYSTEM_ALERT_WINDOW): any new or broadened permission, exported component or cleartext traffic needs a stated reason.
-        - Google Play signing and secrets: the upload keystore, its passwords and the Play service account never in the repo, a log or a command line (the sideload.jks key is the only one kept in the repo); play*.yaml, android.yaml and release.yaml keep least permissions and give pull request jobs no secrets; APK integrity (SHA-256 checked before install) and never installing over a Play copy.
+        - Release signing: the release keystore (the UPLOAD_KEYSTORE_* secrets) and its passwords never in the repo, a log or a command line, and given only to jobs on master (never a pull request's, a dispatch on another branch, or a local build, which use Android's debug key); android.yaml and release.yaml keep least permissions.
+        - Installing the TV app over ADB: the APK's SHA-256 checked before install; a signature mismatch handled by one uninstall and reinstall, then pairing again, never a loop or an uninstall for any other failure.
         - Version and release flow: the manifest.json version drives the integration, the TV app's versionName and versionCode and the release; a change must keep them in step.
         - Signed links, tokens and the TV's Home Assistant user (read-only unless allowed): no wider access than before.
         - Blocking I/O in the event loop.
