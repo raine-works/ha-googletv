@@ -60,7 +60,7 @@
     <string name="status_not_paired">Not connected yet</string>
     <string name="status_updates">Updates</string>
     <string name="updates_auto">Automatic, from Home Assistant</string>
-    <string name="updates_store">By Google Play, or with ADB by Home Assistant</string>
+    <string name="updates_store">Needs network debugging (ADB), for Home Assistant to update it</string>
 
     <string name="apps_subtitle">What Home Assistant shows, and where pop-ups appear</string>
     <string name="apps_card">Apps</string>

@@ -5,7 +5,7 @@ Raineworks TV, the TV app and the Home Assistant integration.
 _Effective 21 November 2026_
 
 This policy covers the **Raineworks TV** app for Google TV and Android TV (package
-`com.raineworks.tvbridge`, on Google Play and in this project's GitHub releases) and the
+`com.raineworks.tvbridge`, in this project's GitHub releases) and the
 **Raineworks TV** Home Assistant integration (`googletv`). Both are made by Raineworks (Raine
 Petersen), the developer, "we" below.
 

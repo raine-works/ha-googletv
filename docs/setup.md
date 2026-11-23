@@ -18,7 +18,7 @@ through its app at any time.
 
 After that there's nothing to look after. Over ADB, Home Assistant keeps
 the TV app at the integration's version: update the integration in the Home Assistant Marketplace and
-the TV follows by itself (an app from Google Play is Play's to update).
+the TV follows by itself.
 Through the app alone, a repair says when the TV app is behind.
 
 ## With the TV app (no developer mode)
@@ -29,13 +29,11 @@ Through the app alone, a repair says when the TV app is behind.
 
 1. **Install the TV app** on the TV and open it. Its screen shows the way:
    a QR code that opens the integration in the Home Assistant Marketplace on your phone, then the
-   step below. It's on Google Play as a beta, open to anyone: join at
-   [https://play.google.com/apps/testing/com.raineworks.tvbridge](https://play.google.com/apps/testing/com.raineworks.tvbridge) with the Google account the TV uses, then install
-   **Raineworks TV** from the Play Store on the TV. Play keeps it up to date. Or, without
-   joining, install the Downloader app from Google Play and open
+   step below. Without ADB, install it with the Downloader app (from the
+   TV's app store): open
    `https://github.com/raine-works/ha-googletv/releases/latest/download/raineworks-tv-bridge.apk`
    in it (no developer options; Android asks once to let Downloader
-   install apps).
+   install apps). With ADB, Home Assistant installs it for you.
 2. **Add the TV.** Scan the TV app's second QR code (**Add this TV**), or
    choose **Add integration → Raineworks TV** in Home Assistant: it lists the
    TVs with the app on its network that aren't added yet. Pick this one and
@@ -102,8 +100,7 @@ app's pairing stays.
 ¹ Pop-ups, and opening media, dashboards, apps and inputs over what's on,
 need **Pop-ups over other apps** allowed. ² Needs **Notification access**.
 ³ Needs **Usage access** (App detection). Some TVs hide these settings
-screens: ADB allows all three. ⁴ From Google Play, Play updates it;
-sideloaded, a repair says when it's behind.
+screens: ADB allows all three. ⁴ A repair says when it's behind.
 
 A fixed address for the TV (a DHCP reservation in your router) is optional:
 a discovered TV is followed to a new one.

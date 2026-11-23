@@ -1,9 +1,10 @@
 """Raineworks TV's artwork: the raineworks mark in its peach-to-teal gradient.
 
 Draws every icon and banner of the TV app (launcher icon, banner, logo,
-status-bar icon) and Google Play's graphics from the mark's geometry and
-gradient (raineworks' blocks/brand): Raineworks' own, with nothing of Google's,
-as Google Play's impersonation policy wants. The integration's brand icon, what
+status-bar icon) and the 512 px project icon (android/play/icon-512.png, which
+raineworks.com shows as the project's logo) from the mark's geometry and
+gradient (raineworks' blocks/brand): Raineworks' own, with nothing of Google's.
+The integration's brand icon, what
 Home Assistant and its Marketplace show, is Google TV's icon
 (brand/google-tv.png): the integration is for Google TV (a trademark of Google
 LLC; this project isn't affiliated with or endorsed by Google).
@@ -191,15 +192,5 @@ save(tile(192, 0.17, 0.0), RES / "drawable-xhdpi/icon.png", opaque=True)
 save(lockup((640, 360), 132, 48, 20), RES / "drawable-xhdpi/banner.png", opaque=True)
 save(logo(192), RES / "drawable-xhdpi/logo.png")
 save(mark(96, 6.0, (255, 255, 255, 255)), RES / "drawable-xhdpi/ic_stat_logo.png")
-# Google Play: the hi-res icon (Play rounds it), the TV banner, the feature graphic
+# The project's 512 px icon, shown by raineworks.com
 save(tile(512, 0.17, 0.0), ROOT / "android/play/icon-512.png", opaque=True)
-save(
-    lockup((1280, 720), 264, 96, 38),
-    ROOT / "android/play/tv-banner-1280x720.png",
-    opaque=True,
-)
-save(
-    lockup((1024, 500), 200, 76, 30),
-    ROOT / "android/play/feature-graphic-1024x500.png",
-    opaque=True,
-)

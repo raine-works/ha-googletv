@@ -25,15 +25,13 @@ local and how pairing and tokens work.
 - **Version and release:** `version` in `custom_components/googletv/manifest.json` is the one version: the TV app's
   `versionName` and `versionCode` are derived from it in `android/app/build.gradle.kts`. Bump it in the pull request.
   When `Test` passes on `master`, `release.yaml` creates a draft GitHub release `v<version>`, builds and attaches the
-  APK and its SHA-256 (`raineworks-tv-bridge.apk`, which Home Assistant checks before installing), publishes it, and
-  starts the `Google Play` workflow (`play.yaml`) for that tag. `play-promote.yaml`, `play-listing.yaml` and
-  `play-status.yaml` manage the Play tracks, store listing and status; they're run by hand. Never tag, upload or
-  promote by hand.
-- **Signing:** Google Play builds are signed with a private upload key held in repository secrets
-  (`UPLOAD_KEYSTORE_BASE64` and its passwords) and uploaded keyless through Workload Identity Federation (variables
-  `PLAY_SERVICE_ACCOUNT`, `PLAY_WORKLOAD_IDENTITY_PROVIDER`). The only key in the repo is the development
-  `android/app/sideload.jks`, for sideloaded builds; a Play install and a sideloaded one can't update each other. Never
-  commit the upload key, a password or a service-account key.
-- Home Assistant never installs the TV app over a copy from Google Play, and checks the SHA-256 before installing.
+  signed APK and its SHA-256 (`raineworks-tv-bridge.apk`, which Home Assistant checks before installing) and publishes
+  it. Never tag or upload by hand.
+- **Signing:** the TV app isn't on Google Play: Home Assistant installs it over ADB. Release builds are signed with a
+  private key held in repository secrets (`UPLOAD_KEYSTORE_BASE64`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_PASSWORD`,
+  `UPLOAD_KEY_ALIAS`), given only to jobs on `master`, never to a pull request's; local and pull request builds use
+  Android's debug key. No key or password is ever committed. See [docs/development.md](docs/development.md).
+- Home Assistant checks the SHA-256 before installing the TV app, and when the TV's copy is signed with another key
+  uninstalls it once and installs again (`GoogleTvClient.async_install_apk`).
 - Adding or widening an Android permission, or anything the TV app serves to the network, needs a reason in the pull
   request and an update to the protocol and security docs.

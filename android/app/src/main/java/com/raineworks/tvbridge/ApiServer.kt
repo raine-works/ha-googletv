@@ -193,19 +193,6 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         .put("id", android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID))
         // What this app can do, for an integration that knows older ones
         .put("features", org.json.JSONArray(FEATURES))
-        // Who installed it: Google Play updates its own; Home Assistant, over ADB, the rest
-        .put("installer", installer() ?: JSONObject.NULL)
-
-    private fun installer(): String? = try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
-        } else {
-            @Suppress("DEPRECATION")
-            context.packageManager.getInstallerPackageName(context.packageName)
-        }
-    } catch (e: Exception) {
-        null
-    }
 
     private fun state(): JSONObject = Device.state(context)
         .put("instance", Notifier.instance)

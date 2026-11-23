@@ -43,7 +43,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 
 | Endpoint | Returns |
 | :--- | :--- |
-| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`, `hidden_inputs`, `webrtc`), `installer` the package that installed it (`com.android.vending`: Google Play) or null, `home_assistant_token` whether it has Home Assistant's token for WebRTC (`POST /api/home_assistant`) |
+| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`, `hidden_inputs`, `webrtc`), `home_assistant_token` whether it has Home Assistant's token for WebRTC (`POST /api/home_assistant`) |
 | `GET /api/events` | What happens on the TV, as it happens: see [Events](#events) |
 | `GET /api/state` | `{screen_on, foreground_app, uptime_ms, volume: {level, max, muted}, sessions, overlay_permission, usage_access, notification_access, network_debugging, instance, popups}`: `sessions` the media sessions (`package, state, position_ms, updated_ms, speed, title, subtitle, description`), null without notification access; `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
 | `GET /api/apps` | `{apps: [{package, activity, name}]}`: the launcher's apps |

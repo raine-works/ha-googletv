@@ -823,7 +823,6 @@ def _bridge_web(web: AiohttpClientMocker, token: str = "T0KEN") -> None:
             "build": "abc1234",
             "paired": True,
             "features": ["events", "confirm_pairing", "device", "hidden_apps"],
-            "installer": None,
         },
     )
     web.post(f"{BRIDGE}/api/client", json={"ok": True})
@@ -1324,6 +1323,32 @@ async def test_install_tv_bridge(
     assert "appops set com.raineworks.tvbridge SYSTEM_ALERT_WINDOW allow" in commands
     assert any("com.raineworks.tvbridge.START" in c for c in commands)
     assert entry.data[CONF_BRIDGE_TOKEN] == "T0KEN"
+
+
+async def test_an_app_reinstalled_over_another_key_is_paired_again(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """The client uninstalled the old copy (its data, and pairing, went): pair anew."""
+    from custom_components.googletv.bridge import BRIDGE_DEV_APK_URL
+
+    entry = await _set_up(hass, client)
+    coordinator = entry.runtime_data
+    _bridge_web(web)
+    apk = b"PK\x03\x04 an apk"
+    web.get(BRIDGE_DEV_APK_URL, content=apk)
+    web.get(f"{BRIDGE_DEV_APK_URL}.sha256", text=hashlib.sha256(apk).hexdigest())
+    client.async_install_apk.return_value = True
+    client.async_read_file.return_value = "p1 123456\n"
+    client.async_get_apps.return_value = [*APPS, BRIDGE_APP]
+    coordinator.bridge.token = "STALE"
+    with patch("custom_components.googletv.coordinator.BRIDGE_PAIRING_RETRY_S", 0):
+        await hass.services.async_call(
+            DOMAIN,
+            "install_tv_bridge",
+            {"entity_id": "media_player.lott_s_tv", "development": True},
+            blocking=True,
+        )
+    assert coordinator.bridge.token == "T0KEN"
 
 
 # Home Assistant's media, through the TV app
@@ -1937,25 +1962,6 @@ async def test_a_tv_over_adb_without_the_app_offers_to_install_it(
     )
 
 
-async def test_the_tv_app_from_google_play_isnt_installed_over(
-    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
-) -> None:
-    from homeassistant.exceptions import HomeAssistantError
-
-    await _paired(hass, client, web)
-    client.async_shell.return_value = (
-        "package:com.raineworks.tvbridge  installer=com.android.vending\n"
-    )
-    with pytest.raises(HomeAssistantError, match="from Google Play"):
-        await hass.services.async_call(
-            DOMAIN,
-            "install_tv_bridge",
-            {"entity_id": "media_player.lott_s_tv"},
-            blocking=True,
-        )
-    client.async_install_apk.assert_not_awaited()
-
-
 # Apps left out of Home Assistant, and the TV app kept up to date
 
 
@@ -2037,7 +2043,7 @@ async def test_the_apps_in_the_options(
     assert sent["blocked_inputs"] == sorted(i.id for i in data.state.inputs)
 
 
-def _old_app(web: AiohttpClientMocker, installer: str | None = None) -> None:
+def _old_app(web: AiohttpClientMocker) -> None:
     """The TV app at 2.3.0 (registered first, so it's what's answered)."""
     web.get(
         f"{BRIDGE}/api/info",
@@ -2047,7 +2053,6 @@ def _old_app(web: AiohttpClientMocker, installer: str | None = None) -> None:
             "build": "abc1234",
             "paired": True,
             "features": ["events", "confirm_pairing", "device"],
-            "installer": installer,
         },
     )
 
@@ -2067,15 +2072,6 @@ async def test_an_old_tv_app_is_updated_over_adb(
     await hass.async_block_till_done()
     # The integration's own version, once
     client.async_install_apk.assert_awaited_once_with(apk)
-
-
-async def test_an_old_tv_app_from_google_play_is_plays_to_update(
-    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
-) -> None:
-    _old_app(web, installer="com.android.vending")
-    await _paired(hass, client, web)
-    await hass.async_block_till_done()
-    client.async_install_apk.assert_not_awaited()
 
 
 async def test_an_old_tv_app_without_adb_is_a_repair(
@@ -2217,7 +2213,6 @@ def _webrtc_app(web: AiohttpClientMocker, has_token: bool = False) -> None:
             "build": "abc1234",
             "paired": True,
             "features": ["events", "hidden_apps", "webrtc"],
-            "installer": None,
             "home_assistant_token": has_token,
         },
     )
