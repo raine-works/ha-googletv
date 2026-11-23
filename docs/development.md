@@ -12,6 +12,19 @@ The parsers (`custom_components/googletv/parsers.py`) are tested on output
 captured from real TVs. The TV app is in `android/` (built by CI, attached
 to each release); its API is documented in `protocol/README.md`.
 
+## Testing the TV app
+
+The TV app's access checks are plain Kotlin, tested with JUnit without a TV
+or an emulator: `Access` (the bearer-token check behind every 401) in
+`AccessTest`, and `PairingCodes` (pairing codes, their expiry and tries, and
+the lockout after wrong codes) in `PairingCodesTest`, with an injected clock.
+The tests are in `android/app/src/test/`. Run them with Java 17:
+
+```bash
+cd android
+./gradlew testReleaseUnitTest
+```
+
 ## Releasing and signing the TV app
 
 Bump `version` in `custom_components/googletv/manifest.json` in the pull
