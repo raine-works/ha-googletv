@@ -14,12 +14,12 @@ to each release); its API is documented in `protocol/README.md`.
 
 ## Dependencies
 
-The test requirements files pin every package exactly. The one exception is
-`adb-shell[async]>=0.4.4` in `manifest.json`: Home Assistant itself depends
-on adb-shell (its `androidtv` integration pins it), and hassfest refuses an
-exact pin on a package Home Assistant depends on, so the integration follows
-whatever version Home Assistant installs. `requirements-test-ha.txt` pins the
-version the tests run against (`adb-shell[async]==0.4.4`).
+Every package is pinned exactly: the test requirements files and the
+integration's own requirement in `manifest.json`
+(`adb-shell[async]==0.4.4`), which `requirements-test-ha.txt` pins to the
+same version so the tests run against what Home Assistant installs. Home
+Assistant's own `androidtv` integration pins the same version. Upgrade
+adb-shell on purpose, in a change of its own, in both files at once.
 
 ## Testing the TV app
 
