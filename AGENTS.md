@@ -23,6 +23,10 @@ local and how pairing and tokens work.
 - **Check (TV app):** the `TV app` workflow (`android.yaml`) runs
   `./gradlew testReleaseUnitTest assembleRelease lintRelease` in `android/` (Java 17) and publishes the `tv-bridge-dev`
   prerelease from `master`.
+- **Pinning exception:** `manifest.json` requires `adb-shell[async]>=0.4.4`, a minimum, not `==`. Home Assistant
+  itself depends on adb-shell and hassfest refuses an exact pin on such a package, so the ecosystem doesn't allow one
+  here. Its minimum is the version `requirements-test-ha.txt` pins exactly; every other requirement is `==`
+  (`tests/test_manifest.py` checks both). See [docs/development.md](docs/development.md).
 - **Version and release:** `version` in `custom_components/googletv/manifest.json` is the one version: the TV app's
   `versionName` and `versionCode` are derived from it in `android/app/build.gradle.kts`. Bump it in the pull request.
   When `Test` passes on `master`, `release.yaml` creates a draft GitHub release `v<version>`, builds and attaches the
