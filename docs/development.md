@@ -33,7 +33,12 @@ The TV app's access checks are plain Kotlin, tested with JUnit without a TV
 or an emulator: `Access` (the bearer-token check behind every 401) in
 `AccessTest`, and `PairingCodes` (pairing codes, their expiry and tries, and
 the lockout after wrong codes) in `PairingCodesTest`, with an injected clock.
-The tests are in `android/app/src/test/`. Run them with Java 17:
+So is the validation of what a paired client sends: `PlayRequest`
+(`/api/play`) in `PlayRequestTest` and `NotificationRequest` (`/api/notify`)
+in `NotificationRequestTest`, each with a valid request and every rejection
+(a URL's scheme, an unknown kind, a bad action, a value out of range). A
+notification's `color` isn't covered: parsing it needs Android's `Color`,
+which a JVM unit test doesn't have. The tests are in `android/app/src/test/`. Run them with Java 17:
 
 ```bash
 cd android
