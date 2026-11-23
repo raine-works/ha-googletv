@@ -1,10 +1,8 @@
 package com.raineworks.tvbridge
 
 import android.content.Context
-import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
-import java.security.MessageDigest
 import java.security.SecureRandom
 
 /** What the bridge keeps: Home Assistant's tokens, the notification rules, the apps it hides. */
@@ -17,21 +15,13 @@ class Prefs(context: Context) {
         get() = prefs.getStringSet(KEY_TOKENS, emptySet())!!.toSet()
 
     fun newToken(): String = synchronized(LOCK) {
-        val bytes = ByteArray(32).also { random.nextBytes(it) }
-        val token = Base64.encodeToString(
-            bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP,
-        )
+        val token = Access.newToken(random)
         prefs.edit().putStringSet(KEY_TOKENS, tokens + token).apply()
         token
     }
 
     /** Whether a request carries a token Home Assistant paired with. */
-    fun isPaired(token: String?): Boolean {
-        if (token.isNullOrEmpty()) return false
-        val given = token.toByteArray()
-        // Compared in constant time
-        return tokens.any { MessageDigest.isEqual(it.toByteArray(), given) }
-    }
+    fun isPaired(token: String?): Boolean = Access.isPaired(token, tokens)
 
     fun forget(token: String) = synchronized(LOCK) {
         prefs.edit().putStringSet(KEY_TOKENS, tokens - token).apply()
