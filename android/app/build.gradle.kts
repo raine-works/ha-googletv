@@ -34,44 +34,30 @@ android {
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
     }
 
-    // A Google Play build (`./gradlew bundleRelease -Pplay`) is signed with the
-    // private upload key (never the sideload key in this repo): its keystore
-    // and passwords come from the environment, as CI's secrets give them.
-    // Google Play re-signs it with the app's own key (Play App Signing), so a
-    // Play install and a sideloaded one can't update each other.
-    val play = providers.gradleProperty("play").isPresent
+    // Release builds are signed with the project's private release key when
+    // CI provides it: its keystore and passwords come from the environment
+    // (RELEASE_KEYSTORE is the decoded file's path), never from the repo.
+    // Without it (a developer's machine, a pull request's build) the build is
+    // signed with Android's debug key, which is enough to run and test it. The
+    // integration installs the app over ADB; a TV that has the app signed with
+    // another key has it uninstalled first (see the integration's adb.py).
+    val releaseKeystore = System.getenv("RELEASE_KEYSTORE")?.takeIf { it.isNotEmpty() }
 
-    signingConfigs {
-        // Sideloaded builds (installed by the integration over ADB, or by
-        // hand) are signed with this development key, kept in the repo so
-        // every build can update the last. Play Store builds are signed by
-        // Google Play; uninstall a sideloaded build before installing one.
-        create("sideload") {
-            storeFile = file("sideload.jks")
-            storePassword = "tvbridge"
-            keyAlias = "sideload"
-            keyPassword = "tvbridge"
-        }
-    }
-
-    if (play) {
-        signingConfigs.create("upload") {
-            storeFile = file(System.getenv("UPLOAD_KEYSTORE") ?: error("UPLOAD_KEYSTORE isn't set"))
+    if (releaseKeystore != null) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKeystore)
             // GitHub Actions passes a secret that isn't set as an empty string, so empty counts as unset
             fun env(name: String) = System.getenv(name)?.takeIf { it.isNotEmpty() }
-            storePassword = env("UPLOAD_KEYSTORE_PASSWORD")
-            keyAlias = env("UPLOAD_KEY_ALIAS") ?: "upload"
-            keyPassword = env("UPLOAD_KEY_PASSWORD") ?: env("UPLOAD_KEYSTORE_PASSWORD")
+            storePassword = env("RELEASE_KEYSTORE_PASSWORD")
+            keyAlias = env("RELEASE_KEY_ALIAS") ?: "upload"
+            keyPassword = env("RELEASE_KEY_PASSWORD") ?: env("RELEASE_KEYSTORE_PASSWORD")
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName(if (play) "upload" else "sideload")
-        }
-        debug {
-            signingConfig = signingConfigs.getByName("sideload")
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
         }
     }
 

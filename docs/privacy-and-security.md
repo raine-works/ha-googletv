@@ -12,7 +12,10 @@
   `.storage/googletv_adbkey`; each TV trusts it once.
 * **Installing or updating the TV app**, Home Assistant checks the
   download against the SHA-256 published with each release before it goes
-  on the TV, and never installs over a copy from Google Play.
+  on the TV. Releases are signed with the project's private release key. A
+  copy on the TV signed with another key (an older build) can't be updated:
+  Home Assistant uninstalls it once, logs why, and installs the new one,
+  which pairs again by itself.
 * **The TV app** pairs with Home Assistant when you choose **Allow** on the
   TV, or over ADB; no code is typed. Every request after that carries its
   token. Ten wrong pairing codes lock pairing for ten minutes. Removing the

@@ -28,6 +28,7 @@ from adb_shell.exceptions import (
     TcpTimeoutException,
 )
 
+from .bridge import BRIDGE_PACKAGE
 from .const import AUTH_TIMEOUT_S, COMMAND_TIMEOUT_S, CONNECT_TIMEOUT_S, KEYCODES
 from .parsers import (
     APPS_COMMAND,
@@ -50,6 +51,12 @@ _LOGGER = logging.getLogger(__name__)
 # Where an APK is copied to install it, and how long that may take
 APK_DEVICE_PATH = "/data/local/tmp/googletv-install.apk"
 INSTALL_TIMEOUT_S = 120.0
+# What ``pm install`` says when the app on the TV is signed with another key
+_SIGNATURE_MISMATCH = (
+    "INSTALL_FAILED_UPDATE_INCOMPATIBLE",
+    "INSTALL_FAILED_SHARED_USER_INCOMPATIBLE",
+    "signatures do not match",
+)
 
 _CONNECTION_ERRORS = (
     AdbConnectionError,
@@ -186,8 +193,41 @@ class GoogleTvClient:
                     break
         return result if isinstance(result, str) else ""
 
-    async def async_install_apk(self, apk: bytes) -> None:
-        """Install (or update) an app from its APK, its permissions granted."""
+    async def async_install_apk(self, apk: bytes) -> bool:
+        """Install (or update) an app from its APK, its permissions granted.
+
+        An app on the TV signed with another key can't be updated (Android
+        refuses with ``INSTALL_FAILED_UPDATE_INCOMPATIBLE``): the project's
+        releases are signed with a different key from the builds it used to
+        publish. Then the app is uninstalled once and installed again, which
+        loses its data (its pairing). Returns whether that happened.
+        """
+        failure = await self._async_push_and_install(apk)
+        if failure is None:
+            return False
+        if not any(marker in failure for marker in _SIGNATURE_MISMATCH):
+            raise GoogleTvError(f"The TV didn't install the app: {failure}")
+        _LOGGER.warning(
+            "%s: the TV app on the TV is signed with another key (%s); "
+            "uninstalling it once and installing this one",
+            self.host,
+            failure,
+        )
+        output = await self.async_shell(
+            f"pm uninstall {BRIDGE_PACKAGE}", timeout_s=INSTALL_TIMEOUT_S
+        )
+        if "Success" not in output:
+            raise GoogleTvError(
+                "The TV app on the TV is signed with another key and the TV "
+                f"wouldn't uninstall it: {output.strip()[:300]}"
+            )
+        failure = await self._async_push_and_install(apk)
+        if failure is not None:
+            raise GoogleTvError(f"The TV didn't install the app: {failure}")
+        return True
+
+    async def _async_push_and_install(self, apk: bytes) -> str | None:
+        """Copy the APK to the TV and install it: None, or why it failed."""
         async with self._lock:
             if not self._device.available:
                 await self.async_connect()
@@ -205,13 +245,13 @@ class GoogleTvClient:
             f"pm install -r -g {APK_DEVICE_PATH}; rm -f {APK_DEVICE_PATH}",
             timeout_s=INSTALL_TIMEOUT_S,
         )
-        if "Success" not in output:
-            # Its "Failure [REASON: …]" line, else the start of what it said
-            failure = next(
-                (line for line in output.splitlines() if "Failure" in line),
-                output.strip()[:300],
-            )
-            raise GoogleTvError(f"The TV didn't install the app: {failure}")
+        if "Success" in output:
+            return None
+        # Its "Failure [REASON: …]" line, else the start of what it said
+        return next(
+            (line for line in output.splitlines() if "Failure" in line),
+            output.strip()[:300],
+        )
 
     async def async_read_file(self, path: str) -> str:
         """A text file on the TV (empty if it isn't there)."""

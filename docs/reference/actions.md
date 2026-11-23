@@ -70,7 +70,7 @@ Shows a Home Assistant dashboard full screen on the TV, through the TV app. It s
 
 ## googletv.install_tv_bridge
 
-Installs or updates the TV app (Raineworks TV) over ADB, allows its pop-ups, and pairs with it. Over ADB the app is kept up to date by itself; this does it now.
+Installs or updates the TV app (Raineworks TV) over ADB, allows its pop-ups, and pairs with it. Over ADB the app is kept up to date by itself; this does it now. A copy signed with another key can't be updated in place: it's uninstalled once, then the new one installed (its pairing is lost, and made again).
 
 | Field | What it does |
 | :--- | :--- |
