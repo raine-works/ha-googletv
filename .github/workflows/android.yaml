@@ -1,4 +1,4 @@
-# Builds the TV app, Raineworks TV (android/) and, on master, publishes the APK to
+# Builds the TV app, Raineworks TV (android/), runs its unit tests and, on master, publishes the APK to
 # the rolling "tv-bridge-dev" prerelease that the integration can install
 # from for testing (googletv.install_tv_bridge with its URL). Pull requests'
 # builds are signed with Android's debug key and get no secrets; a build of
@@ -19,8 +19,9 @@ on:
       - ".github/workflows/android.yaml"
   workflow_dispatch:
 
+# Read-only for the build, which runs a pull request's code; only `publish` (master only) may write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -56,7 +57,7 @@ jobs:
           RELEASE_KEYSTORE_PASSWORD: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && secrets.UPLOAD_KEYSTORE_PASSWORD || '' }}
           RELEASE_KEY_PASSWORD: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && secrets.UPLOAD_KEY_PASSWORD || '' }}
           RELEASE_KEY_ALIAS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && secrets.UPLOAD_KEY_ALIAS || '' }}
-        run: ./gradlew --no-daemon assembleRelease lintRelease
+        run: ./gradlew --no-daemon testReleaseUnitTest assembleRelease lintRelease
 
       - name: Remove the release key
         if: always()
@@ -70,7 +71,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: raineworks-tv-bridge
-          path: android/raineworks-tv-bridge.apk
+          path: |
+            android/raineworks-tv-bridge.apk
+            android/raineworks-tv-bridge.apk.sha256
 
       - name: Lint report
         if: always()
@@ -80,10 +83,23 @@ jobs:
           path: android/app/build/reports/lint-results-release.*
           if-no-files-found: ignore
 
+  # The only job that writes: a build of master, never a pull request's. It runs none of the branch's code, only
+  # `gh` on the APK the build uploaded.
+  publish:
+    name: Publish to tv-bridge-dev
+    needs: build
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Fetch the APK and its SHA-256
+        run: gh run download "$GITHUB_RUN_ID" --name raineworks-tv-bridge --dir .
       - name: Publish to the tv-bridge-dev prerelease
-        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view tv-bridge-dev >/dev/null 2>&1; then
             gh release create tv-bridge-dev --prerelease --target "$GITHUB_SHA" \
