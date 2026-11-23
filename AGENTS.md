@@ -20,8 +20,9 @@ local and how pairing and tokens work.
   tests, no Home Assistant) and again with `requirements-test-ha.txt` (config flow and setup); the `Test` workflow runs
   both. `Validate` runs hassfest and the Marketplace (HACS) validation. Parsers are tested on output captured from real
   TVs ([docs/development.md](docs/development.md)).
-- **Check (TV app):** the `TV app` workflow (`android.yaml`) runs `./gradlew testReleaseUnitTest assembleRelease lintRelease` in `android/`
-  (Java 17) and publishes the `tv-bridge-dev` prerelease from `master`.
+- **Check (TV app):** the `TV app` workflow (`android.yaml`) runs
+  `./gradlew testReleaseUnitTest assembleRelease lintRelease` in `android/` (Java 17) and publishes the `tv-bridge-dev`
+  prerelease from `master`.
 - **Version and release:** `version` in `custom_components/googletv/manifest.json` is the one version: the TV app's
   `versionName` and `versionCode` are derived from it in `android/app/build.gradle.kts`. Bump it in the pull request.
   When `Test` passes on `master`, `release.yaml` creates a draft GitHub release `v<version>`, builds and attaches the
