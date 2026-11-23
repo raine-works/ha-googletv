@@ -1,1 +1,0 @@
-Home Assistant on your TV: notifications, cameras, buttons, media, dashboards.

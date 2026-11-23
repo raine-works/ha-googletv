@@ -178,8 +178,8 @@ class AppClient:
         """Only over ADB."""
         raise NeedsAdbError("A shell needs ADB (network debugging)")
 
-    async def async_install_apk(self, apk: bytes) -> None:
-        """Only over ADB (the app updates from the Play Store)."""
+    async def async_install_apk(self, apk: bytes) -> bool:
+        """Only over ADB."""
         raise NeedsAdbError("Installing needs ADB (network debugging)")
 
     async def async_read_file(self, path: str) -> str:

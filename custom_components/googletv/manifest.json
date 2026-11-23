@@ -18,9 +18,9 @@
     "adb_shell"
   ],
   "requirements": [
-    "adb-shell[async]>=0.4.4"
+    "adb-shell[async]==0.4.4"
   ],
-  "version": "2.5.11",
+  "version": "2.6.0",
   "zeroconf": [
     "_androidtvremote2._tcp.local.",
     "_rwtvbridge._tcp.local."

@@ -22,9 +22,7 @@
     <!-- The TV's HDMI inputs and their names, for the rules -->
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
 
-    <!-- A TV app only: Google Play offers it to Google TV and Android TV devices,
-         never phones or tablets (Home Assistant's own installs over ADB aren't
-         filtered) -->
+    <!-- A TV app only: a TV device, never a phone or tablet -->
     <uses-feature
         android:name="android.software.leanback"
         android:required="true" />
@@ -32,8 +30,8 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
     <!-- Implied by the Wi-Fi permissions (the signal, multicast) and the landscape
-         activity, and Google Play would then require them: a TV on Ethernet has no
-         Wi-Fi, and the app works there too -->
+         activity, which would then be required: a TV on Ethernet has no Wi-Fi, and
+         the app works there too -->
     <uses-feature
         android:name="android.hardware.wifi"
         android:required="false" />

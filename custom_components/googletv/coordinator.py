@@ -91,9 +91,6 @@ BRIDGE_SETUP_COMMANDS = (
     f"am broadcast -a {BRIDGE_PACKAGE}.START -n {BRIDGE_PACKAGE}/.StartReceiver",
 )
 
-# Who installed the TV app, when it was Google Play (Play updates it)
-PLAY_STORE = "com.android.vending"
-
 # The TV app's event stream: tried again this soon after it ends, then less often
 EVENTS_RETRY_S = 5
 EVENTS_MAX_RETRY_S = 300
@@ -243,8 +240,6 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self._rules_pending: dict[str, list[str]] = {}
         # The integration version an update of the app was last tried for
         self._update_tried: str | None = None
-        # Who installed the app (Google Play updates its own)
-        self._bridge_installer: str | None = None
         # What the app can do (its info's features), and whether it has the
         # TV user's token for cameras over WebRTC
         self._bridge_features: set[str] = set()
@@ -354,7 +349,6 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             _LOGGER.debug("Can't read the TV app's version: %s", err)
             return
         self._set_bridge_info(info.get("app_version"), info.get("build"))
-        self._bridge_installer = info.get("installer")
         await self._async_after_bridge_info(info)
 
     async def _async_after_bridge_info(self, info: dict[str, Any]) -> None:
@@ -373,14 +367,12 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
     async def _async_update_bridge_if_old(self, info: dict[str, Any]) -> None:
         """An app older than the integration: updated over ADB, once per version.
 
-        One from Google Play is Play's to update; through the app alone (no
-        ADB), a repair says to update it.
+        Through the app alone (no ADB), a repair says to update it.
         """
         ours = str((await async_get_integration(self.hass, DOMAIN)).version or "")
         issue = f"update_tv_app_{self.config_entry.entry_id}"
         theirs = info.get("app_version") or self.bridge_info.get("version")
-        installer = info.get("installer", self._bridge_installer)
-        if not _older(theirs, ours) or installer == PLAY_STORE:
+        if not _older(theirs, ours):
             ir.async_delete_issue(self.hass, DOMAIN, issue)
             return
         if self.app_only:
@@ -637,12 +629,9 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
     async def async_install_bridge(self, url: str) -> None:
         """Install (or update) the TV app, allow it, and pair.
 
-        Not over one from Google Play: it's signed differently (Play updates it).
+        A copy signed with another key is uninstalled first (the client does it),
+        which also forgets the app's pairing: paired again after.
         """
-        if await self._async_bridge_from_play():
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="bridge_from_play"
-            )
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(url, timeout=BRIDGE_DOWNLOAD_TIMEOUT) as response:
@@ -674,7 +663,9 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             )
         await self._async_check_apk(session, url, apk)
         with translate_errors():
-            await self.client.async_install_apk(apk)
+            if await self.client.async_install_apk(apk) is True:
+                # Uninstalled first (signed with another key): its pairing went
+                self._forget_pairing()
             # Pop-ups over other apps and its rules' app detection, which TVs
             # often have no settings screen for; kept running; started
             for command in BRIDGE_SETUP_COMMANDS:
@@ -685,23 +676,6 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if not self.bridge.token:
             await self._async_pair_bridge(attempts=BRIDGE_PAIRING_ATTEMPTS)
         await self.async_request_refresh()
-
-    async def _async_bridge_from_play(self) -> bool:
-        """The installed TV app came from Google Play."""
-        if not self.bridge_installed or self.app_only:
-            return self.app_only
-        try:
-            listing = await self.client.async_shell(
-                f"pm list packages -i {BRIDGE_PACKAGE}"
-            )
-        except GoogleTvError:
-            return False
-        return any(
-            line.split()[0] == f"package:{BRIDGE_PACKAGE}"
-            and "installer=com.android.vending" in line
-            for line in listing.splitlines()
-            if line.strip()
-        )
 
     async def _async_check_apk(
         self, session: aiohttp.ClientSession, url: str, apk: bytes

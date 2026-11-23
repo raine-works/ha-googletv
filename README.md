@@ -62,11 +62,11 @@ artwork ([Privacy and security](docs/privacy-and-security.md)).
    above, or go to Settings → Marketplace. If it isn't listed, add
    `https://github.com/raine-works/ha-googletv` as a custom repository,
    type **Integration**. Download it and restart Home Assistant.
-2. Connect the TV one of two ways: install the **TV app** on the TV (it's
-   on Google Play as an open beta: [join the beta](https://play.google.com/apps/testing/com.raineworks.tvbridge), then install it
-   from the Play Store on the TV) and choose **Allow** (no developer mode), or turn on network debugging and
-   let Home Assistant install the app over **ADB** (everything, including the
-   remote's keys and turning the TV off).
+2. Connect the TV one of two ways: turn on network debugging and let
+   Home Assistant install the **TV app** over **ADB** (everything, including the
+   remote's keys and turning the TV off), or install the TV app yourself from
+   the [latest release](https://github.com/raine-works/ha-googletv/releases/latest)
+   with the Downloader app and choose **Allow** (no developer mode).
 3. Scan the TV app's **Add this TV** QR code (or **Add integration →
    Raineworks TV**): Home Assistant lists the TVs it finds. Pick yours, then
    choose **Allow** on the TV.

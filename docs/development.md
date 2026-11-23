@@ -10,5 +10,30 @@ pytest -q
 
 The parsers (`custom_components/googletv/parsers.py`) are tested on output
 captured from real TVs. The TV app is in `android/` (built by CI, attached
-to each release); its API is documented in `protocol/README.md`. Sideloaded
-builds are signed with a development key kept in the repo.
+to each release); its API is documented in `protocol/README.md`.
+
+## Releasing and signing the TV app
+
+Bump `version` in `custom_components/googletv/manifest.json` in the pull
+request: it's the integration's, the TV app's `versionName` and (derived)
+`versionCode`, and the release's. When `Test` passes on `master`, the
+`Release` workflow creates the draft release `v<version>`, builds the APK,
+attaches it with its SHA-256 (`raineworks-tv-bridge.apk`; Home Assistant checks
+the hash before installing), and publishes it. Never tag or upload by hand.
+
+The app isn't on Google Play: Home Assistant installs it over ADB. Release
+builds (and the `tv-bridge-dev` prerelease built from `master`) are signed
+with a private key held in repository secrets: `UPLOAD_KEYSTORE_BASE64` (the
+keystore, base64), `UPLOAD_KEYSTORE_PASSWORD`, and optionally
+`UPLOAD_KEY_PASSWORD` and `UPLOAD_KEY_ALIAS` (default `upload`). The workflows
+pass them to Gradle as `RELEASE_KEYSTORE*` environment variables; the
+keystore is decoded to a temporary file and deleted after the build. A
+release without the key fails. Pull request builds and local builds
+(`./gradlew assembleRelease` in `android/`) are signed with Android's debug
+key and get no secrets. Never commit a key or a password.
+
+A TV whose app is signed with another key can't be updated in place (Android
+refuses with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`): `GoogleTvClient.async_install_apk`
+then uninstalls the app once (`pm uninstall`), logs a warning saying why, and
+installs again; the pairing is lost and made again by the coordinator. Any
+other install failure is an error and uninstalls nothing.

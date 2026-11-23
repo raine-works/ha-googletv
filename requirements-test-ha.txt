@@ -1,8 +1,8 @@
 # Home Assistant tests (config flow, setup), with Home Assistant itself. The TV
 # is mocked, but the integration imports adb-shell as it loads.
-pytest
-pytest-asyncio
-pytest-homeassistant-custom-component
+pytest==9.0.0
+pytest-asyncio==1.3.0
+pytest-homeassistant-custom-component==0.13.316
 adb-shell[async]==0.4.4
 # Home Assistant's camera component (its requirement), for the camera tests
 PyTurboJPEG==1.8.0
