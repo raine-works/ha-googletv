@@ -32,4 +32,4 @@ jobs:
     # The checks Claude runs before it pushes: the Test workflow's, with what .github/actions/setup installs.
     with:
       allowed-commands: >-
-        Bash(ruff check .),Bash(ruff check --fix .),Bash(ruff format .),Bash(pytest -q),Bash(.venv/ha/bin/pytest -q)
+        Bash(ruff check .),Bash(ruff check --fix .),Bash(ruff format .),Bash(ruff format --check .),Bash(pytest -q),Bash(.venv/ha/bin/pytest -q),Bash(android/gradlew -p android --no-daemon testReleaseUnitTest assembleRelease lintRelease)
