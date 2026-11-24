@@ -489,8 +489,15 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         self._rules_changed()
 
     async def async_load_rules(self) -> None:
-        """The app's settings as last seen, from before a restart."""
+        """The app's settings as last seen, from before a restart.
+
+        They stand for the app's rules until it says them again, so the
+        Pop-ups switch and the rules work while the TV is away (a change then
+        waits for the app, as one made while it's unreachable does).
+        """
         self._saved_rules = await self._rules_store.async_load() or {}
+        if self.app_rules is None and (rules := self._saved_rules.get("rules")):
+            self.app_rules = dict(rules)
 
     @callback
     def _note_data_id(self, data_id: str | None) -> None:
