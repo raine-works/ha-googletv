@@ -67,8 +67,8 @@ app's Pop-ups section. Off, no notification pops up, over anything: each goes
 where **When pop-ups are off** says (the panel, or nowhere) until it's
 switched on again. Automations can flip it (a movie mode, say: see
 [Recipes](recipes.md)), or `googletv.set_notification_rules` with
-`popups: false`. Switched while the TV is off its network, the TV app takes it
-when it's back. A notification sent with `ignore_rules: true` (a doorbell,
+`popups: false`. The switch works while the TV is off its network too (the TV
+app takes it when it's back); the action needs the TV reachable. A notification sent with `ignore_rules: true` (a doorbell,
 say) still pops up.
 
 **Apps and inputs.** Pop-ups can stay off the apps and inputs you pick: their **Pop-ups** switch
