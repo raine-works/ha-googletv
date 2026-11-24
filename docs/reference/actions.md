@@ -1,6 +1,6 @@
 # Actions
 
-Every action is registered by the integration (`custom_components/googletv/services.yaml`; names and descriptions in `strings.json`). Each one targets a Raineworks TV `media_player` entity.
+Every action is registered by the integration (`custom_components/googletv/services.yaml`; names and descriptions in `strings.json`). Each one targets a Google TV by Raineworks `media_player` entity.
 
 | Action | What it does |
 | :--- | :--- |
@@ -20,7 +20,7 @@ Shows a notification on the TV: a pop-up over what's on, in the notification pan
 | :--- | :--- | :--- |
 | `message` | Text, multiline | The notification's text |
 | `title` | Text | Its title |
-| `icon` | An icon (`mdi:doorbell`), an image URL or a path | The badge; the Raineworks TV logo if not set |
+| `icon` | An icon (`mdi:doorbell`), an image URL or a path | The badge; the Google TV by Raineworks logo if not set |
 | `image` | URL or Home Assistant path | An image. With a `video`, it shows until the video's first frame |
 | `video` | URL or Home Assistant path | A video or live stream (HLS, RTSP, MP4) |
 | `camera_entity` | A `camera` entity | A camera on the card |
@@ -51,10 +51,11 @@ Takes notifications down, from the screen and the notification panel.
 
 ## googletv.set_notification_rules
 
-Sets the apps and inputs pop-ups don't show over, and what happens to those notifications. Each list replaces the one before.
+Sets whether pop-ups show at all, the apps and inputs they don't show over, and what happens to those notifications. Each list replaces the one before.
 
 | Field | What it does |
 | :--- | :--- |
+| `popups` | `false`: no notification pops up, over anything, until it's `true` again (the TV's **Pop-ups** switch, `switch.<tv>_pop_ups`); one sent with `ignore_rules` still does |
 | `blocked_apps` | Apps by name (`Netflix`) or package (`com.netflix.ninja`); a list |
 | `blocked_inputs` | Inputs by name (`Xbox`, `HDMI 2`) or id; a list |
 | `when_blocked` | `panel` or `drop`: where a blocked pop-up goes |
@@ -70,7 +71,7 @@ Shows a Home Assistant dashboard full screen on the TV, through the TV app. It s
 
 ## googletv.install_tv_bridge
 
-Installs or updates the TV app (Raineworks TV) over ADB, allows its pop-ups, and pairs with it. Over ADB the app is kept up to date by itself; this does it now. A copy signed with another key can't be updated in place: it's uninstalled once, then the new one installed (its pairing is lost, and made again).
+Installs or updates the TV app (Google TV by Raineworks) over ADB, allows its pop-ups, and pairs with it. Over ADB the app is kept up to date by itself; this does it now. A copy signed with another key can't be updated in place: it's uninstalled once, then the new one installed (its pairing and settings are lost; it's paired again and Home Assistant gives its settings back).
 
 | Field | What it does |
 | :--- | :--- |

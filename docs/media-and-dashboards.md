@@ -23,7 +23,7 @@ the integration makes a local-only Home Assistant user named after the TV,
 **read-only**: dashboards on the TV show your home but can't switch
 anything. To let them control devices, turn on **Dashboards on the TV can
 control devices** in the TV's options (Settings → Devices & services →
-Raineworks TV → Configure → General). The user is in Settings → People →
+Google TV by Raineworks → Configure → General). The user is in Settings → People →
 Users, where you can remove it; removing the TV removes it too.
 
 **Replacing Google Cast**: everything Home Assistant used Cast for on the

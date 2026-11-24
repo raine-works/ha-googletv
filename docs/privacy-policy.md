@@ -1,12 +1,12 @@
 # Privacy policy
 
-Raineworks TV, the TV app and the Home Assistant integration.
+Google TV by Raineworks, the TV app and the Home Assistant integration.
 
-_Effective 21 November 2026_
+_Effective 24 November 2026_
 
-This policy covers the **Raineworks TV** app for Google TV and Android TV (package
+This policy covers the **Google TV by Raineworks** app for Google TV and Android TV (package
 `com.raineworks.tvbridge`, in this project's GitHub releases) and the
-**Raineworks TV** Home Assistant integration (`googletv`). Both are made by Raineworks (Raine
+**Google TV by Raineworks** Home Assistant integration (`googletv`). Both are made by Raineworks (Raine
 Petersen), the developer, "we" below.
 
 ## In short
@@ -73,17 +73,21 @@ Links to Home Assistant that the integration sends the TV are signed and expire 
 
 ## What's kept on the TV, and deleting it
 
-The app keeps the tokens of the Home Assistant it's paired with, your settings (the pop-ups' size
-and position, which apps and inputs they show over, which apps and inputs Home Assistant leaves
-out), the TV's own Home Assistant user's token (for cameras), and the integration version Home
-Assistant last reported. A video clip shown in a pop-up is downloaded to the app's cache while the
+The app keeps the tokens of the Home Assistant it's paired with, your settings (whether pop-ups
+show at all, their size and position, which apps and inputs they show over, which apps and inputs
+Home Assistant leaves out), a random id for this copy of its data (made on first use; it says
+nothing about you or the TV), the TV's own Home Assistant user's token (for cameras), and the
+integration version Home Assistant last reported. A video clip shown in a pop-up is downloaded to the app's cache while the
 pop-up is up and deleted when it comes down. Nothing else is stored, and nothing is kept anywhere
 but on the TV and in your Home Assistant.
 
+Your Home Assistant keeps a copy of those settings, so they come back when the app's data goes (a
+reinstall, or its data cleared): once it's paired again, Home Assistant gives them back.
+
 To delete it: **Forget all Home Assistant pairings** in the app's About section removes the tokens;
-clearing the app's data in the TV's settings, or uninstalling it, removes everything. What your Home
-Assistant keeps is yours to manage there, and removing the integration removes the TV's Home
-Assistant user it made.
+clearing the app's data in the TV's settings, or uninstalling it, removes everything on the TV.
+What your Home Assistant keeps is yours to manage there; removing the TV from the integration
+deletes its copy of the settings and the TV's Home Assistant user it made.
 
 ## The Home Assistant integration
 

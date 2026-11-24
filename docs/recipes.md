@@ -28,6 +28,21 @@ actions:
             data: { brightness_pct: 60, transition: 2 }
 ```
 
+**Movie mode: no pop-ups on the theater TV while it's on.** A doorbell sent
+with `ignore_rules: true` still pops up; everything else goes to the
+notification panel (or nowhere, as the TV app's **When pop-ups are off**
+says).
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: input_boolean.movie_mode
+actions:
+  - action: "switch.turn_{{ 'off' if trigger.to_state.state == 'on' else 'on' }}"
+    target:
+      entity_id: switch.theater_tv_pop_ups
+```
+
 **Who's at the door, live, in the corner:**
 
 ```yaml

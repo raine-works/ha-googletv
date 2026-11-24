@@ -101,7 +101,7 @@ def _only_our_tvs(data: dict[str, Any]) -> dict[str, Any]:
     others = [entity_id for entity_id in entity_ids if entity_id not in ours]
     if others:
         raise vol.Invalid(
-            f"{', '.join(others)} isn't a Raineworks TV: send it to one of"
+            f"{', '.join(others)} isn't a Google TV by Raineworks: send it to one of"
             f" its TVs ({', '.join(ours) or 'none set up'})"
         )
     return data
@@ -138,6 +138,7 @@ async def async_setup_entry(
                 vol.Optional("blocked_apps"): vol.All(cv.ensure_list, [cv.string]),
                 vol.Optional("blocked_inputs"): vol.All(cv.ensure_list, [cv.string]),
                 vol.Optional("when_blocked"): vol.In(["panel", "drop"]),
+                vol.Optional("popups"): cv.boolean,
             }
         ),
         "async_set_notification_rules",
@@ -581,7 +582,7 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
         await self.coordinator.async_dismiss(tag)
 
     async def async_set_notification_rules(self, **kwargs: Any) -> ServiceResponse:
-        """Pop-ups' rules: apps and inputs (by name or id) they don't show over."""
+        """Pop-ups' rules: on at all, and the apps and inputs they don't show over."""
         changes: dict[str, Any] = {}
         if "blocked_apps" in kwargs:
             by_name = {a.name.casefold(): a.package for a in self.coordinator.data.apps}
@@ -595,6 +596,8 @@ class GoogleTvMediaPlayer(GoogleTvEntity, MediaPlayerEntity):
             ]
         if "when_blocked" in kwargs:
             changes["when_blocked"] = kwargs["when_blocked"]
+        if "popups" in kwargs:
+            changes["popups"] = kwargs["popups"]
         return await self.coordinator.async_bridge_rules(changes)
 
     async def async_install_tv_bridge(

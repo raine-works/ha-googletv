@@ -25,7 +25,12 @@ from .const import (
     CONNECTION_APP,
     DOMAIN,
 )
-from .coordinator import LIVE_STORAGE_VERSION, GoogleTvConfigEntry, GoogleTvCoordinator
+from .coordinator import (
+    LIVE_STORAGE_VERSION,
+    RULES_STORAGE_VERSION,
+    GoogleTvConfigEntry,
+    GoogleTvCoordinator,
+)
 from .online import get_lookups
 
 PLATFORMS: list[Platform] = [
@@ -36,6 +41,7 @@ PLATFORMS: list[Platform] = [
     Platform.REMOTE,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 
@@ -94,6 +100,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> 
     # Asked for when the TV was added: no repair about it meanwhile
     coordinator.installing = bool(entry.data.get(CONF_INSTALL_BRIDGE))
     try:
+        # Before the app's info is first read: its settings to give back, if they went
+        await coordinator.async_load_rules()
         await coordinator.async_config_entry_first_refresh()
     except BaseException:
         # Set up again later with a connection of its own: close this one
@@ -160,7 +168,7 @@ async def _async_options_updated(
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) -> None:
-    """Forget a removed TV: its live notifications, its user, its pairing.
+    """Forget a removed TV: live notifications, app settings, its user, its pairing.
 
     The TV app takes its pop-ups down and forgets Home Assistant, if it's
     reachable.
@@ -174,6 +182,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: GoogleTvConfigEntry) ->
             await bridge.async_unpair()
     await Store(
         hass, LIVE_STORAGE_VERSION, f"{DOMAIN}.live.{entry.entry_id}"
+    ).async_remove()
+    await Store(
+        hass, RULES_STORAGE_VERSION, f"{DOMAIN}.rules.{entry.entry_id}"
     ).async_remove()
     if (user_id := entry.data.get(CONF_DASHBOARD_USER)) and (
         user := await hass.auth.async_get_user(user_id)

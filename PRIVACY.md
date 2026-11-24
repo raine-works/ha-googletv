@@ -1,6 +1,6 @@
-# Privacy policy: Raineworks TV
+# Privacy policy: Google TV by Raineworks
 
-Raineworks TV's privacy policy, for the TV app (`com.raineworks.tvbridge`) and the Home Assistant
+The privacy policy of Google TV by Raineworks, for the TV app (`com.raineworks.tvbridge`) and the Home Assistant
 integration, is [docs/privacy-policy.md](docs/privacy-policy.md), published at
 <https://raineworks.com/projects/ha-googletv/docs/privacy-policy>.
 

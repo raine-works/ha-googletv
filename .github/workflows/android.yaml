@@ -1,4 +1,4 @@
-# Builds the TV app, Raineworks TV (android/), runs its unit tests and, on master, publishes the APK to
+# Builds the TV app, Google TV by Raineworks (android/), runs its unit tests and, on master, publishes the APK to
 # the rolling "tv-bridge-dev" prerelease that the integration can install
 # from for testing (googletv.install_tv_bridge with its URL). Pull requests'
 # builds are signed with Android's debug key and get no secrets; a build of
@@ -103,7 +103,7 @@ jobs:
         run: |
           if ! gh release view tv-bridge-dev >/dev/null 2>&1; then
             gh release create tv-bridge-dev --prerelease --target "$GITHUB_SHA" \
-              --title "Raineworks TV: TV app (development build)" \
+              --title "Google TV by Raineworks: TV app (development build)" \
               --notes "The latest build of the TV app from master, for testing. Install it with the googletv.install_tv_bridge action and this release's APK URL."
           fi
           gh release upload tv-bridge-dev raineworks-tv-bridge.apk raineworks-tv-bridge.apk.sha256 --clobber

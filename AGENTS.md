@@ -10,11 +10,12 @@ not here. Where this file is more specific, it wins.
 
 ## This repository
 
-Raineworks TV (`custom_components/googletv`, domain `googletv`) is a Home Assistant integration for Google TV and
-Android TV that talks to the TV over ADB and to its own TV app over HTTP on the local network. The TV app is an Android
-project in `android/` (package `com.raineworks.tvbridge`, API in [protocol/README.md](protocol/README.md)). Design and
-how-tos are in [docs/](docs/README.md); [docs/privacy-and-security.md](docs/privacy-and-security.md) states what stays
-local and how pairing and tokens work.
+Google TV by Raineworks (`custom_components/googletv`, domain `googletv`) is a Home Assistant integration for Google
+TV and Android TV that talks to the TV over ADB and to its own TV app over HTTP on the local network. The TV app is an
+Android project in `android/` (package `com.raineworks.tvbridge`, API in [protocol/README.md](protocol/README.md)).
+Design and how-tos are in [docs/](docs/README.md); [docs/privacy-and-security.md](docs/privacy-and-security.md) states
+what stays local and how pairing and tokens work. The integration, its Home Assistant icon and the TV app share one
+name and Google TV's icon (`brand/art.py` draws them all).
 
 - **Check (integration):** `ruff check .`, `ruff format --check .`, and `pytest -q` with `requirements-test.txt` (parser
   tests, no Home Assistant) and again with `requirements-test-ha.txt` (config flow and setup); the `Test` workflow runs

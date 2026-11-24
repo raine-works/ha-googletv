@@ -112,6 +112,21 @@ DASHBOARD_TOKEN_LIFETIME = timedelta(days=3650)
 LIVE_STORAGE_VERSION = 1
 LIVE_CHECK_INTERVAL = timedelta(seconds=30)
 
+# The TV app's settings (its rules), kept here too: given back to the app when
+# its data went (reinstalled over another key, or its data cleared)
+RULES_STORAGE_VERSION = 1
+# What's given back: what POST /api/rules takes
+RESTORED_RULES = (
+    "popups",
+    "hidden_apps",
+    "blocked_apps",
+    "hidden_inputs",
+    "blocked_inputs",
+    "when_blocked",
+    "default_size",
+    "default_position",
+)
+
 # How far the TV's start time may wander between reads before it's a restart
 BOOT_DRIFT = timedelta(minutes=2)
 # How soon a failed artwork lookup is tried again while the title plays
@@ -236,8 +251,18 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         # The app's rules (hidden apps, pop-ups' rules) as it last said; None
         # until read, or for an app from before 2.4 (its buttons say then)
         self.app_rules: dict[str, Any] | None = None
-        # Changes made here the app hasn't taken yet (it was unreachable)
-        self._rules_pending: dict[str, list[str]] = {}
+        # Changes made here the app hasn't taken yet (it was unreachable), or
+        # its settings given back after its data went
+        self._rules_pending: dict[str, Any] = {}
+        # The app's settings as last seen, with the copy of its data they came
+        # from (its data_id): kept across restarts, to give back
+        self._rules_store: Store[dict[str, Any]] = Store(
+            hass, RULES_STORAGE_VERSION, f"{DOMAIN}.rules.{entry.entry_id}"
+        )
+        self._saved_rules: dict[str, Any] = {}
+        # The copy of the app's data it says it has now (None: not said yet,
+        # or an app from before 2.7)
+        self._bridge_data_id: str | None = None
         # The integration version an update of the app was last tried for
         self._update_tried: str | None = None
         # What the app can do (its info's features), and whether it has the
@@ -356,6 +381,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
 
         From its info, or its hello when the event stream connects.
         """
+        self._note_data_id(info.get("data_id"))
         if "features" in info:
             self._bridge_features = set(info["features"] or [])
         if "home_assistant_token" in info:
@@ -456,10 +482,57 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             )
             return
         rules = {k: v for k, v in rules.items() if k != "type" and k != "time"}
+        self._remember_rules(rules)
         if rules == self.app_rules:
             return
         self.app_rules = rules
         self._rules_changed()
+
+    async def async_load_rules(self) -> None:
+        """The app's settings as last seen, from before a restart."""
+        self._saved_rules = await self._rules_store.async_load() or {}
+
+    @callback
+    def _note_data_id(self, data_id: str | None) -> None:
+        """The copy of its data the app has: a new one gets its settings back.
+
+        Its data goes when it's uninstalled (an update signed with another
+        key) or cleared; Home Assistant's copy of its settings is given back
+        once it's paired again (pending until then).
+        """
+        if not data_id or data_id == self._bridge_data_id:
+            return
+        self._bridge_data_id = data_id
+        saved_id = self._saved_rules.get("data_id")
+        if saved_id and saved_id != data_id:
+            self._restore_rules()
+
+    @callback
+    def _restore_rules(self) -> None:
+        """Home Assistant's copy of the app's settings, sent with the next sync."""
+        saved = self._saved_rules.get("rules") or {}
+        restored = {k: saved[k] for k in RESTORED_RULES if k in saved}
+        if not restored:
+            return
+        _LOGGER.info(
+            "The TV app on %s lost its settings (reinstalled?): giving them back",
+            self.config_entry.title,
+        )
+        # Changes made here meanwhile win
+        self._rules_pending = {**restored, **self._rules_pending}
+
+    @callback
+    def _remember_rules(self, rules: dict[str, Any]) -> None:
+        """Keep the app's settings as it says them (none while some are pending)."""
+        if self._rules_pending:
+            return
+        saved = {
+            "rules": rules,
+            "data_id": self._bridge_data_id or self._saved_rules.get("data_id"),
+        }
+        if saved != self._saved_rules:
+            self._saved_rules = saved
+            self._rules_store.async_delay_save(lambda: self._saved_rules, 1)
 
     @callback
     def _rules_changed(self) -> None:
@@ -483,13 +556,16 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             )
             self.async_update_listeners()
 
-    async def async_set_app_rules(self, changes: dict[str, list[str]]) -> None:
-        """Change which apps are left out, or which pop-ups don't show over.
+    async def async_set_app_rules(self, changes: dict[str, Any]) -> None:
+        """Change which apps are left out, which pop-ups don't show over, or
+        whether pop-ups show at all (``popups``).
 
         The TV app keeps them (one that's unreachable gets them when it's
         back); without it, apps are left out by disabling their buttons.
         """
-        changes = {k: sorted(set(v)) for k, v in changes.items()}
+        changes = {
+            k: sorted(set(v)) if isinstance(v, list) else v for k, v in changes.items()
+        }
         if self.app_rules is None:
             if "hidden_apps" in changes:
                 self._hide_by_buttons(set(changes["hidden_apps"]))
@@ -664,8 +740,10 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         await self._async_check_apk(session, url, apk)
         with translate_errors():
             if await self.client.async_install_apk(apk) is True:
-                # Uninstalled first (signed with another key): its pairing went
+                # Uninstalled first (signed with another key): its pairing and
+                # its settings went; paired again below, its settings given back
                 self._forget_pairing()
+                self._restore_rules()
             # Pop-ups over other apps and its rules' app detection, which TVs
             # often have no settings screen for; kept running; started
             for command in BRIDGE_SETUP_COMMANDS:
@@ -759,6 +837,8 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
             return
         if kind == "hello":
             self._set_bridge_info(event.get("app_version"), event.get("build"))
+            # Before any rules it sends: a new copy of its data gets its settings back
+            self._note_data_id(event.get("data_id"))
             # Connected again: anything changed meanwhile (rules, a new version)
             self.config_entry.async_create_background_task(
                 self.hass, self._async_after_bridge_info(event), f"{DOMAIN} TV app"
@@ -1168,7 +1248,7 @@ class GoogleTvCoordinator(DataUpdateCoordinator[GoogleTvData]):
         if refresh is None or refresh.user.id != user.id:
             refresh = await auth.async_create_refresh_token(
                 user,
-                client_name=f"Raineworks TV: {self.config_entry.title}",
+                client_name=f"Google TV by Raineworks: {self.config_entry.title}",
                 token_type=TOKEN_TYPE_LONG_LIVED_ACCESS_TOKEN,
                 access_token_expiration=DASHBOARD_TOKEN_LIFETIME,
             )

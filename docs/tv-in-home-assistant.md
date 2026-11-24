@@ -88,6 +88,9 @@ from the name its device gives itself over HDMI-CEC:
   `MEDIA_PLAY_PAUSE`, `SETTINGS`…) or an Android key code; `num_repeats`
   and `delay_secs` work.
 * **Notifications** (`notify.<tv>_notifications`): see [Notifications](notifications.md).
+* **Pop-ups** (`switch.<tv>_pop_ups`): whether notifications pop up on the
+  TV at all, the TV app's own switch (2.7 and later). See
+  [Notifications → Rules](notifications.md#rules).
 * **TV app** (`sensor.<tv>_tv_app`): the TV app's version, its build (the
   commit it was built from) in the `build` attribute.
 * **Diagnostics**: Connection (Ethernet or Wi-Fi), Wi-Fi signal, Storage

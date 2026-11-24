@@ -11,7 +11,7 @@ TVs are also found on their own: every Google TV announces
 entry's unique id (read over ADB too), so a TV already set up isn't offered
 again, and its entry follows it to a new address.
 
-A TV with the app (Raineworks TV) announces ``_rwtvbridge._tcp`` too:
+A TV with the app (Google TV by Raineworks) announces ``_rwtvbridge._tcp`` too:
 it's offered even with network debugging off, and the flow says how to turn
 it on. Adding a TV without the app offers to install it.
 

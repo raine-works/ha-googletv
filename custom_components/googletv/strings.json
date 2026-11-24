@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add a Google TV",
-        "description": "With the Raineworks TV app on the TV, enter the IP address its Home screen shows and submit: the TV asks to connect, and Allow there adds it. Without the app, turn on Settings → System → Developer options → USB debugging on the TV (and Network or Wireless debugging where it's a separate switch); when you submit, the TV shows \"Allow USB debugging?\": tick Always allow and choose Allow. This waits up to a minute for it.",
+        "description": "With the Google TV by Raineworks app on the TV, enter the IP address its Home screen shows and submit: the TV asks to connect, and Allow there adds it. Without the app, turn on Settings → System → Developer options → USB debugging on the TV (and Network or Wireless debugging where it's a separate switch); when you submit, the TV shows \"Allow USB debugging?\": tick Always allow and choose Allow. This waits up to a minute for it.",
         "data": {
           "host": "Address",
           "port": "Port",
@@ -14,12 +14,12 @@
           "host": "The TV's IP address or host name.",
           "port": "The TV's ADB port, 5555 unless you changed it.",
           "name": "Optional. The TV's maker and model when empty.",
-          "install_tv_app": "Raineworks TV on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
+          "install_tv_app": "Google TV by Raineworks on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
         }
       },
       "pick": {
         "title": "Add a TV",
-        "description": "These TVs have the Raineworks TV app and aren't in Home Assistant yet. Pick one and submit: the TV asks to connect, and **Allow** there adds it.",
+        "description": "These TVs have the Google TV by Raineworks app and aren't in Home Assistant yet. Pick one and submit: the TV asks to connect, and **Allow** there adds it.",
         "data": {
           "tv": "TV"
         }
@@ -39,7 +39,7 @@
           "install_tv_app": "Install the TV app"
         },
         "data_description": {
-          "install_tv_app": "Raineworks TV on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
+          "install_tv_app": "Google TV by Raineworks on the TV: Home Assistant's notifications there. Installed over ADB once the TV is added."
         }
       },
       "reconfigure": {
@@ -95,7 +95,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Raineworks TV",
+        "title": "Google TV by Raineworks",
         "menu_options": {
           "apps": "Apps and inputs",
           "general": "General"
@@ -251,6 +251,11 @@
           }
         }
       }
+    },
+    "switch": {
+      "popups": {
+        "name": "Pop-ups"
+      }
     }
   },
   "exceptions": {
@@ -261,13 +266,13 @@
       "message": "The TV has no app or input called {source}."
     },
     "unsupported_media_type": {
-      "message": "Raineworks TV plays audio, video, images, an app, an input or a url, not {media_type}."
+      "message": "Google TV by Raineworks plays audio, video, images, an app, an input or a url, not {media_type}."
     },
     "unreachable": {
       "message": "The TV is off its network and Home Assistant doesn't know its network address (MAC) to wake it. Turn on its network standby (Sony: Remote start) so it stays reachable."
     },
     "bridge_not_paired": {
-      "message": "The TV app (Raineworks TV) isn't installed and paired on this TV. Install it with the Install the TV app action (googletv.install_tv_bridge)."
+      "message": "The TV app (Google TV by Raineworks) isn't installed and paired on this TV. Install it with the Install the TV app action (googletv.install_tv_bridge)."
     },
     "bridge_download_failed": {
       "message": "Couldn't download the TV app: {error}"
@@ -291,7 +296,7 @@
   "services": {
     "notify": {
       "name": "Show a notification",
-      "description": "Shows a notification on the TV through its app (Raineworks TV): a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
+      "description": "Shows a notification on the TV through its app (Google TV by Raineworks): a pop-up over whatever's on screen (apps and HDMI inputs), in the notification panel, or both.",
       "fields": {
         "message": {
           "name": "Message",
@@ -303,7 +308,7 @@
         },
         "icon": {
           "name": "Icon",
-          "description": "The badge's icon: a Home Assistant icon (mdi:doorbell), or an image URL or path. The Raineworks TV logo if not set."
+          "description": "The badge's icon: a Home Assistant icon (mdi:doorbell), or an image URL or path. The Google TV by Raineworks logo if not set."
         },
         "image": {
           "name": "Image",
@@ -387,7 +392,7 @@
     },
     "set_notification_rules": {
       "name": "Set notification rules",
-      "description": "The apps and inputs pop-ups don't show over (by name or id), and what happens to those notifications.",
+      "description": "Whether notifications pop up at all, the apps and inputs they don't show over (by name or id), and what happens to those notifications.",
       "fields": {
         "blocked_apps": {
           "name": "Blocked apps",
@@ -400,6 +405,10 @@
         "when_blocked": {
           "name": "When blocked",
           "description": "A blocked pop-up goes to the panel, or nowhere."
+        },
+        "popups": {
+          "name": "Pop-ups",
+          "description": "Off, no notification pops up, over anything (they follow When blocked), until switched on again; one sent with Ignore rules still does. The TV's Pop-ups switch does the same."
         }
       }
     },
@@ -419,7 +428,7 @@
     },
     "install_tv_bridge": {
       "name": "Install the TV app",
-      "description": "Installs or updates the TV app (Raineworks TV) over ADB, allows its pop-ups, and pairs with it.",
+      "description": "Installs or updates the TV app (Google TV by Raineworks) over ADB, allows its pop-ups, and pairs with it.",
       "fields": {
         "development": {
           "name": "Development build",
@@ -485,7 +494,7 @@
         "step": {
           "confirm": {
             "title": "Install the TV app on {name}",
-            "description": "Home Assistant reaches {name} over ADB, but the TV app (Raineworks TV) isn't on it. The app shows Home Assistant's notifications on the TV, plays its media and dashboards, and tells it what happens there. Submit to install it over ADB now (a minute or so); it's paired by itself."
+            "description": "Home Assistant reaches {name} over ADB, but the TV app (Google TV by Raineworks) isn't on it. The app shows Home Assistant's notifications on the TV, plays its media and dashboards, and tells it what happens there. Submit to install it over ADB now (a minute or so); it's paired by itself."
           }
         },
         "error": {

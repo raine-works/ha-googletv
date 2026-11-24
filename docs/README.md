@@ -1,4 +1,4 @@
-# Raineworks TV documentation
+# Google TV by Raineworks documentation
 
 | Guide | What it covers |
 | :--- | :--- |

@@ -216,7 +216,7 @@ class MainActivity : Activity() {
         return rail
     }
 
-    /** The raineworks mark, Google TV's in its corner, and the name. */
+    /** Google TV's icon, the name, and who made it. */
     private fun brand(): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -227,7 +227,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
         }
-        names.addView(text(getString(R.string.app_name), 17f, Theme.semibold(this), Theme.FOREGROUND))
+        names.addView(text(getString(R.string.header_title), 17f, Theme.semibold(this), Theme.FOREGROUND))
         names.addView(
             text(getString(R.string.app_tagline), 11f, Theme.regular(this), Theme.MUTED_FOREGROUND).apply {
                 setPadding(0, dp(2), 0, 0)
@@ -535,8 +535,16 @@ class MainActivity : Activity() {
         shown = signature()
     }
 
-    /** Pop-ups' size and place when a notification doesn't say, and a test. */
+    /** Pop-ups on or off, their size and place when a notification doesn't say, and a test. */
     private fun popups() {
+        // Home Assistant switches this too (its Pop-ups switch): movie mode, say
+        card(getString(R.string.popups_switch_title), getString(R.string.popups_switch_text)) { body ->
+            val row = itemRow(body, getString(R.string.popups_switch_row), null, "mdi:message-badge-outline")
+            switchCell(row, prefs.popupsEnabled, getString(R.string.popups_switch_title)) { on ->
+                prefs.popupsEnabled = on
+                rulesChanged()
+            }
+        }
         card(getString(R.string.default_size)) {
             chips(
                 it,

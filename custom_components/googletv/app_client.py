@@ -1,6 +1,6 @@
 """A TV through its app alone (no ADB): the same calls as ``GoogleTvClient``.
 
-The TV app (Raineworks TV) reads the TV and does what an app may:
+The TV app (Google TV by Raineworks) reads the TV and does what an app may:
 media and volume keys, opening apps, links and inputs, the volume. What
 only ADB can do (the D-pad, Home, turning the TV off, which input is on
 screen) raises ``GoogleTvError`` saying so; ADB can be added to the TV later.

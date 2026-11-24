@@ -32,15 +32,16 @@ object Events {
 
     /**
      * A new connection's stream; the oldest goes when there are too many.
-     * [hasToken]: whether the app has Home Assistant's token (for WebRTC).
+     * [hasToken]: whether the app has Home Assistant's token (for WebRTC);
+     * [dataId]: this copy of the app's data (new after a reinstall).
      */
-    fun open(hasToken: Boolean): InputStream {
+    fun open(hasToken: Boolean, dataId: String): InputStream {
         while (streams.size >= MAX_STREAMS) streams.firstOrNull()?.let { it.end(); streams.remove(it) }
         return Stream().also {
             streams.add(it)
             it.offer(
                 (JSONObject().put("type", "hello").put("instance", Notifier.instance).put("app_version", BuildConfig.VERSION_NAME).put("build", BuildConfig.GIT_SHA)
-                    .put("features", org.json.JSONArray(ApiServer.FEATURES)).put("home_assistant_token", hasToken).put("time", System.currentTimeMillis()).toString() + "\n").toByteArray(Charsets.UTF_8),
+                    .put("features", org.json.JSONArray(ApiServer.FEATURES)).put("home_assistant_token", hasToken).put("data_id", dataId).put("time", System.currentTimeMillis()).toString() + "\n").toByteArray(Charsets.UTF_8),
             )
         }
     }
