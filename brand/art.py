@@ -4,8 +4,9 @@ Draws every icon and banner from Google TV's icon (brand/google-tv.png): the
 integration's brand icon (what Home Assistant and its Marketplace show), the TV
 app's launcher icon, banner, in-app logo and status-bar icon, and the 512 px
 project icon (android/play/icon-512.png, which raineworks.com and the README
-show). One look for the integration and the TV app. Google TV is a trademark of
-Google LLC; this project isn't affiliated with or endorsed by Google.
+show), and the docs' icon and banner (docs/images). One look for the
+integration and the TV app. Google TV is a trademark of Google LLC; this
+project isn't affiliated with or endorsed by Google.
 Run it from the repo root with Pillow: ``python brand/art.py``.
 """
 
@@ -101,3 +102,10 @@ if __name__ == "__main__":
     save(silhouette(96), RES / "drawable-xhdpi/ic_stat_logo.png")
     # The project's 512 px icon, shown by raineworks.com and the README
     save(tile(512), ROOT / "android/play/icon-512.png", opaque=True)
+    # The docs' icon and wide banner (raineworks.com's project page)
+    save(tile(512), ROOT / "docs/images/icon.png", opaque=True)
+    save(
+        lockup((1024, 500), 200, 80, 32),
+        ROOT / "docs/images/feature-graphic-1024x500.png",
+        opaque=True,
+    )
