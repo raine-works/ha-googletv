@@ -56,10 +56,15 @@ cd android
 
 ## Releasing and signing the TV app
 
-Bump `version` in `custom_components/googletv/manifest.json` in the pull
-request: it's the integration's, the TV app's `versionName` and (derived)
-`versionCode`, and the release's. When `Test` passes on `master`, the
-`Release` workflow creates the draft release `v<version>`, builds the APK,
+`version` in `custom_components/googletv/manifest.json` is the integration's,
+the TV app's `versionName` and (derived) `versionCode`, and the release's.
+Never bump it by hand: the `Release pull request` workflow (`release-pr.yml`,
+Raineworks' shared workflow) keeps one pull request, `Release v<version>`, open
+on `master` with the next version, worked out from what's been merged since
+the last tag: major for a breaking change (`type!:`), minor for a `feat`, patch
+for anything else that changes `custom_components/`, `android/` or `protocol/`
+(tests excluded). Merging it is the release. When `Test` passes on `master`,
+the `Release` workflow creates the draft release `v<version>`, builds the APK,
 attaches it with its SHA-256 (`raineworks-tv-bridge.apk`; Home Assistant checks
 the hash before installing), and publishes it. Never tag or upload by hand.
 

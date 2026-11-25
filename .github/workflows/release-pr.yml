@@ -1,0 +1,25 @@
+# Keeps one pull request open with the next release (`Release v<version>`), its version worked out from what's been
+# merged since the last: merging it is the release, published by the repository's own release workflow. The workflow
+# is Raineworks', in raine-works/agents (.github/workflows/release-pr.yml): this file only calls it, and comes from the
+# raineworks-base skill's templates/workflows/release-pr.yml. Change the workflow there, for every repository at once;
+# here, only its inputs (with:). The Base rules check moves the pin when the shared workflows change.
+name: Release pull request
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-pr:
+    name: Release pull request
+    uses: raine-works/agents/.github/workflows/release-pr.yml@8ef4df2732bff8e05f06fd3c99a6d0f9da572f1c # raine-works/agents master
+    secrets: inherit
+    # The integration's manifest carries the version (the TV app takes its version from it too), and the TV app and
+    # its protocol ship with the integration.
+    with:
+      paths: ^(custom_components|android|protocol)/
+      ignore: (^|/)(tests?|androidTest|__tests__)/|\.test\.
