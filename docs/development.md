@@ -68,5 +68,7 @@ key and get no secrets. Never commit a key or a password.
 A TV whose app is signed with another key can't be updated in place (Android
 refuses with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`): `GoogleTvClient.async_install_apk`
 then uninstalls the app once (`pm uninstall`), logs a warning saying why, and
-installs again; the pairing is lost and made again by the coordinator. Any
+installs again; the pairing is lost and made again by the coordinator, and the
+app's settings, lost with its data, are given back from Home Assistant's copy
+([Privacy and security](privacy-and-security.md)). Any
 other install failure is an error and uninstalls nothing.
