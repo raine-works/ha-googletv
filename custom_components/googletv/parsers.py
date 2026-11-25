@@ -120,7 +120,7 @@ PLAYBACK_BUFFERING = 6
 # little ("com.tcl.tv"). Launcher apps are named by ``KNOWN_APPS`` or their
 # package.
 KNOWN_APPS: dict[str, str] = {
-    "com.raineworks.tvbridge": "Raineworks TV",
+    "com.raineworks.tvbridge": "Google TV by Raineworks",
     "com.google.android.apps.tv.launcherx": "Home screen",
     "com.google.android.tvlauncher": "Home screen",
     "com.android.tv.settings": "Settings",

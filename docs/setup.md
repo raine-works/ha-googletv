@@ -6,7 +6,7 @@ Requires Home Assistant 2025.2 or newer.
 
 ## Install the integration
 
-1. Open **Raineworks TV** in the Home Assistant Marketplace with the button
+1. Open **Google TV by Raineworks** in the Home Assistant Marketplace with the button
    above, or go to Settings → Marketplace. If it isn't listed, add
    `https://github.com/raine-works/ha-googletv` as a custom repository,
    type **Integration**.
@@ -35,7 +35,7 @@ Through the app alone, a repair says when the TV app is behind.
    in it (no developer options; Android asks once to let Downloader
    install apps). With ADB, Home Assistant installs it for you.
 2. **Add the TV.** Scan the TV app's second QR code (**Add this TV**), or
-   choose **Add integration → Raineworks TV** in Home Assistant: it lists the
+   choose **Add integration → Google TV by Raineworks** in Home Assistant: it lists the
    TVs with the app on its network that aren't added yet. Pick this one and
    **Submit**. (It may also show under Settings → Devices & services →
    **Discovered**.)
@@ -72,7 +72,7 @@ it adds, and turning it on) and **About**.
 Home Assistant installs the TV app over ADB, allows its permissions and
 pairs with it. A TV over ADB without the app gets a repair, **Install the
 TV app**, that does the same at a press. Not discovered? **Add integration
-→ Raineworks TV**, with the TV's IP address and port 5555.
+→ Google TV by Raineworks**, with the TV's IP address and port 5555.
 
 **A TV connected through its app, given ADB later**: turn on network
 debugging (the TV app's **ADB** section has the steps, with each one's

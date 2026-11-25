@@ -146,6 +146,9 @@ set_notification_rules:
             - panel
             - drop
           translation_key: when_blocked
+    popups:
+      selector:
+        boolean:
 
 show_dashboard:
   target:

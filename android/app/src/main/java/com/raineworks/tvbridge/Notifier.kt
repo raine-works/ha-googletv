@@ -8,8 +8,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Shows a notification as asked: a pop-up over whatever's on screen (an app
- * or an HDMI input), in the notification panel, or both, unless a rule says
- * not to pop up over what's on screen now.
+ * or an HDMI input), in the notification panel, or both, unless pop-ups are
+ * switched off or a rule says not to pop up over what's on screen now. A
+ * notification with ignore_rules pops up all the same.
  */
 object Notifier {
     /** This run of the app: Home Assistant shows its live notifications again when it changes. */
@@ -52,12 +53,9 @@ object Notifier {
             .put("reason", reason ?: JSONObject.NULL)
     }
 
-    /** Which rule (if any) keeps a pop-up off the screen now: "app:<pkg>" / "input:<id>". */
-    fun blockingRule(prefs: Prefs, app: String?, input: String?): String? {
-        if (input != null && input in prefs.blockedInputs) return "input:$input"
-        if (app != null && app in prefs.blockedApps) return "app:$app"
-        return null
-    }
+    /** Which rule (if any) keeps a pop-up off the screen now: "all", "input:<id>" or "app:<pkg>" ([Rules]). */
+    fun blockingRule(prefs: Prefs, app: String?, input: String?): String? =
+        Rules.blockingRule(prefs.popupsEnabled, prefs.blockedApps, prefs.blockedInputs, app, input)
 
     fun handle(context: Context, request: NotificationRequest): Outcome {
         val prefs = Prefs(context)

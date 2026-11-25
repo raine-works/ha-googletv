@@ -13,7 +13,7 @@ on Home Assistant's event bus, with the TV's `device_id`:
 | `dashboard` | `state` (`opened`, `closed`), `url` | A dashboard on the TV |
 | `state` | `change` (`screen`, `volume`) | The screen turned on or off, or the volume changed (the TV is read again at once) |
 | `apps` | `change` (`installed`, `uninstalled`, `changed`), `package` | An app was installed or uninstalled (the app list and buttons follow at once) |
-| `rules` | `hidden_apps`, `hidden_inputs`, `blocked_apps`, `blocked_inputs`, … | A switch was flipped in the TV app's Apps section (Home Assistant follows) |
+| `rules` | `popups`, `hidden_apps`, `hidden_inputs`, `blocked_apps`, `blocked_inputs`, … | A switch was flipped in the TV app (Home Assistant follows) |
 
 Each TV also has a **Notification events** entity
 (`event.<tv>_notification_events`): `action` (with `action` and `tag`),

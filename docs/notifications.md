@@ -12,7 +12,7 @@ top right. The **`googletv.notify`** action does the rest:
 | Field | |
 | :--- | :--- |
 | `message`, `title` | The text |
-| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Raineworks TV logo if not set |
+| `icon` | The badge: a Home Assistant icon (`mdi:doorbell`), or an image URL or path; the Google TV by Raineworks logo if not set |
 
 | `image` | An image URL, or a Home Assistant path (`/local/doorbell.jpg`, `/media/local/snapshot.jpg`). With a `video`, it shows until the video's first frame: a doorbell's snapshot, then its clip |
 | `camera_entity` | A camera on the card. `camera_view`: `live` (the default) opens it over WebRTC when the camera offers it (go2rtc, or a camera with WebRTC of its own) and sends H.264 (not H.265), live in about a second, with HLS (2 to 5 seconds) when it doesn't or WebRTC fails to start; `hls`, HLS only; `snapshot`, a still. The camera's snapshot shows until the video starts, unless an `image` is given (a doorbell's ring snapshot): yours wins. An unavailable camera adds nothing (a warning in the log), so the rest of the card still shows |
@@ -61,7 +61,17 @@ rest, which come back as cards go.
 
 ## Rules
 
-Pop-ups can stay off the apps and inputs you pick: their **Pop-ups** switch
+**Pop-ups on or off.** Every TV with the TV app (2.7 and later) has a
+**Pop-ups** switch (`switch.<tv>_pop_ups`), the same as the one on the TV
+app's Pop-ups section. Off, no notification pops up, over anything: each goes
+where **When pop-ups are off** says (the panel, or nowhere) until it's
+switched on again. Automations can flip it (a movie mode, say: see
+[Recipes](recipes.md)), or `googletv.set_notification_rules` with
+`popups: false`. The switch works while the TV is off its network too (the TV
+app takes it when it's back); the action needs the TV reachable. A notification sent with `ignore_rules: true` (a doorbell,
+say) still pops up.
+
+**Apps and inputs.** Pop-ups can stay off the apps and inputs you pick: their **Pop-ups** switch
 on the TV app's Apps section, **Configure → Apps and inputs** on the integration, or
 **`googletv.set_notification_rules`** (by name: `Netflix`, `Xbox`). An app
 can be left out of Home Assistant and still get pop-ups, or the reverse.

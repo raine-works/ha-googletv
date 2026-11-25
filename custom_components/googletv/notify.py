@@ -1,6 +1,6 @@
 """A notify entity per TV: Home Assistant's notifications on its screen.
 
-Through the TV app (Raineworks TV): a plain message pops up in the top
+Through the TV app (Google TV by Raineworks): a plain message pops up in the top
 right. For an image, a camera, a corner, a duration or the panel, use the
 googletv.notify action.
 """

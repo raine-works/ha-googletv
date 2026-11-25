@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="android/play/icon-512.png" alt="Raineworks TV" width="128">
+  <img src="android/play/icon-512.png" alt="Google TV by Raineworks" width="128">
 </p>
 
-# Raineworks TV
+# Google TV by Raineworks
 
 An **unofficial** [Home Assistant](https://www.home-assistant.io/) integration for
 Google TV and Android TV, from [Raineworks](https://github.com/raine-works), with a
@@ -19,7 +19,7 @@ Remote, Google Cast and ADB integrations together, and a few things none of them
 
 > This project is not affiliated with, authorized, or endorsed by Google. Google
 > TV and Android TV are trademarks of Google LLC; the integration's icon in Home
-> Assistant is Google TV's, to say what it's for. The TV app is Raineworks TV's own.
+> Assistant is Google TV's, to say what it's for. The TV app uses it too.
 
 ## What it does
 
@@ -58,7 +58,7 @@ artwork ([Privacy and security](docs/privacy-and-security.md)).
 
 [![Open your Home Assistant instance and open this repository in the Home Assistant Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=raine-works&repository=ha-googletv&category=integration)
 
-1. Open **Raineworks TV** in the Home Assistant Marketplace with the button
+1. Open **Google TV by Raineworks** in the Home Assistant Marketplace with the button
    above, or go to Settings → Marketplace. If it isn't listed, add
    `https://github.com/raine-works/ha-googletv` as a custom repository,
    type **Integration**. Download it and restart Home Assistant.
@@ -68,7 +68,7 @@ artwork ([Privacy and security](docs/privacy-and-security.md)).
    the [latest release](https://github.com/raine-works/ha-googletv/releases/latest)
    with the Downloader app and choose **Allow** (no developer mode).
 3. Scan the TV app's **Add this TV** QR code (or **Add integration →
-   Raineworks TV**): Home Assistant lists the TVs it finds. Pick yours, then
+   Google TV by Raineworks**): Home Assistant lists the TVs it finds. Pick yours, then
    choose **Allow** on the TV.
 
 [Setup](docs/setup.md) has every step, and what each way gives. Requires

@@ -107,12 +107,13 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
                 ok()
             }
             method == Method.GET && path == "/api/events" ->
-                newChunkedResponse(Response.Status.OK, "application/x-ndjson", Events.open(prefs.homeAssistantToken.isNotEmpty()))
+                newChunkedResponse(Response.Status.OK, "application/x-ndjson", Events.open(prefs.homeAssistantToken.isNotEmpty(), prefs.dataId))
             method == Method.GET && path == "/api/apps" -> json(JSONObject().put("apps", apps()))
             method == Method.GET && path == "/api/inputs" -> json(JSONObject().put("inputs", inputs()))
             method == Method.GET && path == "/api/rules" -> json(prefs.rules())
             method == Method.POST && path == "/api/rules" -> {
                 val body = body(session)
+                Rules.popups(body.opt("popups"))?.let { prefs.popupsEnabled = it }
                 body.optJSONArray("hidden_apps")?.let { prefs.hiddenApps = strings(it) }
                 body.optJSONArray("blocked_apps")?.let { prefs.blockedApps = strings(it) }
                 body.optJSONArray("hidden_inputs")?.let { prefs.hiddenInputs = strings(it) }
@@ -191,6 +192,8 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
         .put("build", BuildConfig.GIT_SHA)
         // The TV's id (Android ID, as its mDNS announcement says): Home Assistant's unique id for it
         .put("id", android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID))
+        // This copy of its data: new after a reinstall, when Home Assistant gives the rules back
+        .put("data_id", prefs.dataId)
         // What this app can do, for an integration that knows older ones
         .put("features", org.json.JSONArray(FEATURES))
 
@@ -242,7 +245,7 @@ class ApiServer(private val context: Context, port: Int) : NanoHTTPD(port) {
 
     companion object {
         const val API_VERSION = 1
-        val FEATURES = listOf("events", "confirm_pairing", "device", "hidden_apps", "hidden_inputs", "webrtc")
+        val FEATURES = listOf("events", "confirm_pairing", "device", "hidden_apps", "hidden_inputs", "webrtc", "popups")
         const val PORT = 8721
         private const val MAX_BODY = 64 * 1024
         private const val TAG = "TvBridge"

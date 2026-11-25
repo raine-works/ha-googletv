@@ -1,4 +1,4 @@
-# Raineworks TV: the TV app's API (v1)
+# Google TV by Raineworks: the TV app's API (v1)
 
 The TV app (`android/`) serves a small JSON API on the local network, which
 the Home Assistant integration (`custom_components/googletv/`) calls.
@@ -43,7 +43,7 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 
 | Endpoint | Returns |
 | :--- | :--- |
-| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, features}`: `build` the commit it's built from, `id` the TV's Android ID, `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`, `hidden_inputs`, `webrtc`), `home_assistant_token` whether it has Home Assistant's token for WebRTC (`POST /api/home_assistant`) |
+| `GET /api/info` | `{api, app_version, build, id, name, manufacturer, model, android, paired, data_id, features}`: `build` the commit it's built from, `id` the TV's Android ID, `data_id` this copy of the app's data (random, made on first use: a new one means its data went, reinstalled or cleared, and Home Assistant gives its rules back), `features` what this app can do (`events`, `confirm_pairing`, `device`, `hidden_apps`, `hidden_inputs`, `webrtc`, `popups`), `home_assistant_token` whether it has Home Assistant's token for WebRTC (`POST /api/home_assistant`) |
 | `GET /api/events` | What happens on the TV, as it happens: see [Events](#events) |
 | `GET /api/state` | `{screen_on, foreground_app, uptime_ms, volume: {level, max, muted}, sessions, overlay_permission, usage_access, notification_access, network_debugging, instance, popups}`: `sessions` the media sessions (`package, state, position_ms, updated_ms, speed, title, subtitle, description`), null without notification access; `instance` changes when the app restarts (and has lost its pop-ups); `popups` the tags of those up now |
 | `GET /api/apps` | `{apps: [{package, activity, name}]}`: the launcher's apps |
@@ -55,8 +55,8 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 | `POST /api/input` | `{id}`: switches to an input, through the TV's own input app (`409` without the overlay permission) |
 | `POST /api/client` | `{integration_version, adb}`: Home Assistant says which integration it is and whether it also uses ADB, for the app's screen |
 | `GET /api/inputs` | `{inputs: [{id, name}]}`: HDMI and other external inputs, by their names on the TV |
-| `GET /api/rules` | `{hidden_apps: [package], hidden_inputs: [input id], blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}`: `hidden_apps` and `hidden_inputs` are left out of Home Assistant (its app list and buttons, its sources and Input) |
-| `POST /api/rules` | the same fields (any of them) to change; returns the rules, and every event stream gets them (`rules`) |
+| `GET /api/rules` | `{popups, hidden_apps: [package], hidden_inputs: [input id], blocked_apps: [package], blocked_inputs: [input id], when_blocked, default_size, default_position}`: `popups` false keeps every pop-up off the screen; `hidden_apps` and `hidden_inputs` are left out of Home Assistant (its app list and buttons, its sources and Input) |
+| `POST /api/rules` | the same fields (any of them) to change (`popups` a JSON boolean); returns the rules, and every event stream gets them (`rules`) |
 | `POST /api/notify` | shows a notification; see below |
 | `POST /api/play` | Plays media; see below |
 | `POST /api/home_assistant` | `{token}`: the TV's own Home Assistant user's long-lived token, kept, to sign in to Home Assistant's websocket and open cameras over WebRTC. Sent once; again when a camera reports `no_token` or `auth_invalid` |
@@ -90,15 +90,15 @@ the Home Assistant integration (`custom_components/googletv/`) calls.
 
 Returns `{popup, panel, blocked_by, reason, instance}`: whether it popped up and/or went
 to the panel; `blocked_by` the rule that kept it off the screen
-(`app:<package>` or `input:<id>`), `reason` `blocked` or
+(`all` while `popups` is false, `app:<package>` or `input:<id>`), `reason` `blocked` or
 `overlay_not_allowed` when it didn't pop up.
 
 **Stacking**: a stack per position; 3 cards show, persistent ones
 (`duration: 0`) first, then the newest; a "+N more" pill counts the rest,
 which show again as others go (up to 12 are kept per position).
 
-**Rules**: a pop-up isn't shown over an app or input in `blocked_apps` /
-`blocked_inputs`. What's on screen is `context` when given (Home Assistant
+**Rules**: no pop-up is shown while `popups` is false, and none over an app
+or input in `blocked_apps` / `blocked_inputs`; `ignore_rules` overrides both. What's on screen is `context` when given (Home Assistant
 knows the HDMI input over ADB), else the app in front (with usage access).
 Pop-ups do show over HDMI inputs unless a rule says otherwise.
 
@@ -132,7 +132,7 @@ a stream that stops reading loses its oldest events.
 
 | `type` | Fields | When |
 | :--- | :--- | :--- |
-| `hello` | `instance`, `app_version`, `build`, `features`, `home_assistant_token` | First, on connecting. A new `instance`: the app restarted; `home_assistant_token` false: give it the token again (its data was cleared) |
+| `hello` | `instance`, `app_version`, `build`, `features`, `home_assistant_token`, `data_id` | First, on connecting. A new `instance`: the app restarted; `home_assistant_token` false: give it the token again (its data was cleared); a new `data_id`: its data went, give its rules back |
 | `rules` | the rules, as `GET /api/rules` | They changed, on the TV's screen or through the API |
 | `apps` | `change` (`installed`, `uninstalled`, `changed`), `package` | An app was installed, uninstalled or changed: worth reading `/api/apps` again |
 | `state` | `change` (`screen`, `volume`) | The screen turned on or off, or the volume changed: worth reading the state again |

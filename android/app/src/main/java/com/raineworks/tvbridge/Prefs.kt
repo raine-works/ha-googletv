@@ -5,7 +5,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.SecureRandom
 
-/** What the bridge keeps: Home Assistant's tokens, the notification rules, the apps it hides. */
+/**
+ * What the bridge keeps: Home Assistant's tokens, the notification rules, the apps it hides.
+ *
+ * Home Assistant keeps a copy of the rules and gives them back when [dataId]
+ * changes: the app's data went (reinstalled, or its data cleared).
+ */
 class Prefs(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("bridge", Context.MODE_PRIVATE)
@@ -50,6 +55,24 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean(KEY_CLIENT_ADB, false)
         set(value) = prefs.edit().putBoolean(KEY_CLIENT_ADB, value).apply()
 
+    /**
+     * This copy of the app's data: made at random the first time it's asked
+     * for, so it's new after a reinstall or a cleared data. Says nothing
+     * about the TV or its owner.
+     */
+    val dataId: String
+        get() = synchronized(LOCK) {
+            prefs.getString(KEY_DATA_ID, null) ?: java.util.UUID.randomUUID().toString().also {
+                // commit, not apply: an update installed right after can't lose it
+                prefs.edit().putString(KEY_DATA_ID, it).commit()
+            }
+        }
+
+    /** Pop-ups at all: off, every notification is handled as blocked ([whenBlocked]). */
+    var popupsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_POPUPS, true)
+        set(value) = prefs.edit().putBoolean(KEY_POPUPS, value).apply()
+
     /** Apps (packages) that pop-ups don't show over. */
     var blockedApps: Set<String>
         get() = prefs.getStringSet(KEY_BLOCKED_APPS, emptySet())!!.toSet()
@@ -87,6 +110,7 @@ class Prefs(context: Context) {
 
     /** The rules and the hidden apps, as the API and its events say them. */
     fun rules(): JSONObject = JSONObject()
+        .put("popups", popupsEnabled)
         .put("hidden_apps", JSONArray(hiddenApps.sorted()))
         .put("blocked_apps", JSONArray(blockedApps.sorted()))
         .put("hidden_inputs", JSONArray(hiddenInputs.sorted()))
@@ -104,6 +128,8 @@ class Prefs(context: Context) {
         const val WHEN_BLOCKED_PANEL = "panel"
         const val WHEN_BLOCKED_DROP = "drop"
         private const val KEY_TOKENS = "tokens"
+        private const val KEY_DATA_ID = "data_id"
+        private const val KEY_POPUPS = "popups"
         private const val KEY_BLOCKED_APPS = "blocked_apps"
         private const val KEY_HIDDEN_APPS = "hidden_apps"
         private const val KEY_HIDDEN_INPUTS = "hidden_inputs"

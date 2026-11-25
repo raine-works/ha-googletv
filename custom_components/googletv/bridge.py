@@ -1,4 +1,4 @@
-"""The TV app (Raineworks TV): its local API (see protocol/README.md).
+"""The TV app (Google TV by Raineworks): its local API (see protocol/README.md).
 
 The app shows Home Assistant's notifications on the TV: pop-ups over whatever
 is on screen (apps and HDMI inputs) with text, an image or a video, or in the

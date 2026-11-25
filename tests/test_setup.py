@@ -832,6 +832,7 @@ def _bridge_web(web: AiohttpClientMocker, token: str = "T0KEN") -> None:
 
 # The TV app's rules: YouTube TV left out of Home Assistant
 RULES = {
+    "popups": True,
     "hidden_apps": [OTHER_APP],
     "blocked_apps": [],
     "blocked_inputs": [],
@@ -927,7 +928,7 @@ async def test_an_action_refuses_another_integrations_player(
     hass.states.async_set("media_player.lott_s_tv_cast", "idle")
     sent = len(_bridge_calls(web, "/api/notify"))
     with pytest.raises(
-        vol.Invalid, match="media_player.lott_s_tv_cast isn't a Raineworks TV"
+        vol.Invalid, match="media_player.lott_s_tv_cast isn't a Google TV by Raineworks"
     ):
         await hass.services.async_call(
             DOMAIN,
@@ -2409,3 +2410,275 @@ async def test_a_tv_app_that_lost_its_token_says_so_on_hello(
     )
     await hass.async_block_till_done()
     assert coordinator._bridge_has_token is False
+
+
+# Pop-ups on or off from Home Assistant (a movie mode), and the TV app's
+# settings given back when its data went
+
+
+def _app_info(web: AiohttpClientMocker, data_id: str) -> None:
+    """The TV app's info with this copy of its data (registered first: it's answered)."""
+    web.get(
+        f"{BRIDGE}/api/info",
+        json={
+            "api": 1,
+            "app_version": VERSION,
+            "build": "abc1234",
+            "paired": True,
+            "data_id": data_id,
+            "features": [
+                "events",
+                "confirm_pairing",
+                "device",
+                "hidden_apps",
+                "popups",
+            ],
+        },
+    )
+
+
+async def test_the_popups_switch(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Off, the TV app is told; on again, too. The TV says first, then the switch."""
+    await _paired(hass, client, web)
+    assert hass.states.get("switch.lott_s_tv_pop_ups").state == "on"
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.lott_s_tv_pop_ups"}, blocking=True
+    )
+    assert _bridge_calls(web, "/api/rules")[-1][2] == {"popups": False}
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.lott_s_tv_pop_ups"}, blocking=True
+    )
+    assert _bridge_calls(web, "/api/rules")[-1][2] == {"popups": True}
+
+
+async def test_popups_switched_off_on_the_tv(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    entry = await _paired(hass, client, web)
+    entry.runtime_data._async_handle_event({"type": "rules", **RULES, "popups": False})
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.lott_s_tv_pop_ups").state == "off"
+
+
+async def test_popups_switched_off_while_the_tv_is_away(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Movie mode starts before the TV is on: the app gets it when it's back."""
+    entry = await _paired(hass, client, web)
+    web.clear_requests()
+    web.post(f"{BRIDGE}/api/rules", exc=TimeoutError())
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.lott_s_tv_pop_ups"}, blocking=True
+    )
+    assert hass.states.get("switch.lott_s_tv_pop_ups").state == "off"
+    web.clear_requests()
+    web.post(f"{BRIDGE}/api/rules", json={**RULES, "popups": False})
+    entry.runtime_data._async_handle_event({"type": "rules", **RULES})
+    await hass.async_block_till_done()
+    assert _bridge_calls(web, "/api/rules")[-1][2] == {"popups": False}
+    assert hass.states.get("switch.lott_s_tv_pop_ups").state == "off"
+
+
+async def test_no_popups_switch_for_an_older_app(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """An app from before 2.7 has no such switch: none here either."""
+    web.get(
+        f"{BRIDGE}/api/rules",
+        json={k: v for k, v in RULES.items() if k != "popups"},
+    )
+    await _paired(hass, client, web)
+    assert hass.states.get("switch.lott_s_tv_pop_ups") is None
+
+
+async def test_popups_by_the_action(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    await _paired(hass, client, web)
+    await hass.services.async_call(
+        DOMAIN,
+        "set_notification_rules",
+        {"entity_id": "media_player.lott_s_tv", "popups": False},
+        blocking=True,
+        return_response=True,
+    )
+    assert _bridge_calls(web, "/api/rules")[-1][2] == {"popups": False}
+
+
+async def test_the_apps_settings_are_kept_here(
+    hass: HomeAssistant,
+    client: AsyncMock,
+    web: AiohttpClientMocker,
+    hass_storage: dict,
+) -> None:
+    from homeassistant.helpers.storage import Store
+
+    _app_info(web, "copy-1")
+    entry = await _paired(hass, client, web)
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
+    await hass.async_block_till_done()
+    saved = await Store(hass, 1, f"{DOMAIN}.rules.{entry.entry_id}").async_load()
+    assert saved == {"rules": RULES, "data_id": "copy-1"}
+    # Removed with the TV
+    _media_web(web)
+    web.post(f"{BRIDGE}/api/dismiss", json={"ok": True})
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert f"{DOMAIN}.rules.{entry.entry_id}" not in hass_storage
+
+
+async def test_the_apps_settings_come_back_when_its_data_went(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """A new copy of its data (reinstalled, cleared): its settings are given back."""
+    _app_info(web, "copy-1")
+    entry = await _paired(hass, client, web)
+    await hass.async_block_till_done()
+    posted = len(_bridge_calls(web, "/api/rules"))
+    entry.runtime_data._async_handle_event(
+        {
+            "type": "hello",
+            "instance": "run-2",
+            "app_version": VERSION,
+            "data_id": "copy-2",
+            "features": ["events", "hidden_apps", "popups"],
+        }
+    )
+    await hass.async_block_till_done()
+    sent = [c[2] for c in _bridge_calls(web, "/api/rules")[posted:] if c[2]]
+    assert sent == [RULES]
+
+
+async def test_the_same_apps_settings_arent_sent_again(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """The app reconnecting with the same data: nothing given back."""
+    _app_info(web, "copy-1")
+    entry = await _paired(hass, client, web)
+    await hass.async_block_till_done()
+    entry.runtime_data._async_handle_event(
+        {
+            "type": "hello",
+            "instance": "run-2",
+            "app_version": VERSION,
+            "data_id": "copy-1",
+            "features": ["events", "hidden_apps", "popups"],
+        }
+    )
+    await hass.async_block_till_done()
+    assert not [c for c in _bridge_calls(web, "/api/rules") if c[2]]
+
+
+async def test_settings_come_back_after_a_restart_too(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Home Assistant restarted meanwhile: its saved copy is given back."""
+    from homeassistant.helpers.storage import Store
+
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="X1")
+    await Store(hass, 1, f"{DOMAIN}.rules.{entry.entry_id}").async_save(
+        {"rules": {**RULES, "popups": False, "unknown": 1}, "data_id": "copy-1"}
+    )
+    _app_info(web, "copy-2")
+    client.async_get_apps.return_value = [*APPS, BRIDGE_APP]
+    _bridge_web(web)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="X1",
+        entry_id=entry.entry_id,
+        title="Lott's TV",
+        data={CONF_HOST: "10.0.0.5", CONF_PORT: 5555, "bridge_token": "T0KEN"},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    sent = [c[2] for c in _bridge_calls(web, "/api/rules") if c[2]]
+    # What the app takes; a key it doesn't know isn't sent
+    assert sent == [{**RULES, "popups": False}]
+
+
+async def test_an_app_reinstalled_over_another_key_gets_its_settings_back(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    from custom_components.googletv.bridge import BRIDGE_DEV_APK_URL
+
+    entry = await _paired(hass, client, web)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    assert coordinator._saved_rules["rules"] == RULES
+    apk = b"PK\x03\x04 an apk"
+    web.get(BRIDGE_DEV_APK_URL, content=apk)
+    web.get(f"{BRIDGE_DEV_APK_URL}.sha256", text=hashlib.sha256(apk).hexdigest())
+    client.async_install_apk.return_value = True
+    client.async_read_file.return_value = "p1 123456\n"
+    with patch("custom_components.googletv.coordinator.BRIDGE_PAIRING_RETRY_S", 0):
+        await hass.services.async_call(
+            DOMAIN,
+            "install_tv_bridge",
+            {"entity_id": "media_player.lott_s_tv", "development": True},
+            blocking=True,
+        )
+    await hass.async_block_till_done()
+    assert [c[2] for c in _bridge_calls(web, "/api/rules") if c[2]] == [RULES]
+
+
+async def test_popups_switched_off_after_a_restart_while_the_tv_is_away(
+    hass: HomeAssistant, client: AsyncMock, web: AiohttpClientMocker
+) -> None:
+    """Home Assistant restarted with the TV off: the switch works from what's saved."""
+    from homeassistant.helpers.storage import Store
+
+    from custom_components.googletv.adb import GoogleTvError
+    from custom_components.googletv.const import CONF_PROPS
+
+    client.async_connect.side_effect = GoogleTvError("No route to host")
+    client.async_get_state.side_effect = GoogleTvError("No route to host")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="X1",
+        title="Lott's TV",
+        data={
+            CONF_HOST: "10.0.0.5",
+            CONF_PORT: 5555,
+            CONF_PROPS: PROPS,
+            "bridge_token": "T0KEN",
+        },
+    )
+    await Store(hass, 1, f"{DOMAIN}.rules.{entry.entry_id}").async_save(
+        {"rules": RULES, "data_id": "copy-1"}
+    )
+    web.post(f"{BRIDGE}/api/rules", exc=TimeoutError())
+    web.post(f"{BRIDGE}/api/client", json={"ok": True})
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.googletv.async_get_client", AsyncMock(return_value=client)
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert hass.states.get("switch.lott_s_tv_pop_ups").state == "on"
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.lott_s_tv_pop_ups"}, blocking=True
+    )
+    assert hass.states.get("switch.lott_s_tv_pop_ups").state == "off"
+    # The TV is back: its app says hello, and takes what it missed
+    web.clear_requests()
+    web.post(f"{BRIDGE}/api/rules", json={**RULES, "popups": False})
+    web.post(f"{BRIDGE}/api/client", json={"ok": True})
+    entry.runtime_data._async_handle_event(
+        {
+            "type": "hello",
+            "instance": "run-2",
+            "app_version": VERSION,
+            "data_id": "copy-1",
+            "features": ["events", "hidden_apps", "popups"],
+        }
+    )
+    await hass.async_block_till_done()
+    assert _bridge_calls(web, "/api/rules")[-1][2] == {"popups": False}
+    assert hass.states.get("switch.lott_s_tv_pop_ups").state == "off"

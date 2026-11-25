@@ -94,6 +94,14 @@
       "notifications": {
         "default": "mdi:message-badge"
       }
+    },
+    "switch": {
+      "popups": {
+        "default": "mdi:message-badge-outline",
+        "state": {
+          "off": "mdi:message-off-outline"
+        }
+      }
     }
   },
   "services": {

@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Raineworks TV</string>
-    <string name="app_tagline">for Home Assistant</string>
+    <string name="app_name">Google TV by Raineworks</string>
+    <string name="header_title">Google TV</string>
+    <string name="app_tagline">by Raineworks</string>
     <string name="version_line">Version %1$s</string>
     <string name="ip_line">IP address %1$s</string>
     <string name="service_channel">Bridge service</string>
     <string name="service_text">Ready for Home Assistant on port %1$d</string>
     <string name="notification_channel">Home Assistant</string>
     <string name="pairing_title">Pair with Home Assistant</string>
-    <string name="pairing_hint">Enter this code in Home Assistant (Raineworks TV)</string>
+    <string name="pairing_hint">Enter this code in Home Assistant (Google TV by Raineworks)</string>
 
     <string name="nav_home">Home</string>
     <string name="nav_apps">Apps</string>
@@ -39,9 +40,9 @@
 
     <string name="setup_title">Set up with Home Assistant</string>
     <string name="setup_subtitle">No code to type, no developer options</string>
-    <string name="setup_qr">QR code: Raineworks TV in the Home Assistant Marketplace</string>
+    <string name="setup_qr">QR code: Google TV by Raineworks in the Home Assistant Marketplace</string>
     <string name="setup_marketplace_title">Add the integration</string>
-    <string name="setup_marketplace_text">Scan with your phone to open Raineworks TV in the Marketplace. Download it, then restart Home Assistant.</string>
+    <string name="setup_marketplace_text">Scan with your phone to open Google TV by Raineworks in the Marketplace. Download it, then restart Home Assistant.</string>
     <string name="setup_debugging_title">Turn on network debugging</string>
     <string name="setup_debugging_text">In Developer options, turn on USB debugging, and Network debugging where it\'s a separate switch.</string>
     <string name="setup_open_settings">Open settings</string>
@@ -49,7 +50,7 @@
     <string name="setup_off">Off</string>
     <string name="setup_add_title">Add this TV</string>
     <string name="setup_add_text">Then scan this to add the TV. Home Assistant lists the TVs it finds: pick this one (%1$s), then choose Allow here when the TV asks.</string>
-    <string name="setup_add_qr">QR code: add a TV to Raineworks TV in Home Assistant</string>
+    <string name="setup_add_qr">QR code: add a TV to Google TV by Raineworks in Home Assistant</string>
 
     <string name="status_title">Connection</string>
     <string name="status_paired_adb">Connected, with ADB</string>
@@ -75,6 +76,9 @@
     <string name="when_blocked_panel">Notification panel</string>
     <string name="when_blocked_drop">Don\'t show it</string>
 
+    <string name="popups_switch_title">Pop-ups</string>
+    <string name="popups_switch_text">Off, notifications follow \"When pop-ups are off\" (Apps). Home Assistant can switch this too, for movie night, say. A notification that ignores the rules still pops up.</string>
+    <string name="popups_switch_row">Notifications pop up over what\'s on</string>
     <string name="popups_subtitle">How notifications look when Home Assistant doesn\'t say</string>
     <string name="default_size">Size</string>
     <string name="default_position">Position</string>
@@ -91,7 +95,7 @@
     <string name="position_bottom_right">Bottom right</string>
     <string name="try_title">Try it</string>
     <string name="test_button">Show a test notification</string>
-    <string name="test_title">Raineworks TV</string>
+    <string name="test_title">Google TV by Raineworks</string>
     <string name="test_message">Notifications from Home Assistant look like this.</string>
     <string name="clear_button">Clear pop-ups</string>
     <string name="cleared">Pop-ups cleared</string>
@@ -122,9 +126,9 @@
     <string name="adb_step_developer_text">In Settings → System → About, select Android TV OS build seven times.</string>
     <string name="adb_open_about">Open About</string>
     <string name="adb_step_connect">Connect Home Assistant over ADB</string>
-    <string name="adb_step_connect_text">In Home Assistant, open this TV (Settings → Devices &amp; services → Raineworks TV), choose ⋮ → Reconfigure, then Connect over ADB, and allow it here.</string>
+    <string name="adb_step_connect_text">In Home Assistant, open this TV (Settings → Devices &amp; services → Google TV by Raineworks), choose ⋮ → Reconfigure, then Connect over ADB, and allow it here.</string>
 
-    <string name="about_subtitle">Raineworks TV, by Raineworks</string>
+    <string name="about_subtitle">Google TV by Raineworks, for Home Assistant</string>
     <string name="about_card">This app</string>
     <string name="about_version">Version</string>
     <string name="about_build">Build</string>

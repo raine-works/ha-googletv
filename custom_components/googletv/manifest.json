@@ -1,6 +1,6 @@
 {
   "domain": "googletv",
-  "name": "Raineworks TV",
+  "name": "Google TV by Raineworks",
   "codeowners": [
     "@raine-works"
   ],
@@ -20,7 +20,7 @@
   "requirements": [
     "adb-shell[async]>=0.4.4"
   ],
-  "version": "2.6.1",
+  "version": "2.7.0",
   "zeroconf": [
     "_androidtvremote2._tcp.local.",
     "_rwtvbridge._tcp.local."

@@ -6,7 +6,7 @@
   (kept in `.storage/googletv.apps`, read again monthly), and artwork for
   what's playing from iTunes, TVmaze, Google Play and Wikipedia. No account
   or key. Turn off **Look up app icons and artwork online** in the TV's
-  options (Settings → Devices & services → Raineworks TV →
+  options (Settings → Devices & services → Google TV by Raineworks →
   Configure → General) to keep everything on your network.
 * **ADB.** Home Assistant signs in to every TV with one key, kept in
   `.storage/googletv_adbkey`; each TV trusts it once.
@@ -15,7 +15,14 @@
   on the TV. Releases are signed with the project's private release key. A
   copy on the TV signed with another key (an older build) can't be updated:
   Home Assistant uninstalls it once, logs why, and installs the new one,
-  which pairs again by itself.
+  which pairs again by itself and gets its settings back.
+* **The TV app's settings** (its rules: the pop-ups switch, apps and inputs
+  left out or kept clear of pop-ups, pop-ups' size and place) are kept in
+  Home Assistant too, in `.storage/googletv.rules.<entry id>`, so they come
+  back when the app's data goes (a reinstall over another key, or its data
+  cleared). The app says which copy of its data it has with a random
+  `data_id`, made on first use: it says nothing about the TV or you.
+  Removing the TV from Home Assistant deletes the copy.
 * **The TV app** pairs with Home Assistant when you choose **Allow** on the
   TV, or over ADB; no code is typed. Every request after that carries its
   token. Ten wrong pairing codes lock pairing for ten minutes. Removing the
