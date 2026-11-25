@@ -15,6 +15,7 @@ _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _PYTHON_VERSION = _ROOT / ".python-version"
 _JAVA_VERSION = _ROOT / ".java-version"
 _SETUP_ACTION = _ROOT / ".github" / "actions" / "setup" / "action.yml"
+_WORKFLOWS = _ROOT / ".github" / "workflows"
 
 
 def _pin(path: pathlib.Path) -> str:
@@ -47,3 +48,17 @@ def test_setup_action_reads_the_pins() -> None:
     assert not re.search(r"^\s*(python|java)-version:", action, re.MULTILINE), (
         "the setup action names a version instead of reading the pin file"
     )
+
+
+def test_workflows_read_the_pins() -> None:
+    """Test, TV app and Release take their versions from the files, too."""
+    for name, key in (
+        ("test.yaml", "python"),
+        ("android.yaml", "java"),
+        ("release.yaml", "java"),
+    ):
+        workflow = (_WORKFLOWS / name).read_text(encoding="utf-8")
+        assert f"{key}-version-file: .{key}-version" in workflow, name
+        assert not re.search(r"^\s*(python|java)-version:", workflow, re.MULTILINE), (
+            f"{name} names a version instead of reading the pin file"
+        )
