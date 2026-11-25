@@ -27,6 +27,14 @@ manifest is an exact `==` pin, and that each requirement's version is the
 one `requirements-test-ha.txt` pins. Raise adb-shell on purpose, in a change
 of its own, in both files at once.
 
+What runs the code is pinned too: `.python-version` holds the exact Python
+release (`3.13.18`) and `.java-version` the exact Temurin JDK that builds the
+TV app (`17.0.21+9`). CI's setup reads them (`python-version-file`,
+`java-version-file`), so neither the interpreter nor the JDK that signs the
+release APK changes without a commit; `tests/test_toolchain.py` checks both
+are exact. Use the same versions locally, and raise them on purpose, in a
+change of their own.
+
 ## Testing the TV app
 
 The TV app's access checks are plain Kotlin, tested with JUnit without a TV
@@ -38,7 +46,8 @@ So is the validation of what a paired client sends: `PlayRequest`
 in `NotificationRequestTest`, each with a valid request and every rejection
 (a URL's scheme, an unknown kind, a bad action, a value out of range). A
 notification's `color` isn't covered: parsing it needs Android's `Color`,
-which a JVM unit test doesn't have. The tests are in `android/app/src/test/`. Run them with Java 17:
+which a JVM unit test doesn't have. The tests are in `android/app/src/test/`. Run them with Java 17 (the
+release in `.java-version`):
 
 ```bash
 cd android
