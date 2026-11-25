@@ -29,8 +29,9 @@ of its own, in both files at once.
 
 What runs the code is pinned too: `.python-version` holds the exact Python
 release (`3.13.18`) and `.java-version` the exact Temurin JDK that builds the
-TV app (`17.0.21+9`). CI's setup reads them (`python-version-file`,
-`java-version-file`), so neither the interpreter nor the JDK that signs the
+TV app (`17.0.21+9`). CI reads them (`python-version-file`,
+`java-version-file` in the setup action and in the Test, TV app and Release
+workflows), so neither the interpreter nor the JDK that signs the
 release APK changes without a commit; `tests/test_toolchain.py` checks both
 are exact. Use the same versions locally, and raise them on purpose, in a
 change of their own.
