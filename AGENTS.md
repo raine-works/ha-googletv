@@ -29,12 +29,13 @@ name and Google TV's icon (`brand/art.py` draws them all).
   here. Its minimum is the version `requirements-test-ha.txt` pins exactly; every other requirement is `==`
   (`tests/test_manifest.py` checks both). See [docs/development.md](docs/development.md).
 - **Version and release:** `version` in `custom_components/googletv/manifest.json` is the one version: the TV app's
-  `versionName` and `versionCode` are derived from it in `android/app/build.gradle.kts`. Never bump it by hand: `release-pr.yml` (Raineworks' shared
-  Release pull request) keeps one pull request, `Release v<version>`, open on `master` with the next version (major
-  for a breaking change, `type!:`; minor for a `feat`; patch for anything else that changes `custom_components/`,
-  `android/` or `protocol/`), and merging it is the release. When `Test` passes on `master`, `release.yaml` creates a draft GitHub release `v<version>`, builds and attaches the
-  signed APK and its SHA-256 (`raineworks-tv-bridge.apk`, which Home Assistant checks before installing) and publishes
-  it.
+  `versionName` and `versionCode` are derived from it in `android/app/build.gradle.kts`. Never bump it by hand:
+  `release-pr.yml` (Raineworks' shared Release pull request) keeps one pull request, `Release v<version>`, open on
+  `master` with the next version (major for a breaking change, `type!:`; minor for a `feat`; patch for anything else
+  that changes `custom_components/`, `android/` or `protocol/`), and merging it is the release. When `Test` passes on
+  `master`, `release.yaml` creates a draft GitHub release `v<version>`, builds and attaches the signed APK and its
+  SHA-256 (`raineworks-tv-bridge.apk`, which Home Assistant checks before installing) and publishes it. See
+  [docs/development.md](docs/development.md).
 - **Signing:** the TV app isn't on Google Play: Home Assistant installs it over ADB. Release builds are signed with a
   private key held in repository secrets (`UPLOAD_KEYSTORE_BASE64`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_PASSWORD`,
   `UPLOAD_KEY_ALIAS`), given only to jobs on `master`, never to a pull request's; local and pull request builds use
